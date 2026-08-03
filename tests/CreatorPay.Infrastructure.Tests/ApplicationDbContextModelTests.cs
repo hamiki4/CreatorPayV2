@@ -7,6 +7,15 @@ namespace CreatorPay.Infrastructure.Tests;
 
 public sealed class ApplicationDbContextModelTests
 {
+    [Fact]
+    public void Wallet_and_purchase_constraints_are_in_model()
+    {
+        using var db = CreateContext();
+        var wallet = db.Model.FindEntityType(typeof(CreatorPay.Domain.Entities.MerchantWallet))!;
+        Assert.Contains(wallet.GetIndexes(), x => x.IsUnique && x.Properties.Select(p => p.Name).SequenceEqual(["MerchantId", "CurrencyCode"]));
+        var purchase = db.Model.FindEntityType(typeof(CreatorPay.Domain.Entities.PurchaseTransaction))!;
+        Assert.Contains(purchase.GetIndexes(), x => x.IsUnique && x.Properties.Any(p => p.Name == "PublicTransactionId"));
+    }
     private readonly IModel _model = CreateContext().Model;
 
     [Fact]

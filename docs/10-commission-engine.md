@@ -1,5 +1,7 @@
 # Commission Engine
 
+Confirmed purchases persist the selected rule/version/source and all calculated amounts in an immutable commission snapshot in the wallet transaction.
+
 Milestone 10 introduces configurable, effective-dated and versioned commission rules. A plan groups rules; a rule identifies its scope and ISO currency; immutable versions hold rates, amount bounds, UTC validity, and rounding. Assignments connect rules to the platform, merchant, partnership, or a campaign reference placeholder.
 
 ## Resolution and calculation

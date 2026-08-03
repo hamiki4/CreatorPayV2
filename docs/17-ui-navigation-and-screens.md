@@ -1,5 +1,7 @@
 # UI Navigation and Screens
 
+Milestone 11 adds merchant wallet/deposit/purchase views, the Platform Admin pending-deposit queue, and cashier purchase entry, confirmation, insufficient-funds, and recent-submission states with ETB formatting.
+
 Milestone 8 adds creator merchant-search/status views and merchant creator-search/lifecycle views, with responsive loading, empty, validation, and destructive-confirmation states. English copy is ready to move into Amharic resource dictionaries.
 
 ## Merchant organization

@@ -14,6 +14,8 @@ using CreatorPay.Application.Qr;
 using CreatorPay.Infrastructure.Qr;
 using CreatorPay.Application.Commission;
 using CreatorPay.Infrastructure.Commission;
+using CreatorPay.Application.Wallet;
+using CreatorPay.Infrastructure.Wallet;
 
 namespace CreatorPay.Infrastructure;
 
@@ -43,6 +45,8 @@ public static class DependencyInjection
         services.AddSingleton<IQrImageGenerator, QrImageGenerator>();
         services.AddScoped<ICreatorQrService, CreatorQrService>();
         services.AddScoped<ICommissionEngine, CommissionEngine>();
+        services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
+        services.AddScoped<IWalletService, WalletService>();
         return services;
     }
 }

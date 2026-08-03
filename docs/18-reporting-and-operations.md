@@ -1,5 +1,7 @@
 # Reporting and Operations
 
+Posted wallet entries and balanced journals are append-only operational records. Platform support views can inspect purchases and pending deposits without editing posted financial history.
+
 Reports use authoritative confirmed/posted records, merchant-local dates for commerce views and UTC internally. Every result identifies time zone, currency, generated time and filters. Role scope from [permissions](05-user-roles-and-permissions.md) applies to views and exports.
 
 | Capability | Measures / operator action |

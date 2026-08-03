@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+Milestone 11 implements the prepaid ETB wallet, manual deposits, atomic purchases, immutable commission snapshots, idempotency, ledger/journal, APIs, and initial role-specific UI. Milestone 12 should build creator earnings from `CreatorPayable` without mutating posted journals.
+
 ## Milestone 8 — complete
 
 Merchant–creator discovery, merchant-specific approval, lifecycle history, location/date eligibility, scoped APIs, audits, and web workspaces are implemented. Milestone 9 should consume the eligibility service for QR validation without duplicating partnership policy.

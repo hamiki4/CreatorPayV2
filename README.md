@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 11 adds the merchant prepaid ETB wallet, manual deposit approval, and atomic cashier purchase confirmation. Configure `MerchantWallet:LowBalanceThreshold` and see [the wallet workflow](docs/11-merchant-wallet-and-deposits.md).
+
 Milestone 8 adds merchant-specific creator approval, audited partnership lifecycles, location/date eligibility, scoped APIs, and role-aware partnership screens. See [Merchant–Creator Partnerships](docs/08-merchant-creator-partnerships.md).
 
 Milestones 1–7 are implemented. Milestone 7 adds merchant locations, Supervisor/Cashier management, secure staff invitations, strict merchant/location authorization, organization audit events, and responsive role-aware React screens. See [Merchant Organization and Staff](docs/23-merchant-organization-and-staff.md) for APIs, security controls, limitations, and validation commands.

@@ -35,6 +35,15 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<CampaignCommissionAssignment> CampaignCommissionAssignments => Set<CampaignCommissionAssignment>();
     public DbSet<CommissionCalculationSnapshot> CommissionCalculationSnapshots => Set<CommissionCalculationSnapshot>();
     public DbSet<CommissionAuditEvent> CommissionAuditEvents => Set<CommissionAuditEvent>();
+    public DbSet<MerchantWallet> MerchantWallets => Set<MerchantWallet>();
+    public DbSet<MerchantWalletEntry> MerchantWalletEntries => Set<MerchantWalletEntry>();
+    public DbSet<MerchantDeposit> MerchantDeposits => Set<MerchantDeposit>();
+    public DbSet<MerchantWalletHold> MerchantWalletHolds => Set<MerchantWalletHold>();
+    public DbSet<FinancialJournal> FinancialJournals => Set<FinancialJournal>();
+    public DbSet<FinancialJournalLine> FinancialJournalLines => Set<FinancialJournalLine>();
+    public DbSet<PurchaseTransaction> PurchaseTransactions => Set<PurchaseTransaction>();
+    public DbSet<TransactionStatusHistory> TransactionStatusHistories => Set<TransactionStatusHistory>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

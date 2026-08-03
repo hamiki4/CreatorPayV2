@@ -1,5 +1,7 @@
 # Testing Strategy
 
+Milestone 11 tests wallet non-negativity, balance transitions, journal balancing, and EF uniqueness metadata. True PostgreSQL concurrency integration remains environment-dependent; SQLite is not used as a concurrency substitute.
+
 Milestone 8 tests lifecycle and supplied-time/location eligibility in the domain suite. API behavior remains PostgreSQL-compatible; SQLite must not replace PostgreSQL integration coverage. Backend and production frontend builds are validation gates.
 
 ## Milestone 7

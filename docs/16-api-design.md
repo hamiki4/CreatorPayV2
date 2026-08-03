@@ -1,5 +1,7 @@
 # API Design
 
+Milestone 11 adds `/api/v1/merchant/wallet`, merchant/admin deposit endpoints, and cashier/merchant/admin purchase endpoints. Financial POSTs require `Idempotency-Key` and return DTOs or RFC Problem Details.
+
 Milestone 8 partnership APIs are versioned under `/api/v1/creator`, `/api/v1/merchant`, and read-only `/api/v1/admin/partnerships`; they use claim-derived scope, DTOs, and Problem Details.
 
 ## Merchant organization endpoints
