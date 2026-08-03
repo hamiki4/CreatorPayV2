@@ -51,3 +51,6 @@ The creator workspace includes My QR, on-demand PNG display/download, issue stat
 # Commission screens (Milestone 10)
 
 Platform administration includes rule inventory and commission preview, with the API supporting plan editing, rule detail/version history, new versions, and default/override assignment workflows. Merchant workspace shows its effective rule and preview. Creator commission detail is supplied through each owned approved partnership. Screens provide loading, empty/error states, percentage/currency formatting, a no-transaction warning, responsive existing card/form styles, English copy, and an Amharic localization seam.
+# Milestone 12 screens
+
+The creator workspace includes balance summary, estimated payout, filtered earning history, and payout history. Platform administration includes payout batch creation/details and a manual payout queue with confirmation gates. Destination credentials are never rendered.

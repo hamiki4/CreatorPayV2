@@ -31,6 +31,7 @@ public sealed class FinancialJournal : Entity
     public bool IsPosted { get; private set; }
     public Guid? RelatedTransactionId { get; set; }
     public Guid? RelatedDepositId { get; set; }
+    public Guid? RelatedPayoutId { get; set; }
     public ICollection<FinancialJournalLine> Lines { get; } = [];
     public void Post(DateTime now) { if (IsPosted) throw new InvalidOperationException("Journal is already posted."); if (Lines.Count < 2 || Lines.Sum(x => x.Type == JournalLineType.Debit ? x.Amount : 0) != Lines.Sum(x => x.Type == JournalLineType.Credit ? x.Amount : 0)) throw new InvalidOperationException("Journal debits and credits must balance."); IsPosted = true; PostedAtUtc = now; }
 }

@@ -20,3 +20,6 @@ Reports use authoritative confirmed/posted records, merchant-local dates for com
 Background jobs include outbox delivery, partnership/campaign expiry, earning availability, weekly payout creation/submission/status polling, low-balance evaluation, reconciliation, fraud evaluation, retention, token cleanup and projection repair. Jobs use distributed leases, bounded batches, checkpoints, idempotency, retry/backoff, dead-letter/manual replay and metrics; overlapping runs cannot duplicate effects.
 
 Monitor structured logs, traces and metrics for API latency/error rate, database saturation, queue age/depth, job freshness, sync rejection, wallet conflicts, payout/notification/provider failures, fraud volume, disk/backup status and certificate/secret expiry. Alerts have severity, owner, runbook and escalation. Public health is coarse; readiness checks dependencies without exposing credentials. Operator actions are least-privileged and audited.
+# Payout operations
+
+Operators mature earnings, create a cutoff-keyed weekly batch, start processing, submit through the manual adapter, and record paid or failed outcomes. Fail/cancel returns funds to Available. Audit events and immutable balance entries support investigation; posted payout journals are never edited.

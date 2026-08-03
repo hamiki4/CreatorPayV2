@@ -61,3 +61,6 @@ Creator: `GET /api/v1/creator/qr`, `GET /api/v1/creator/qr/image`, `GET /api/v1/
 # Commission endpoints (Milestone 10)
 
 Platform Admin manages `GET/POST/PUT /api/v1/admin/commission-plans`, `GET/POST /api/v1/admin/commission-rules`, version creation/history, rule status, platform/merchant/partnership assignments, and `POST /api/v1/admin/commission-preview`. Merchant Admin reads `/api/v1/merchant/commission-rules/effective` and scoped partnership rules and uses `/api/v1/merchant/commission-preview`. Creators read `/api/v1/creator/partnerships/{id}/commission-rule`. Validation errors use Problem Details; previews have no financial side effects.
+# Milestone 12 API
+
+Creator read APIs: `GET /api/v1/creator/earnings`, `/earnings/summary`, `/earnings/{id}`, `/payouts`, and `/payouts/{id}`. Platform Admin APIs cover payout-batch list/create/detail/process/cancel; payout list/detail/submit/mark-paid/mark-failed/retry/cancel; and `POST /api/v1/admin/earnings/mature`. Responses use DTOs and failures use Problem Details.

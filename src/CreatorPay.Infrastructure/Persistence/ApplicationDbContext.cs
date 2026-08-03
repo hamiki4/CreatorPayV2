@@ -44,6 +44,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<PurchaseTransaction> PurchaseTransactions => Set<PurchaseTransaction>();
     public DbSet<TransactionStatusHistory> TransactionStatusHistories => Set<TransactionStatusHistory>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<CreatorEarning> CreatorEarnings => Set<CreatorEarning>(); public DbSet<CreatorBalanceAccount> CreatorBalanceAccounts => Set<CreatorBalanceAccount>(); public DbSet<CreatorBalanceEntry> CreatorBalanceEntries => Set<CreatorBalanceEntry>();
+    public DbSet<PayoutBatch> PayoutBatches => Set<PayoutBatch>(); public DbSet<CreatorPayout> CreatorPayouts => Set<CreatorPayout>(); public DbSet<PayoutItem> PayoutItems => Set<PayoutItem>(); public DbSet<PayoutAttempt> PayoutAttempts => Set<PayoutAttempt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

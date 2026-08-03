@@ -16,6 +16,8 @@ using CreatorPay.Application.Commission;
 using CreatorPay.Infrastructure.Commission;
 using CreatorPay.Application.Wallet;
 using CreatorPay.Infrastructure.Wallet;
+using CreatorPay.Application.Earnings;
+using CreatorPay.Infrastructure.Earnings;
 
 namespace CreatorPay.Infrastructure;
 
@@ -47,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<ICommissionEngine, CommissionEngine>();
         services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
         services.AddScoped<IWalletService, WalletService>();
+        services.Configure<CreatorPayoutOptions>(configuration.GetSection(CreatorPayoutOptions.SectionName)); services.AddSingleton<IPayoutProvider,ManualPayoutProvider>(); services.AddScoped<ICreatorEarningsService,CreatorEarningsService>();
         return services;
     }
 }

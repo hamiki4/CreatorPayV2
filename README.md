@@ -46,3 +46,6 @@ CreatorPay now supports one permanent active creator QR, secure regeneration/rev
 # Milestone 10: commission engine
 
 CreatorPay now includes configurable commission plans/rules, immutable effective-dated versions, campaign/partnership/merchant/platform priority selection, decimal ETB calculation with configurable rounding, historical snapshot storage, Platform Admin management APIs, scoped Merchant/Creator views, audited non-financial previews, and a React commission workspace. Purchase and wallet processing remain intentionally deferred to Milestone 11.
+# Milestone 12
+
+CreatorPay now prepares weekly ETB creator payouts from immutable confirmed-purchase earnings. Creator views expose balances/history; Platform Admin views support idempotent batches and manual payout outcomes. No external payout rail is integrated. See `docs/12-creator-earnings-and-payouts.md`.

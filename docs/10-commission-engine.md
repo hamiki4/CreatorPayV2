@@ -34,3 +34,6 @@ Platform Admin owns `/api/v1/admin/commission-plans`, `/commission-rules`, `/com
 Audited events include plan/rule/version changes, activation, default and override assignments, previews, invalid configuration, and denied scoped preview attempts. Audit values omit personal data and secrets.
 
 Known limitations: no campaign management (assignment placeholder only), currency metadata remains fixed at two fraction digits, database exclusion constraints for overlapping assignments are deferred, and snapshots are not yet attached to purchases. Wallets, purchases, earnings, revenue, settlement, payouts, disputes, notifications, and offline behavior remain out of scope.
+# Milestone 12 consumption
+
+Confirmed purchases now copy the immutable snapshot's `CreatorCommissionAmount` into one creator earning. Historical earnings are never recalculated from current rules.

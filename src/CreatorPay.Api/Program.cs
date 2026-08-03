@@ -8,6 +8,7 @@ using CreatorPay.Api.Partnerships;
 using CreatorPay.Api.Qr;
 using CreatorPay.Api.Commission;
 using CreatorPay.Api.Wallet;
+using CreatorPay.Api.Earnings;
 using CreatorPay.Application;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Domain.Enums;
@@ -29,5 +30,5 @@ builder.Services.AddRateLimiter(o => { o.RejectionStatusCode = StatusCodes.Statu
 var app = builder.Build(); if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.UseExceptionHandler(); app.UseHttpsRedirection(); app.Use(async (context, next) => { context.Response.Headers.XContentTypeOptions = "nosniff"; context.Response.Headers.XFrameOptions = "DENY"; context.Response.Headers["Referrer-Policy"] = "no-referrer"; await next(); });
 app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
-app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "CreatorPay API" })).WithName("GetHealth").WithTags("Health"); app.MapAuthEndpoints(); app.MapCreatorEndpoints(); app.MapMerchantEndpoints(); app.MapOrganizationEndpoints(); app.MapPartnershipEndpoints(); app.MapQrEndpoints(); app.MapCommissionEndpoints(); app.MapWalletEndpoints(); app.Run();
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "CreatorPay API" })).WithName("GetHealth").WithTags("Health"); app.MapAuthEndpoints(); app.MapCreatorEndpoints(); app.MapMerchantEndpoints(); app.MapOrganizationEndpoints(); app.MapPartnershipEndpoints(); app.MapQrEndpoints(); app.MapCommissionEndpoints(); app.MapWalletEndpoints(); app.MapEarningsEndpoints(); app.Run();
 public partial class Program;

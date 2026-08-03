@@ -32,3 +32,6 @@ Ledger entry types include DepositPending, DepositPosted, HoldPlaced/Released/Ca
 The initial suggested low-balance threshold is 1,000 ETB but is Platform Admin configurable per policy/merchant. Crossing it queues a warning. Insufficient funds or `LowBalanceRestricted` blocks new commission transactions but not sign-in, statements, deposit submission, or remediation. Atomic row/version locking prevents the available balance becoming negative. Holds are reserved, expiring amounts and are not spendable.
 
 Daily automated and operator reconciliation compares internal deposits/ledger/provider settlement; discrepancies become cases. Refund/reversal rules use the original transaction snapshot and link all entries. Deposit decisions, threshold changes, holds, restrictions, adjustments and exports require audit events.
+# Milestone 12 liability settlement
+
+Purchase confirmation still creates CreatorPayable exactly once. Creator earning creation adds no journal. A successfully confirmed manual payout later debits CreatorPayable and credits PaymentClearing; failure or cancellation leaves the liability unchanged.

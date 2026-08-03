@@ -60,3 +60,6 @@ Permanent creator QR issuance, regeneration, revocation/history, on-demand PNG g
 # Milestone 10 — complete
 
 The configurable commission domain, PostgreSQL persistence, version selection hierarchy, deterministic calculator, snapshot schema, scoped APIs, auditing, preview UI, migration, tests, and documentation are implemented. Milestone 11 should consume the engine from merchant wallet/purchase processing and persist one snapshot atomically, without recalculating historical purchases.
+# Milestone 12 — complete
+
+Creator earnings, category balances and entries, configurable maturation, weekly payout batches, manual processing, payout attempts, settlement accounting, scoped APIs, React workspaces, PostgreSQL migration, tests, and operational documentation are implemented. Milestone 13 may add customer phone verification and repeat-use approval without changing historical earning or journal records.

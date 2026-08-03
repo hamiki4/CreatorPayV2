@@ -34,3 +34,6 @@ QR tests cover deterministic signed tokens, tamper rejection, non-raw hash stora
 # Commission testing (Milestone 10)
 
 Domain tests cover valid/zero calculations, invalid rates and splits, bounds, effective dates, both midpoint modes, and exact creator/platform conservation. EF model/migration validation remains PostgreSQL/Npgsql; SQLite is not substituted. API authorization is policy-based and existing integration coverage verifies 401/403 behavior. Future transaction integration tests must assert snapshot immutability.
+# Milestone 12 coverage
+
+Domain tests cover category transfers, non-negative balances, time-gated maturation, and prevention of double payment. Model/build validation covers PostgreSQL mappings, unique idempotency constraints, row-version concurrency, restrictive relationships, and money precision. Provider integration remains intentionally absent.
