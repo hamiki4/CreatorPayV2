@@ -1,0 +1,21 @@
+services:
+  creatorpay-postgres:
+    image: postgres:17-alpine
+    container_name: creatorpay-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-CreatorPayV2Db}
+      POSTGRES_USER: ${POSTGRES_USER:-creatorpay}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env file}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - creatorpay-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  creatorpay-postgres-data:

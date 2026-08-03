@@ -1,2 +1,14 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CreatorPay.Api/CreatorPay.Api.csproj" />
+    <Project Path="src/CreatorPay.Application/CreatorPay.Application.csproj" />
+    <Project Path="src/CreatorPay.Domain/CreatorPay.Domain.csproj" />
+    <Project Path="src/CreatorPay.Infrastructure/CreatorPay.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CreatorPay.Api.IntegrationTests/CreatorPay.Api.IntegrationTests.csproj" />
+    <Project Path="tests/CreatorPay.Application.Tests/CreatorPay.Application.Tests.csproj" />
+    <Project Path="tests/CreatorPay.Domain.Tests/CreatorPay.Domain.Tests.csproj" />
+    <Project Path="tests/CreatorPay.Infrastructure.Tests/CreatorPay.Infrastructure.Tests.csproj" />
+  </Folder>
 </Solution>
