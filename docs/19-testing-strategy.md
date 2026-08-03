@@ -17,3 +17,6 @@ Tests follow the risk pyramid and use deterministic clock/ID/key/provider abstra
 | Offline sync | order, restart, duplicate key, altered payload, expired approval, status changed offline, approval-required and rejected recovery |
 
 Acceptance criteria in [complete acceptance criteria](21-complete-acceptance-criteria.md) map to automated test IDs. CI runs format/static analysis, unit/application/frontend tests, PostgreSQL/API integration, build and migration checks; nightly/pre-release adds E2E, concurrency, DAST and restore drills. Production-like test data is synthetic and secrets are never copied. Flaky tests are quarantined only with owner/deadline and cannot conceal financial/security failures.
+# Milestone 4 testing note
+
+Password policy, framework hashing, opaque-token hashing/randomness, JWT claims, and EF metadata are covered without substituting SQLite. PostgreSQL transaction/index integration should run against a dedicated PostgreSQL database or Testcontainers in CI.

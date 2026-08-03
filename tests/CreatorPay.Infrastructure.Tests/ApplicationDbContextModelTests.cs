@@ -16,6 +16,16 @@ public sealed class ApplicationDbContextModelTests
         Assert.All(expected, type => Assert.NotNull(_model.FindEntityType(type)));
     }
 
+    [Fact]
+    public void Model_CreatesAuthenticationEntitiesAndUniqueTokenIndexes()
+    {
+        Type[] expected = [typeof(RefreshToken), typeof(LoginAudit), typeof(PasswordResetToken)];
+        Assert.All(expected, type => Assert.NotNull(_model.FindEntityType(type)));
+        Assert.True(FindIndex(typeof(RefreshToken), "TokenHash").IsUnique);
+        Assert.True(FindIndex(typeof(PasswordResetToken), "TokenHash").IsUnique);
+        Assert.False(FindIndex(typeof(RefreshToken), "UserAccountId", "ExpiresAtUtc").IsUnique);
+    }
+
     [Theory]
     [InlineData(typeof(UserAccount), "NormalizedEmail")]
     [InlineData(typeof(Creator), "PublicCreatorId")]
@@ -62,4 +72,6 @@ public sealed class ApplicationDbContextModelTests
             .Options;
         return new ApplicationDbContext(options);
     }
+
+    private IIndex FindIndex(Type type, params string[] properties) => _model.FindEntityType(type)!.GetIndexes().Single(x => x.Properties.Select(p => p.Name).SequenceEqual(properties));
 }

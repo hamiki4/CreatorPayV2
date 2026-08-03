@@ -17,3 +17,6 @@
 Versioned, configurable rules flag rather than silently rewrite records: phone/creator/cashier/merchant velocity, repeated amounts, rapid/off-hours use, large purchase/commission, wallet churn, QR failures, device/IP/account sharing, location anomalies and payout-destination changes. Thresholds are Platform Admin configured. Alerts have severity, evidence, owner, status, resolution/reason and links; holds/manual review are auditable. Avoid using device/IP alone for adverse action and assess privacy/fairness.
 
 Financial transactions and ledger/audit records are immutable; corrections are linked compensating events. Define retention schedules per data class, legal hold, secure deletion and backup expiry. Legal decisions remain open for Ethiopian data protection, identity consent, cross-border hosting/transfers, tax/financial retention, breach response, KYC/AML and customer marketing consent. Perform threat modeling, dependency/secret scans, SAST/DAST and penetration testing before production.
+# Milestone 4 controls
+
+Password hashing, temporary lockout, signed short-lived JWTs, hashed rotating refresh tokens, reuse-family revocation, hashed single-use reset tokens, authentication rate limits, safe audits, and baseline response headers are implemented. Raw passwords and tokens must never enter logs or audit rows.

@@ -40,3 +40,6 @@ The request/response column names the main contract; all requests are schema/for
 | Health | `GET /health`; `GET /health/ready` | Public/internal | none → coarse liveness/readiness | public response leaks no dependencies; readiness network-restricted; no idem |
 
 Uploads use separate authenticated presign/finalize endpoints or streamed multipart with documented limits. Provider callbacks live at `/api/v1/integrations/{provider}/callbacks`, authenticate signatures, retain raw evidence securely and require idempotency. Exact DTO schemas and OpenAPI examples are implementation-milestone deliverables.
+# Milestone 4 authentication API
+
+Versioned authentication routes are under `/api/v1/auth`. They use request/response DTOs and RFC Problem Details failures. JWT Bearer is the API authentication scheme; OpenAPI exposure is limited to development.

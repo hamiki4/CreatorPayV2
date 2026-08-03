@@ -16,6 +16,8 @@ public sealed class UserAccountConfiguration : IEntityTypeConfiguration<UserAcco
         builder.Property(x => x.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.LastLoginAtUtc).HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LockoutEndUtc).HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastFailedLoginAtUtc).HasColumnType("timestamp with time zone");
         builder.HasIndex(x => x.NormalizedEmail).IsUnique();
         builder.HasIndex(x => x.CreatorId).IsUnique().HasFilter("\"CreatorId\" IS NOT NULL");
         builder.HasIndex(x => x.MerchantId).IsUnique().HasFilter("\"MerchantId\" IS NOT NULL");

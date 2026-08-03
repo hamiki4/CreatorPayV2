@@ -33,3 +33,6 @@ stateDiagram-v2
   Active --> Closed: close
   Suspended --> Closed: close
 ```
+# Milestone 4 authentication boundary
+
+Registration and approval remain unimplemented. Until restricted onboarding tokens exist, only `Active` accounts may log in. Pending verification/approval and all other non-active statuses are rejected generically.

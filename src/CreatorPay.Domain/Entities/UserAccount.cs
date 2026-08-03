@@ -17,4 +17,7 @@ public sealed class UserAccount : Entity
     public bool IsEmailVerified { get; set; }
     public bool IsPhoneVerified { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
+    public int FailedLoginCount { get; set; }
+    public DateTime? LockoutEndUtc { get; set; }
+    public DateTime? LastFailedLoginAtUtc { get; set; }
 }

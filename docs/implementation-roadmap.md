@@ -35,3 +35,6 @@ Milestone 4 should begin with a threat model and decisions for account-to-role c
 ## Open decision gates
 
 Before relevant milestones: obtain legal/compliance decisions for identity documents, Ethiopian privacy/data residency, retention, tax/KYC/AML; banking decisions for payout beneficiary/rails/cutoff/failed settlement; payment-provider contracts/callbacks/reconciliation; hosting region and RPO/RTO. Defaults in this blueprint are proposals until versioned configuration or an approved decision records them.
+# Milestone 4 status
+
+Identity, authentication, authorization policies, rotation/revocation, reset foundations, migration, tests, and security documentation are implemented. Milestone 5 should build registration/verification workflows on these contracts without weakening the active-only login rule until restricted onboarding access is explicitly designed.

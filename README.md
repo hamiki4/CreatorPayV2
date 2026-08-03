@@ -27,3 +27,6 @@ Infrastructure tests currently validate Npgsql EF metadata without substituting 
 - Delivery sequence: [implementation roadmap](docs/implementation-roadmap.md)
 
 Open legal, banking, tax, privacy, hosting and payment-provider questions are intentionally recorded as decision gates rather than invented implementation details.
+# Milestone 4: authentication
+
+CreatorPay now includes secure password hashing, JWT Bearer access tokens, rotating hashed refresh tokens, password reset foundations, account lockout, authentication audits, role policies, and `/api/v1/auth` endpoints. See [authentication and token security](docs/22-authentication-and-token-security.md) for configuration, risks, and manual commands.

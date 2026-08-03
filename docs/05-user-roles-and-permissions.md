@@ -22,3 +22,6 @@ Log actor, effective role, UTC time, action, target/type, merchant/location scop
 ## Configuration ownership
 
 Platform Admin configures versioned platform defaults; Merchant Admin may configure merchant values only where platform policy permits. No creator/platform split (including 50/50 or 70/30) is implicit. Every financial transaction stores the resolved rule and split snapshot.
+# Milestone 4 authorization foundation
+
+Server policies are `PlatformAdminOnly`, `CreatorOnly`, `MerchantAdminOnly`, `SupervisorOnly`, `CashierOnly`, `MerchantOperations`, and `AuthenticatedUser`. Future merchant/location use cases must validate persisted ownership and assignments in Application services using `ICurrentUserService`; frontend route visibility is not authorization.

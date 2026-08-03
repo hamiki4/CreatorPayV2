@@ -25,4 +25,11 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("CreatorPay API", await response.Content.ReadAsStringAsync());
     }
+
+    [Fact]
+    public async Task CurrentUserRequiresAuthentication()
+    {
+        using HttpResponseMessage response = await _client.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }
