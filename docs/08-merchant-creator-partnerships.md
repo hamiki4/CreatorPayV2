@@ -43,3 +43,6 @@ Known limitations: no renewal/resubmission endpoint, automated expiration job, c
 # Milestone 9 dependency
 
 QR validation requires an `Approved` partnership whose start/end window includes the validation time. Suspended, blocked, expired, not-yet-started, and absent partnerships return distinct safe results. When active partnership-location records exist, the selected location must be included.
+# Commission integration (Milestone 10)
+
+An approved partnership may receive an effective-dated commission override. Merchant Admin can view it only for their merchant; a Creator can view it only for their own approved partnership. The override outranks merchant and platform defaults and is below a supplied campaign override. This does not create transactions or earnings.

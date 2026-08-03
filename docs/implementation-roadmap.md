@@ -55,3 +55,6 @@ Milestone 6 should add merchant and primary Merchant Admin registration, verific
 # Milestone 9 — complete
 
 Permanent creator QR issuance, regeneration, revocation/history, on-demand PNG generation, merchant/staff location-scoped validation, audit events, APIs, and React workspaces are implemented. Purchase transactions, customer verification, commissions, wallets, earnings, notifications, payouts, and offline synchronization remain explicitly deferred.
+# Milestone 10 — complete
+
+The configurable commission domain, PostgreSQL persistence, version selection hierarchy, deterministic calculator, snapshot schema, scoped APIs, auditing, preview UI, migration, tests, and documentation are implemented. Milestone 11 should consume the engine from merchant wallet/purchase processing and persist one snapshot atomically, without recalculating historical purchases.

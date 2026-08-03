@@ -12,6 +12,8 @@ using CreatorPay.Application.Organization;
 using CreatorPay.Infrastructure.Organization;
 using CreatorPay.Application.Qr;
 using CreatorPay.Infrastructure.Qr;
+using CreatorPay.Application.Commission;
+using CreatorPay.Infrastructure.Commission;
 
 namespace CreatorPay.Infrastructure;
 
@@ -40,6 +42,7 @@ public static class DependencyInjection
         services.AddSingleton<IQrTokenService, QrTokenService>();
         services.AddSingleton<IQrImageGenerator, QrImageGenerator>();
         services.AddScoped<ICreatorQrService, CreatorQrService>();
+        services.AddScoped<ICommissionEngine, CommissionEngine>();
         return services;
     }
 }

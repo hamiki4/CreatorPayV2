@@ -26,6 +26,15 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<MerchantVerificationToken> MerchantVerificationTokens => Set<MerchantVerificationToken>();
     public DbSet<MerchantAuditEvent> MerchantAuditEvents => Set<MerchantAuditEvent>();
     public DbSet<StaffInvitation> StaffInvitations => Set<StaffInvitation>();
+    public DbSet<CommissionPlan> CommissionPlans => Set<CommissionPlan>();
+    public DbSet<CommissionRule> CommissionRules => Set<CommissionRule>();
+    public DbSet<CommissionRuleVersion> CommissionRuleVersions => Set<CommissionRuleVersion>();
+    public DbSet<PlatformCommissionAssignment> PlatformCommissionAssignments => Set<PlatformCommissionAssignment>();
+    public DbSet<MerchantCommissionAssignment> MerchantCommissionAssignments => Set<MerchantCommissionAssignment>();
+    public DbSet<PartnershipCommissionAssignment> PartnershipCommissionAssignments => Set<PartnershipCommissionAssignment>();
+    public DbSet<CampaignCommissionAssignment> CampaignCommissionAssignments => Set<CampaignCommissionAssignment>();
+    public DbSet<CommissionCalculationSnapshot> CommissionCalculationSnapshots => Set<CommissionCalculationSnapshot>();
+    public DbSet<CommissionAuditEvent> CommissionAuditEvents => Set<CommissionAuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

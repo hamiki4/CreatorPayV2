@@ -29,3 +29,6 @@ Password policy, framework hashing, opaque-token hashing/randomness, JWT claims,
 # Milestone 9 coverage
 
 QR tests cover deterministic signed tokens, tamper rejection, non-raw hash storage, PNG signatures, immediate revocation metadata, EF entity discovery, unique public/token identifiers, and the PostgreSQL filtered unique active-QR constraint. Solution and frontend builds, all test projects, migration discovery, and whitespace checks are release gates.
+# Commission testing (Milestone 10)
+
+Domain tests cover valid/zero calculations, invalid rates and splits, bounds, effective dates, both midpoint modes, and exact creator/platform conservation. EF model/migration validation remains PostgreSQL/Npgsql; SQLite is not substituted. API authorization is policy-based and existing integration coverage verifies 401/403 behavior. Future transaction integration tests must assert snapshot immutability.

@@ -41,3 +41,6 @@ Creators register at `/api/v1/creators/register`, complete development-provider 
 # Milestone 9: creator QR validation
 
 CreatorPay now supports one permanent active creator QR, secure regeneration/revocation with retained history, on-demand PNG output, and authenticated merchant-side validation against merchant/staff location scope and approved partnership eligibility. This milestone stops before transactions or financial processing. See `docs/09-qr-and-cashier-transaction-workflow.md` for endpoints, security, UI, and limitations.
+# Milestone 10: commission engine
+
+CreatorPay now includes configurable commission plans/rules, immutable effective-dated versions, campaign/partnership/merchant/platform priority selection, decimal ETB calculation with configurable rounding, historical snapshot storage, Platform Admin management APIs, scoped Merchant/Creator views, audited non-financial previews, and a React commission workspace. Purchase and wallet processing remain intentionally deferred to Milestone 11.
