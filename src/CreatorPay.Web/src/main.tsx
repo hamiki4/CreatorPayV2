@@ -1,52 +1,18 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, FormEvent, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
-type CreatorProfile = {
-  publicCreatorId: string
-  firstName: string
-  lastName: string
-  displayName: string
-  email: string
-  isEmailVerified: boolean
-  isPhoneVerified: boolean
-  creatorStatus: string
-  nextStep: string
+type MerchantProfile = { publicMerchantId:string; legalBusinessName:string; tradingName:string; email:string; phoneNumber:string; isEmailVerified:boolean; isPhoneVerified:boolean; accountStatus:string; merchantStatus:string; registrationProgress:number; nextStep:string }
+const initial = { legalBusinessName:'', tradingName:'', businessType:'', taxRegistrationNumber:'', phoneNumber:'', email:'', password:'', businessAddress:'', city:'', region:'', country:'', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone }
+
+function Registration({onDone}:{onDone:(message:string)=>void}) {
+  const [form,setForm]=useState(initial); const [busy,setBusy]=useState(false)
+  async function submit(event:FormEvent){event.preventDefault();setBusy(true);try{const response=await fetch('/api/v1/merchants/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...form,taxRegistrationNumber:form.taxRegistrationNumber||null,documents:[]})});if(!response.ok){const problem=await response.json();throw new Error(problem.detail??'Registration failed.')}const data=await response.json();onDone(`${data.message} Merchant ID: ${data.publicMerchantId}`)}catch(error){onDone(error instanceof Error?error.message:'Registration failed.')}finally{setBusy(false)}}
+  return <section className="registration"><div><p className="eyebrow">New merchant</p><h2>Register your business</h2><p>Create the first Merchant Admin account and begin verification.</p></div><form onSubmit={submit}>{Object.keys(initial).map(key=><label key={key}><span>{key.replace(/([A-Z])/g,' $1')}</span><input type={key==='password'?'password':key==='email'?'email':'text'} required={!['taxRegistrationNumber'].includes(key)} value={form[key as keyof typeof form]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}<button disabled={busy}>{busy?'Submitting…':'Register merchant'}</button></form></section>
 }
 
-function Dashboard() {
-  const [profile, setProfile] = useState<CreatorProfile | null>(null)
-  const [message, setMessage] = useState('Sign in to load your creator onboarding status.')
-
-  useEffect(() => {
-    const accessToken = localStorage.getItem('creatorpay_access_token')
-    if (!accessToken) return
-    fetch('/api/v1/creators/me', { headers: { Authorization: `Bearer ${accessToken}` } })
-      .then(async response => {
-        if (!response.ok) throw new Error(response.status === 401 ? 'Your session has expired. Sign in again.' : 'Creator status is temporarily unavailable.')
-        return response.json() as Promise<CreatorProfile>
-      })
-      .then(data => { setProfile(data); setMessage(data.nextStep) })
-      .catch((error: Error) => setMessage(error.message))
-  }, [])
-
-  return (
-    <main className="dashboard">
-      <header>
-        <p className="eyebrow">CreatorPay V2</p>
-        <span className="stage">Creator onboarding</span>
-        <h1>{profile?.displayName ?? 'Creator dashboard'}</h1>
-        {profile && <p className="legal-name">{profile.firstName} {profile.lastName}</p>}
-      </header>
-      <section className="status-grid" aria-label="Creator onboarding status">
-        <article><span>Creator ID</span><strong>{profile?.publicCreatorId ?? '—'}</strong></article>
-        <article><span>Email</span><strong>{profile?.email ?? '—'}</strong><em className={profile?.isEmailVerified ? 'complete' : ''}>{profile?.isEmailVerified ? 'Verified' : 'Verification required'}</em></article>
-        <article><span>Phone</span><strong>{profile?.isPhoneVerified ? 'Verified' : 'Verification required'}</strong><em className={profile?.isPhoneVerified ? 'complete' : ''}>{profile?.isPhoneVerified ? 'Complete' : 'Action needed'}</em></article>
-        <article><span>Platform approval</span><strong>{profile?.creatorStatus ?? 'Unavailable'}</strong></article>
-      </section>
-      <aside><span>Next step</span><p>{message}</p></aside>
-    </main>
-  )
-}
-
-createRoot(document.getElementById('root')!).render(<StrictMode><Dashboard /></StrictMode>)
+function Dashboard(){const[profile,setProfile]=useState<MerchantProfile|null>(null);const[message,setMessage]=useState('Sign in to load your merchant onboarding status.');const[showRegistration,setShowRegistration]=useState(false)
+  useEffect(()=>{const token=localStorage.getItem('creatorpay_access_token');if(!token)return;fetch('/api/v1/merchants/me',{headers:{Authorization:`Bearer ${token}`}}).then(async r=>{if(!r.ok)throw new Error(r.status===401?'Your session has expired. Sign in again.':'Merchant status is temporarily unavailable.');return r.json()}).then((data:MerchantProfile)=>{setProfile(data);setMessage(data.nextStep)}).catch((e:Error)=>setMessage(e.message))},[])
+  if(showRegistration)return <main className="shell"><button className="text-button" onClick={()=>setShowRegistration(false)}>← Dashboard</button><Registration onDone={setMessage}/><aside><span>Registration status</span><p>{message}</p></aside></main>
+  return <main className="dashboard"><header><p className="eyebrow">CreatorPay V2</p><span className="stage">Merchant onboarding</span><h1>{profile?.tradingName??'Merchant dashboard'}</h1><p className="legal-name">{profile?.legalBusinessName??'Register or sign in to continue'}</p><button className="text-button" onClick={()=>setShowRegistration(true)}>Register a business →</button></header><section className="status-grid" aria-label="Merchant onboarding status"><article><span>Merchant ID</span><strong>{profile?.publicMerchantId??'—'}</strong></article><article><span>Verification</span><strong>{profile?(profile.isEmailVerified&&profile.isPhoneVerified?'Verified':'In progress'):'Unavailable'}</strong><em className={profile?.isEmailVerified&&profile?.isPhoneVerified?'complete':''}>{profile?`${profile.registrationProgress}% complete`:'Sign in required'}</em></article><article><span>Platform approval</span><strong>{profile?.merchantStatus??'Unavailable'}</strong></article><article><span>Merchant Admin</span><strong>{profile?.email??'—'}</strong><em>{profile?.accountStatus??'Awaiting sign in'}</em></article></section><aside><span>Next step</span><p>{message}</p></aside></main>}
+createRoot(document.getElementById('root')!).render(<StrictMode><Dashboard/></StrictMode>)

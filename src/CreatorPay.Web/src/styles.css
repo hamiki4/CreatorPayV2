@@ -5,6 +5,7 @@
 body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 90% 0, #d8eadc, transparent 34rem), #edf3ee; }
 #root { min-height: 100vh; padding: clamp(1.25rem, 5vw, 4rem); }
 .dashboard { max-width: 72rem; margin: auto; }
+.shell { max-width: 72rem; margin: auto; }
 header { position: relative; padding: clamp(2rem, 7vw, 5rem) 0 2.5rem; border-bottom: 1px solid #bdccbf; }
 .eyebrow, .stage, article span, aside span { color: #487052; font-size: .76rem; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 .stage { position: absolute; top: 2rem; right: 0; padding: .55rem .9rem; border: 1px solid #9fb7a5; border-radius: 99px; }
@@ -18,5 +19,13 @@ article em.complete { color: #287245; }
 aside { margin-top: 1.5rem; padding: 1.4rem 1.6rem; border-radius: .35rem; color: #eff8f0; background: #153c27; }
 aside span { color: #a9ceb3; }
 aside p { margin: .5rem 0 0; font-size: 1.15rem; }
+.text-button { margin-top: 1rem; padding: 0; border: 0; color: #205d39; background: transparent; font: 700 1rem 'DM Sans', sans-serif; cursor: pointer; }
+.registration { display: grid; grid-template-columns: .8fr 1.2fr; gap: clamp(2rem,6vw,6rem); padding: 4rem 0 2rem; }
+.registration h2 { margin: .5rem 0; font: 700 clamp(2.3rem,5vw,4.5rem)/1 Manrope,sans-serif; letter-spacing: -.05em; }
+form { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+label { display: flex; flex-direction: column; gap: .4rem; color: #487052; font-size: .78rem; font-weight: 700; text-transform: capitalize; }
+input { width: 100%; padding: .85rem; border: 1px solid #aabbad; border-radius: .25rem; background: #f8faf7; color: #17211b; font: inherit; }
+form button { grid-column: 1/-1; padding: 1rem; border: 0; border-radius: .25rem; color: white; background: #153c27; font-weight: 700; cursor: pointer; }
 @media (max-width: 760px) { .status-grid { grid-template-columns: 1fr 1fr; } .stage { position: static; display: inline-block; } }
+@media (max-width: 760px) { .registration { grid-template-columns: 1fr; } }
 @media (max-width: 460px) { .status-grid { grid-template-columns: 1fr; } }

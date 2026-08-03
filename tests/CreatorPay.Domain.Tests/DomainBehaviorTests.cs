@@ -54,6 +54,22 @@ public sealed class DomainBehaviorTests
     }
 
     [Fact]
+    public void Merchant_Rejection_RequiresPendingApproval()
+    {
+        var merchant = new Merchant { Status = MerchantStatus.Draft };
+        Assert.Throws<InvalidOperationException>(() => merchant.Reject(Now, "admin"));
+    }
+
+    [Fact]
+    public void Merchant_SuspensionAndReactivation_EnforceTransitions()
+    {
+        var merchant = new Merchant { Status = MerchantStatus.PendingApproval };
+        merchant.Approve(Now, Guid.NewGuid()); merchant.Suspend(Now.AddMinutes(1), "admin"); merchant.Reactivate(Now.AddMinutes(2), "admin");
+        Assert.Equal(MerchantStatus.Active, merchant.Status);
+        Assert.Throws<InvalidOperationException>(() => merchant.Reactivate(Now.AddMinutes(3), "admin"));
+    }
+
+    [Fact]
     public void Partnership_Approval_RecordsApprovalAndPeriod()
     {
         var partnership = PendingPartnership();

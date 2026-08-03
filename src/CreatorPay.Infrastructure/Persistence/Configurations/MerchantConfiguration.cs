@@ -17,6 +17,13 @@ public sealed class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
         builder.Property(x => x.NormalizedPhoneNumber).HasMaxLength(32).IsRequired();
         builder.Property(x => x.Email).HasMaxLength(320).IsRequired();
         builder.Property(x => x.TaxRegistrationNumber).HasMaxLength(100);
+        builder.Property(x => x.BusinessAddress).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.City).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.Region).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.Country).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.TimeZone).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.LogoFileName).HasMaxLength(255);
+        builder.Property(x => x.LogoContentType).HasMaxLength(100);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.ApprovedAtUtc).HasColumnType("timestamp with time zone");
         builder.HasIndex(x => x.PublicMerchantId).IsUnique();

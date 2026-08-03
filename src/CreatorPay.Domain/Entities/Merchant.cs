@@ -13,6 +13,14 @@ public sealed class Merchant : Entity
     public string NormalizedPhoneNumber { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? TaxRegistrationNumber { get; set; }
+    public string BusinessAddress { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string Region { get; set; } = string.Empty;
+    public string Country { get; set; } = string.Empty;
+    public string TimeZone { get; set; } = string.Empty;
+    public string? LogoFileName { get; set; }
+    public string? LogoContentType { get; set; }
+    public long? LogoSizeBytes { get; set; }
     public MerchantStatus Status { get; set; } = MerchantStatus.Draft;
     public DateTime? ApprovedAtUtc { get; private set; }
     public Guid? ApprovedByUserId { get; private set; }
@@ -20,6 +28,7 @@ public sealed class Merchant : Entity
     public ICollection<Supervisor> Supervisors { get; } = [];
     public ICollection<Cashier> Cashiers { get; } = [];
     public ICollection<MerchantCreatorPartnership> CreatorPartnerships { get; } = [];
+    public ICollection<MerchantDocument> Documents { get; } = [];
 
     public void Approve(DateTime approvedAtUtc, Guid approvedByUserId)
     {
@@ -37,6 +46,20 @@ public sealed class Merchant : Entity
         Status = MerchantStatus.Suspended;
         UpdatedAtUtc = suspendedAtUtc;
         UpdatedBy = updatedBy;
+    }
+
+    public void Reject(DateTime rejectedAtUtc, string? updatedBy = null)
+    {
+        EnsureUtc(rejectedAtUtc);
+        if (Status != MerchantStatus.PendingApproval) throw new InvalidOperationException("Only a merchant pending approval can be rejected.");
+        Status = MerchantStatus.Rejected; UpdatedAtUtc = rejectedAtUtc; UpdatedBy = updatedBy;
+    }
+
+    public void Reactivate(DateTime reactivatedAtUtc, string? updatedBy = null)
+    {
+        EnsureUtc(reactivatedAtUtc);
+        if (Status != MerchantStatus.Suspended) throw new InvalidOperationException("Only a suspended merchant can be reactivated.");
+        Status = MerchantStatus.Active; UpdatedAtUtc = reactivatedAtUtc; UpdatedBy = updatedBy;
     }
 
     private static void EnsureUtc(DateTime value)

@@ -20,6 +20,9 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<CreatorVerificationToken> CreatorVerificationTokens => Set<CreatorVerificationToken>();
     public DbSet<CreatorAuditEvent> CreatorAuditEvents => Set<CreatorAuditEvent>();
+    public DbSet<MerchantDocument> MerchantDocuments => Set<MerchantDocument>();
+    public DbSet<MerchantVerificationToken> MerchantVerificationTokens => Set<MerchantVerificationToken>();
+    public DbSet<MerchantAuditEvent> MerchantAuditEvents => Set<MerchantAuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
