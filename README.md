@@ -1,35 +1,29 @@
 # CreatorPay V2
 
-CreatorPay is a creator-to-merchant affiliate commission platform. Milestone 2 provides the core domain model and PostgreSQL persistence foundation while preserving the clean-architecture solution established in Milestone 1.
+CreatorPay is a creator-to-merchant affiliate-commerce platform. Milestones 1 and 2 provide the clean-architecture solution and the initial domain/PostgreSQL persistence skeleton. Milestone 3 is a documentation-only software requirements and implementation blueprint; no new application behavior is included.
 
-## Prerequisites
+The defining rule is dual approval: a creator must first be approved by the CreatorPay Platform Admin and then separately approved by each merchant through a transaction-eligible `Approved` `MerchantCreatorPartnership`. Platform approval alone never authorizes merchant commission transactions.
+
+## Prerequisites and validation
 
 - .NET 10 SDK and `dotnet-ef`
 - Node.js and npm
-- Docker Desktop for local PostgreSQL (optional for metadata-only tests)
-
-## Build and test
+- Docker Desktop for local PostgreSQL (optional for current metadata-only tests)
 
 ```powershell
-dotnet restore CreatorPay.slnx
 dotnet build CreatorPay.slnx
 dotnet test CreatorPay.slnx
 npm run build --prefix src/CreatorPay.Web
 ```
 
-Infrastructure tests validate the Npgsql EF model metadata without substituting SQLite. Container-backed PostgreSQL integration tests are deferred to a later milestone.
+Infrastructure tests currently validate Npgsql EF metadata without substituting SQLite. Migrations are deliberately not applied at API startup. See [database design](docs/03-database-design.md) for local PostgreSQL setup.
 
-## Local PostgreSQL and migrations
+## Documentation map
 
-Copy `.env.example` to `.env`, replace the placeholder password, export `ConnectionStrings__CreatorPayDatabase` for the API/EF CLI, then start PostgreSQL:
+- Foundation: [business](docs/01-business-overview.md), [architecture](docs/02-system-architecture.md), [database](docs/03-database-design.md), [domain](docs/04-domain-model.md)
+- Participants: [roles](docs/05-user-roles-and-permissions.md), [registration](docs/06-registration-and-verification.md), [platform approval](docs/07-platform-approval-workflows.md), [partnerships](docs/08-merchant-creator-partnerships.md)
+- Commerce: [cashier/QR](docs/09-qr-and-cashier-transaction-workflow.md), [commission](docs/10-commission-engine.md), [wallet](docs/11-merchant-wallet-and-deposits.md), [earnings/payouts](docs/12-creator-earnings-and-payouts.md), [customer phone](docs/13-customer-phone-and-repeat-use.md), [notifications](docs/14-notifications.md)
+- Delivery: [security/privacy](docs/15-security-fraud-and-privacy.md), [API](docs/16-api-design.md), [UI](docs/17-ui-navigation-and-screens.md), [operations](docs/18-reporting-and-operations.md), [testing](docs/19-testing-strategy.md), [deployment](docs/20-deployment-and-environments.md), [MVP acceptance](docs/21-complete-acceptance-criteria.md)
+- Delivery sequence: [implementation roadmap](docs/implementation-roadmap.md)
 
-```powershell
-docker compose up -d
-$env:ConnectionStrings__CreatorPayDatabase = "Host=localhost;Port=5432;Database=CreatorPayV2Db;Username=creatorpay;Password=<local-password>"
-dotnet ef migrations list --project src/CreatorPay.Infrastructure --startup-project src/CreatorPay.Api
-dotnet ef database update --project src/CreatorPay.Infrastructure --startup-project src/CreatorPay.Api
-```
-
-Migrations are deliberately not applied during API startup. Run the API with `dotnet run --project src/CreatorPay.Api`; the only business-neutral endpoint remains `GET /health`.
-
-See [database design](docs/03-database-design.md), [domain model](docs/04-domain-model.md), and the [implementation roadmap](docs/implementation-roadmap.md).
+Open legal, banking, tax, privacy, hosting and payment-provider questions are intentionally recorded as decision gates rather than invented implementation details.

@@ -25,7 +25,7 @@ Partnership statuses mean:
 - `Expired`: date/administrative expiration state.
 - `Blocked`: explicitly prohibited.
 
-The domain supports creator and merchant approval/suspension plus partnership approval, rejection, suspension, revocation, and time-supplied eligibility checks. Invalid transitions, non-UTC timestamps, missing reasons, and invalid date ranges are rejected.
+The current domain supports creator and merchant approval/suspension plus partnership approval, rejection, suspension, revocation, and time-supplied eligibility checks. Invalid transitions, non-UTC timestamps, missing reasons, and invalid date ranges are rejected. The complete future partnership graph (including renewal, blocking, expiry and reinstatement) is specified in [merchant-creator partnerships](08-merchant-creator-partnerships.md); it is not yet implemented.
 
 ## Current limitations
 
