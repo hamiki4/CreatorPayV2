@@ -1,5 +1,7 @@
 # User Roles and Permissions
 
+Milestone 8: Creators manage only their relationships; Merchant Admins manage only their merchant; Platform Admin support is read-only; Supervisors and Cashiers have no partnership management access.
+
 ## Milestone 7 organization permissions
 
 - Merchant Admin: manages only locations, supervisors, cashiers, assignments, statuses, and invitations for the `MerchantId` in authenticated claims.

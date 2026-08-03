@@ -1,5 +1,7 @@
 # API Design
 
+Milestone 8 partnership APIs are versioned under `/api/v1/creator`, `/api/v1/merchant`, and read-only `/api/v1/admin/partnerships`; they use claim-derived scope, DTOs, and Problem Details.
+
 ## Merchant organization endpoints
 
 Milestone 7 endpoints and authorization rules are catalogued in [23-merchant-organization-and-staff.md](23-merchant-organization-and-staff.md). They use versioned `/api/v1` routes, request/response DTOs, claim-derived merchant scope, role policies, and Problem Details failures. EF entities and secret hashes are never serialized.

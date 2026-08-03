@@ -1,32 +1,42 @@
-# Merchant-Creator Partnerships
+# Merchant–Creator Partnerships (Milestone 8)
 
-One durable partnership record exists per merchant/creator pair, consistent with the current unique database constraint. Requests may originate from creator search, a merchant scanning the permanent creator QR, merchant creator search, or direct add. Direct add still produces `Pending` unless the same authorized merchant action explicitly approves it and captures the decision audit.
+CreatorPay uses two approval levels: a Platform Admin first activates a creator, then each merchant independently approves that creator. Platform approval never grants automatic promotion rights.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Pending: request/direct add
-  Pending --> Approved: approve
-  Pending --> Rejected: reject
-  Pending --> Blocked: block
-  Rejected --> Pending: resubmit allowed
-  Approved --> Suspended: temporarily stop
-  Suspended --> Approved: reinstate/renew
-  Approved --> Revoked: merchant revokes / creator stops
-  Suspended --> Revoked: revoke
-  Approved --> Expired: end date reached
-  Suspended --> Expired: end date reached
-  Expired --> Pending: renewal request
-  Rejected --> Blocked: block
-  Suspended --> Blocked: block
-  Blocked --> Pending: authorized unblock and new request
+  [*] --> Pending
+  Pending --> Approved
+  Pending --> Rejected
+  Pending --> Revoked: withdraw
+  Approved --> Suspended
+  Approved --> Revoked
+  Approved --> Expired
+  Approved --> Blocked
+  Suspended --> Approved: reactivate
+  Suspended --> Revoked
+  Suspended --> Blocked
+  Blocked --> Approved: merchant reactivation
 ```
 
-`Pending`, `Approved`, `Rejected`, `Suspended`, `Revoked`, `Expired`, and `Blocked` are the canonical statuses. Transitions not shown are invalid. Renewal returns to review; history is retained. Blocking prevents new requests until an authorized merchant user unblocks. Rejection is a decision on a request; revocation ends prior approval; suspension is reversible. Creator “stop promoting” becomes `Revoked` and is audited with creator as actor.
+Every change appends `PartnershipStatusHistory`; historical rows are not rewritten. Blocked relationships cannot be bypassed.
 
-## Eligibility at transaction time
+```mermaid
+sequenceDiagram
+  Creator->>API: Search active merchants
+  API-->>Creator: Eligible results
+  Creator->>API: Request partnership
+  API->>Database: Pending + audit/history
+  Merchant Admin->>API: Approve or reject
+  API->>Database: Validate scope/status + history
+  API-->>Creator: Updated relationship
+```
 
-Eligibility requires all of: authentic active QR; Creator and creator account Active; Merchant Active (not LowBalanceRestricted for commission purchases); Cashier/account Active; active cashier assignment to the chosen active location; partnership `Approved`; start absent or `<= now`; end absent or `> now`; no location rows or an active row for the chosen merchant location; any campaign active and applicable; and a resolvable effective commission rule. All checks occur server-side again at confirmation/sync time.
+Eligibility requires Approved status, active creator and merchant, an inclusive start boundary, exclusive end boundary, and—when restricted—a matching active merchant location. The reusable domain service accepts evaluation time.
 
-Merchant Admin manages requests, location restrictions, dates, campaign and partnership commission assignment. Supervisors may view assigned-location eligibility but cannot decide unless explicitly granted a future permission. Creators can search only discoverable active merchants, request, view reason-safe status and stop. Performance reports include attributable gross sales, commissions, transaction/reversal counts and time/location/campaign filters; they must not expose customer phones.
+Assignments must belong to the partnership merchant and be active. Removal deactivates an assignment rather than deleting it. No active assignments means all active locations.
 
-Current Milestone 2 methods implement only a subset of this state graph; later milestones must extend behavior without rewriting history.
+Creator APIs use `/api/v1/creator`; Merchant Admin APIs use `/api/v1/merchant`; Platform Admin has read-only `/api/v1/admin/partnerships`. Scope comes from authenticated claims. Cashiers and supervisors have no management access. Responses use DTOs and Problem Details.
+
+Audits cover requests, direct additions, transitions, date/location changes, invalid transitions, and cross-merchant attempts without sensitive search/profile data.
+
+Known limitations: no renewal/resubmission endpoint, automated expiration job, commissions, campaigns, notifications, QR validation, wallets, transactions, earnings, or payouts. Milestone 9 QR validation must call the eligibility service with supplied time and location.

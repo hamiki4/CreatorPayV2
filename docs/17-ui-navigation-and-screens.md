@@ -1,5 +1,7 @@
 # UI Navigation and Screens
 
+Milestone 8 adds creator merchant-search/status views and merchant creator-search/lifecycle views, with responsive loading, empty, validation, and destructive-confirmation states. English copy is ready to move into Amharic resource dictionaries.
+
 ## Merchant organization
 
 Merchant Admin navigation exposes Locations, Supervisors, and Cashiers. Each area includes list/empty/loading/error states and contextual create, invite, edit, assignment, primary-location, activation, and deactivation actions. Invitation acceptance is public and token-based. Supervisor and Cashier navigation is restricted to My profile and Assigned locations. No QR UI is present.

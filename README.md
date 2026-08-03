@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 8 adds merchant-specific creator approval, audited partnership lifecycles, location/date eligibility, scoped APIs, and role-aware partnership screens. See [Merchant–Creator Partnerships](docs/08-merchant-creator-partnerships.md).
+
 Milestones 1–7 are implemented. Milestone 7 adds merchant locations, Supervisor/Cashier management, secure staff invitations, strict merchant/location authorization, organization audit events, and responsive role-aware React screens. See [Merchant Organization and Staff](docs/23-merchant-organization-and-staff.md) for APIs, security controls, limitations, and validation commands.
 
 CreatorPay is a creator-to-merchant affiliate-commerce platform. Milestones 1–5 provide the clean-architecture foundation, domain/PostgreSQL persistence, requirements blueprint, authentication boundary, and creator registration/verification/platform-approval workflow.

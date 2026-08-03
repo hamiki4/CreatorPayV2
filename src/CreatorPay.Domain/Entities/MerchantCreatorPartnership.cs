@@ -18,6 +18,7 @@ public sealed class MerchantCreatorPartnership : Entity
     public DateTime? SuspendedAtUtc { get; private set; }
     public Guid? SuspendedByUserId { get; private set; }
     public string? SuspensionReason { get; private set; }
+    public string? IntroductoryMessage { get; set; }
     public DateTime? StartDateUtc { get; private set; }
     public DateTime? EndDateUtc { get; private set; }
     public Guid? AssignedCommissionRuleId { get; set; }
@@ -25,6 +26,7 @@ public sealed class MerchantCreatorPartnership : Entity
     public Merchant Merchant { get; set; } = null!;
     public Creator Creator { get; set; } = null!;
     public ICollection<PartnershipLocation> Locations { get; } = [];
+    public ICollection<PartnershipStatusHistory> StatusHistory { get; } = [];
 
     public void Approve(DateTime approvedAtUtc, Guid approvedByUserId, DateTime? startDateUtc = null, DateTime? endDateUtc = null)
     {
@@ -65,10 +67,32 @@ public sealed class MerchantCreatorPartnership : Entity
     public void Revoke(DateTime revokedAtUtc, Guid revokedByUserId)
     {
         EnsureUtc(revokedAtUtc);
-        if (Status is not (PartnershipStatus.Approved or PartnershipStatus.Suspended)) throw new InvalidOperationException("Only an approved or suspended partnership can be revoked.");
+        if (Status is not (PartnershipStatus.Pending or PartnershipStatus.Approved or PartnershipStatus.Suspended)) throw new InvalidOperationException("Only a pending, approved, or suspended partnership can be revoked.");
         Status = PartnershipStatus.Revoked;
         UpdatedAtUtc = revokedAtUtc;
         UpdatedBy = revokedByUserId.ToString();
+    }
+
+    public void Reactivate(DateTime changedAtUtc, Guid changedByUserId)
+    {
+        EnsureUtc(changedAtUtc);
+        if (Status is not (PartnershipStatus.Suspended or PartnershipStatus.Blocked)) throw new InvalidOperationException("Only a suspended or blocked partnership can be reactivated.");
+        Status = PartnershipStatus.Approved; SuspendedAtUtc = null; SuspendedByUserId = null; SuspensionReason = null;
+        UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
+    }
+
+    public void Block(DateTime changedAtUtc, Guid changedByUserId)
+    {
+        EnsureUtc(changedAtUtc);
+        if (Status is not (PartnershipStatus.Approved or PartnershipStatus.Suspended)) throw new InvalidOperationException("Only an approved or suspended partnership can be blocked.");
+        Status = PartnershipStatus.Blocked; UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
+    }
+
+    public void SetDates(DateTime? startDateUtc, DateTime? endDateUtc, DateTime changedAtUtc, Guid changedByUserId)
+    {
+        EnsureOptionalUtc(startDateUtc); EnsureOptionalUtc(endDateUtc); EnsureUtc(changedAtUtc);
+        if (startDateUtc.HasValue && endDateUtc.HasValue && endDateUtc <= startDateUtc) throw new ArgumentException("End date must be after start date.");
+        StartDateUtc = startDateUtc; EndDateUtc = endDateUtc; UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
     }
 
     public bool IsTransactionEligibleAt(DateTime utcNow)

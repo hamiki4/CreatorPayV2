@@ -1,5 +1,9 @@
 # Implementation Roadmap
 
+## Milestone 8 — complete
+
+Merchant–creator discovery, merchant-specific approval, lifecycle history, location/date eligibility, scoped APIs, audits, and web workspaces are implemented. Milestone 9 should consume the eligibility service for QR validation without duplicating partnership policy.
+
 ## Milestone 7 — complete
 
 Merchant locations, Supervisor/Cashier profiles and assignments, secure staff invitations, claim-derived scoping, audit events, role-aware React pages, PostgreSQL constraints, and migration `AddMerchantOrganizationAndStaffInvitations` are implemented. Milestone 8 functionality is intentionally not included.

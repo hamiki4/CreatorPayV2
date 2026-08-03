@@ -15,6 +15,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<SupervisorLocationAssignment> SupervisorLocationAssignments => Set<SupervisorLocationAssignment>();
     public DbSet<MerchantCreatorPartnership> MerchantCreatorPartnerships => Set<MerchantCreatorPartnership>();
     public DbSet<PartnershipLocation> PartnershipLocations => Set<PartnershipLocation>();
+    public DbSet<PartnershipStatusHistory> PartnershipStatusHistories => Set<PartnershipStatusHistory>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<LoginAudit> LoginAudits => Set<LoginAudit>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();

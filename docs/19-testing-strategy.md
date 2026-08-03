@@ -1,5 +1,7 @@
 # Testing Strategy
 
+Milestone 8 tests lifecycle and supplied-time/location eligibility in the domain suite. API behavior remains PostgreSQL-compatible; SQLite must not replace PostgreSQL integration coverage. Backend and production frontend builds are validation gates.
+
 ## Milestone 7
 
 Model tests verify hashed invitation storage and PostgreSQL filtered indexes. Application tests verify reusable merchant/location scoping. API integration tests verify 401 and role-based 403 boundaries without replacing PostgreSQL semantics with SQLite. Full persistence flows should run against the PostgreSQL service from `docker-compose.yml`; the frontend TypeScript/Vite production build is part of acceptance.
