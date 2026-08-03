@@ -1,0 +1,46 @@
+using CreatorPay.Domain.Common;
+using CreatorPay.Domain.Enums;
+
+namespace CreatorPay.Domain.Entities;
+
+public sealed class Merchant : Entity
+{
+    public string PublicMerchantId { get; set; } = string.Empty;
+    public string LegalBusinessName { get; set; } = string.Empty;
+    public string TradingName { get; set; } = string.Empty;
+    public string BusinessType { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string NormalizedPhoneNumber { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? TaxRegistrationNumber { get; set; }
+    public MerchantStatus Status { get; set; } = MerchantStatus.Draft;
+    public DateTime? ApprovedAtUtc { get; private set; }
+    public Guid? ApprovedByUserId { get; private set; }
+    public ICollection<MerchantLocation> Locations { get; } = [];
+    public ICollection<Supervisor> Supervisors { get; } = [];
+    public ICollection<Cashier> Cashiers { get; } = [];
+    public ICollection<MerchantCreatorPartnership> CreatorPartnerships { get; } = [];
+
+    public void Approve(DateTime approvedAtUtc, Guid approvedByUserId)
+    {
+        EnsureUtc(approvedAtUtc);
+        if (Status != MerchantStatus.PendingApproval) throw new InvalidOperationException("Only a merchant pending approval can be approved.");
+        Status = MerchantStatus.Active;
+        ApprovedAtUtc = approvedAtUtc;
+        ApprovedByUserId = approvedByUserId;
+    }
+
+    public void Suspend(DateTime suspendedAtUtc, string? updatedBy = null)
+    {
+        EnsureUtc(suspendedAtUtc);
+        if (Status is not (MerchantStatus.Active or MerchantStatus.LowBalanceRestricted)) throw new InvalidOperationException("Only an eligible merchant can be suspended.");
+        Status = MerchantStatus.Suspended;
+        UpdatedAtUtc = suspendedAtUtc;
+        UpdatedBy = updatedBy;
+    }
+
+    private static void EnsureUtc(DateTime value)
+    {
+        if (value.Kind != DateTimeKind.Utc) throw new ArgumentException("Timestamp must be UTC.", nameof(value));
+    }
+}

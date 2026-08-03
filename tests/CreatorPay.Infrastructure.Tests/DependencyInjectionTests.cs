@@ -9,7 +9,12 @@ public sealed class DependencyInjectionTests
     public void AddInfrastructureReturnsServiceCollection()
     {
         ServiceCollection services = [];
-        IConfiguration configuration = new ConfigurationBuilder().Build();
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:CreatorPayDatabase"] = "Host=localhost;Database=CreatorPayV2Db;Username=test;Password=test"
+            })
+            .Build();
 
         Assert.Same(services, services.AddInfrastructure(configuration));
     }
