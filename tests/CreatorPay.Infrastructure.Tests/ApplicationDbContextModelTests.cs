@@ -26,6 +26,15 @@ public sealed class ApplicationDbContextModelTests
         Assert.False(FindIndex(typeof(RefreshToken), "UserAccountId", "ExpiresAtUtc").IsUnique);
     }
 
+    [Fact]
+    public void Model_CreatesCreatorOnboardingAuditAndHashedTokenStorage()
+    {
+        Assert.NotNull(_model.FindEntityType(typeof(CreatorAuditEvent)));
+        Assert.NotNull(_model.FindEntityType(typeof(CreatorVerificationToken)));
+        Assert.True(FindIndex(typeof(CreatorVerificationToken), "TokenHash").IsUnique);
+        Assert.Null(_model.FindEntityType(typeof(CreatorVerificationToken))!.FindProperty("Token"));
+    }
+
     [Theory]
     [InlineData(typeof(UserAccount), "NormalizedEmail")]
     [InlineData(typeof(Creator), "PublicCreatorId")]

@@ -1,0 +1,27 @@
+using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Creators;
+
+namespace CreatorPay.Api.Creators;
+
+public static class CreatorEndpoints
+{
+    public static IEndpointRouteBuilder MapCreatorEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup("/api/v1/creators").WithTags("Creators");
+        group.MapPost("/register", async (RegisterCreatorRequest request, ICreatorService service, CancellationToken ct) => ToHttp(await service.RegisterAsync(request, ct), StatusCodes.Status201Created)).RequireRateLimiting("auth-sensitive");
+        group.MapPost("/verify-email", async (VerifyCreatorRequest request, ICreatorService service, CancellationToken ct) => ToHttp(await service.VerifyEmailAsync(request.Token, ct))).RequireRateLimiting("auth-sensitive");
+        group.MapPost("/verify-phone", async (VerifyCreatorRequest request, ICreatorService service, CancellationToken ct) => ToHttp(await service.VerifyPhoneAsync(request.Token, ct))).RequireRateLimiting("auth-sensitive");
+        group.MapGet("/me", async (ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.GetMeAsync(user.UserAccountId!.Value, ct))).RequireAuthorization("CreatorOnly");
+        group.MapPut("/me", async (UpdateCreatorProfileRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.UpdateMeAsync(user.UserAccountId!.Value, request, ct))).RequireAuthorization("CreatorOnly");
+        group.MapGet("/pending", async (ICreatorService service, CancellationToken ct) => Results.Ok(await service.GetPendingAsync(ct))).RequireAuthorization("PlatformAdminOnly");
+        group.MapGet("/{creatorId:guid}", async (Guid creatorId, ICreatorService service, CancellationToken ct) => ToHttp(await service.GetAsync(creatorId, ct))).RequireAuthorization("PlatformAdminOnly");
+        group.MapPost("/approve", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.ApproveAsync(request.CreatorId, user.UserAccountId!.Value, ct))).RequireAuthorization("PlatformAdminOnly");
+        group.MapPost("/reject", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RejectAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("PlatformAdminOnly");
+        group.MapPost("/suspend", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.SuspendAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("PlatformAdminOnly");
+        group.MapPost("/reactivate", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.ReactivateAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("PlatformAdminOnly");
+        return endpoints;
+    }
+    private static IResult ToHttp(CreatorResult result) => result.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(result.Error!);
+    private static IResult ToHttp<T>(CreatorResult<T> result, int successStatus = StatusCodes.Status200OK) => result.Succeeded ? Results.Json(result.Value, statusCode: successStatus) : Problem(result.Error!);
+    private static IResult Problem(string detail) => Results.Problem(detail, statusCode: StatusCodes.Status400BadRequest, title: "Creator request failed");
+}

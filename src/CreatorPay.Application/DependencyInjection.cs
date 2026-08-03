@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Creators;
 
 namespace CreatorPay.Application;
 
@@ -9,6 +10,7 @@ public static class DependencyInjection
     {
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddSingleton<PasswordPolicyValidator>();
+        services.AddScoped<ICreatorService, CreatorService>();
         return services;
     }
 }

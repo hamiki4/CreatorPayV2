@@ -21,3 +21,9 @@ Suspension requires reason/evidence and immediately blocks new eligible transact
 | Close | authorized request; obligations handled | Closed | unsettled funds require controlled closure workflow |
 
 Acceptance: decisions are idempotent, concurrency-safe, notified, filterable in audit history, and authorization-tested; no decision endpoint can silently create a partnership.
+
+## Milestone 5 creator transitions
+
+The implemented graph is `Draft → PendingVerification → PendingApproval → Active`, with `PendingApproval → Rejected`, `Active → Suspended`, and `Suspended → Active`. Approval requires both verification flags. Rejection and suspension require a reason. Every decision updates the linked account and writes an audit event with actor, UTC time, type, and safe reason. Only `PlatformAdminOnly` reaches queue, detail, and decision endpoints. No decision creates a partnership.
+
+Decision retries currently return validation failure outside the required source state; optimistic ETag/version handling and a durable notification outbox remain future hardening work.

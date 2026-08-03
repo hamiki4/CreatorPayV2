@@ -12,6 +12,9 @@ public sealed class Creator : Entity
     public string PhoneNumber { get; set; } = string.Empty;
     public string NormalizedPhoneNumber { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public string? ProfileImageFileName { get; set; }
+    public string? ProfileImageContentType { get; set; }
+    public long? ProfileImageSizeBytes { get; set; }
     public CreatorStatus Status { get; set; } = CreatorStatus.Draft;
     public DateTime? ApprovedAtUtc { get; private set; }
     public Guid? ApprovedByUserId { get; private set; }
@@ -26,6 +29,13 @@ public sealed class Creator : Entity
         ApprovedByUserId = approvedByUserId;
     }
 
+    public void Reject(DateTime rejectedAtUtc, string updatedBy)
+    {
+        EnsureUtc(rejectedAtUtc);
+        if (Status != CreatorStatus.PendingApproval) throw new InvalidOperationException("Only a creator pending approval can be rejected.");
+        Status = CreatorStatus.Rejected; UpdatedAtUtc = rejectedAtUtc; UpdatedBy = updatedBy;
+    }
+
     public void Suspend(DateTime suspendedAtUtc, string? updatedBy = null)
     {
         EnsureUtc(suspendedAtUtc);
@@ -33,6 +43,13 @@ public sealed class Creator : Entity
         Status = CreatorStatus.Suspended;
         UpdatedAtUtc = suspendedAtUtc;
         UpdatedBy = updatedBy;
+    }
+
+    public void Reactivate(DateTime reactivatedAtUtc, string updatedBy)
+    {
+        EnsureUtc(reactivatedAtUtc);
+        if (Status != CreatorStatus.Suspended) throw new InvalidOperationException("Only a suspended creator can be reactivated.");
+        Status = CreatorStatus.Active; UpdatedAtUtc = reactivatedAtUtc; UpdatedBy = updatedBy;
     }
 
     private static void EnsureUtc(DateTime value)

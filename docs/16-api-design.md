@@ -43,3 +43,7 @@ Uploads use separate authenticated presign/finalize endpoints or streamed multip
 # Milestone 4 authentication API
 
 Versioned authentication routes are under `/api/v1/auth`. They use request/response DTOs and RFC Problem Details failures. JWT Bearer is the API authentication scheme; OpenAPI exposure is limited to development.
+
+## Milestone 5 creator API
+
+Implemented routes under `/api/v1/creators` are public `POST /register`, `POST /verify-email`, and `POST /verify-phone`; Creator-only `GET /me` and `PUT /me`; and PlatformAdmin-only `GET /pending`, `GET /{creatorId}`, `POST /approve`, `POST /reject`, `POST /suspend`, and `POST /reactivate`. Decision DTOs carry `creatorId` and an optional reason (required for reject/suspend). No EF entity is serialized.

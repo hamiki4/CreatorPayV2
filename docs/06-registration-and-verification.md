@@ -33,6 +33,14 @@ stateDiagram-v2
   Active --> Closed: close
   Suspended --> Closed: close
 ```
-# Milestone 4 authentication boundary
+# Authentication boundary
 
-Registration and approval remain unimplemented. Until restricted onboarding tokens exist, only `Active` accounts may log in. Pending verification/approval and all other non-active statuses are rejected generically.
+Only `Active` accounts may use normal login. Pending verification/approval and all other non-active statuses are rejected generically; public verification challenges are used during onboarding.
+
+## Milestone 5 creator implementation
+
+Creator registration accepts first name, last name, display name, phone, email, and a Milestone 4-compliant password. Email is trimmed and uppercased for uniqueness; phone is reduced to digits and stored in canonical `+digits` display form. Initial states are exactly `AccountStatus.PendingVerification` and `CreatorStatus.Draft`.
+
+Registration creates independent email and phone opaque challenges. Only SHA-256 hashes, purpose, expiry, and single-use timestamps are persisted. The development provider is an explicit port for future email/SMS integrations and is not a production delivery mechanism. Verification failures use the same generic invalid-or-expired response. After the first verification the creator is `PendingVerification`; after both, creator and account atomically become `PendingApproval`.
+
+Changing email or phone invalidates that channel's verification and outstanding challenges, creates a replacement challenge, and returns both records to verification. Pending users remain subject to the active-only login rule. Profile image support stores validated filename, MIME type, and byte-count metadata only.

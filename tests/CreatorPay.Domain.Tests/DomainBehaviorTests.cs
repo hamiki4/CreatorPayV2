@@ -29,6 +29,22 @@ public sealed class DomainBehaviorTests
     }
 
     [Fact]
+    public void Creator_Rejection_RequiresPendingApproval()
+    {
+        var creator = new Creator { Status = CreatorStatus.Draft };
+        Assert.Throws<InvalidOperationException>(() => creator.Reject(Now, "admin"));
+    }
+
+    [Fact]
+    public void Creator_Reactivation_OnlyAllowsSuspendedCreator()
+    {
+        var creator = new Creator { Status = CreatorStatus.PendingApproval };
+        creator.Approve(Now, Guid.NewGuid()); creator.Suspend(Now.AddMinutes(1), "admin"); creator.Reactivate(Now.AddMinutes(2), "admin");
+        Assert.Equal(CreatorStatus.Active, creator.Status);
+        Assert.Throws<InvalidOperationException>(() => creator.Reactivate(Now.AddMinutes(3), "admin"));
+    }
+
+    [Fact]
     public void Merchant_Approval_ActivatesPendingMerchant()
     {
         var merchant = new Merchant { Status = MerchantStatus.PendingApproval };

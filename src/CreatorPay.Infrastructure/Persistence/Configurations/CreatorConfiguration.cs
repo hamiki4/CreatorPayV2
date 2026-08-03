@@ -16,6 +16,8 @@ public sealed class CreatorConfiguration : IEntityTypeConfiguration<Creator>
         builder.Property(x => x.PhoneNumber).HasMaxLength(32).IsRequired();
         builder.Property(x => x.NormalizedPhoneNumber).HasMaxLength(32).IsRequired();
         builder.Property(x => x.Email).HasMaxLength(320).IsRequired();
+        builder.Property(x => x.ProfileImageFileName).HasMaxLength(255);
+        builder.Property(x => x.ProfileImageContentType).HasMaxLength(100);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.ApprovedAtUtc).HasColumnType("timestamp with time zone");
         builder.HasIndex(x => x.PublicCreatorId).IsUnique();

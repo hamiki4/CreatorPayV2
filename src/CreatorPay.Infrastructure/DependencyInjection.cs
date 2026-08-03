@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using CreatorPay.Infrastructure.Persistence;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Infrastructure.Authentication;
+using CreatorPay.Application.Creators;
+using CreatorPay.Infrastructure.Creators;
 
 namespace CreatorPay.Infrastructure;
 
@@ -21,9 +23,11 @@ public static class DependencyInjection
         services.Configure<PasswordOptions>(configuration.GetSection(PasswordOptions.SectionName));
         services.Configure<LockoutOptions>(configuration.GetSection(LockoutOptions.SectionName));
         services.Configure<PasswordResetOptions>(configuration.GetSection(PasswordResetOptions.SectionName));
+        services.Configure<CreatorVerificationOptions>(configuration.GetSection(CreatorVerificationOptions.SectionName));
         services.AddScoped<IAuthenticationStore, AuthenticationStore>();
         services.AddSingleton<IPasswordHasher, PasswordHasherService>();
         services.AddSingleton<IUtcClock, UtcClock>(); services.AddSingleton<ITokenService, TokenService>(); services.AddSingleton<IPasswordResetNotifier, SafePasswordResetNotifier>();
+        services.AddScoped<ICreatorStore, CreatorStore>(); services.AddSingleton<ICreatorVerificationProvider, DevelopmentCreatorVerificationProvider>();
         return services;
     }
 }

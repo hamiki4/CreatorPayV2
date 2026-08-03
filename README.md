@@ -1,6 +1,6 @@
 # CreatorPay V2
 
-CreatorPay is a creator-to-merchant affiliate-commerce platform. Milestones 1 and 2 provide the clean-architecture solution and the initial domain/PostgreSQL persistence skeleton. Milestone 3 is a documentation-only software requirements and implementation blueprint; no new application behavior is included.
+CreatorPay is a creator-to-merchant affiliate-commerce platform. Milestones 1–5 provide the clean-architecture foundation, domain/PostgreSQL persistence, requirements blueprint, authentication boundary, and creator registration/verification/platform-approval workflow.
 
 The defining rule is dual approval: a creator must first be approved by the CreatorPay Platform Admin and then separately approved by each merchant through a transaction-eligible `Approved` `MerchantCreatorPartnership`. Platform approval alone never authorizes merchant commission transactions.
 
@@ -30,3 +30,7 @@ Open legal, banking, tax, privacy, hosting and payment-provider questions are in
 # Milestone 4: authentication
 
 CreatorPay now includes secure password hashing, JWT Bearer access tokens, rotating hashed refresh tokens, password reset foundations, account lockout, authentication audits, role policies, and `/api/v1/auth` endpoints. See [authentication and token security](docs/22-authentication-and-token-security.md) for configuration, risks, and manual commands.
+
+## Milestone 5: creator onboarding
+
+Creators register at `/api/v1/creators/register`, complete development-provider email and phone verification, and enter the Platform Admin approval queue. Creator profile access is owner-scoped; approval decisions require `PlatformAdmin`. Verification tokens are hashed at rest and onboarding events are audited. The React shell presents a creator status dashboard. No merchant, partnership, QR, financial, or payout behavior is included.

@@ -1,44 +1,22 @@
-:root {
-  color: #17211b;
-  background: #f2f7f3;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-}
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Manrope:wght@600;700&display=swap');
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-#root {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 2rem;
-}
-
-main {
-  max-width: 64rem;
-}
-
-.eyebrow {
-  margin: 0 0 1rem;
-  color: #177245;
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-h1 {
-  margin: 0;
-  font-size: clamp(2.75rem, 8vw, 6.5rem);
-  line-height: 0.98;
-  letter-spacing: -0.055em;
-}
+:root { color: #17211b; background: #edf3ee; font-family: 'DM Sans', sans-serif; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 90% 0, #d8eadc, transparent 34rem), #edf3ee; }
+#root { min-height: 100vh; padding: clamp(1.25rem, 5vw, 4rem); }
+.dashboard { max-width: 72rem; margin: auto; }
+header { position: relative; padding: clamp(2rem, 7vw, 5rem) 0 2.5rem; border-bottom: 1px solid #bdccbf; }
+.eyebrow, .stage, article span, aside span { color: #487052; font-size: .76rem; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+.stage { position: absolute; top: 2rem; right: 0; padding: .55rem .9rem; border: 1px solid #9fb7a5; border-radius: 99px; }
+h1 { margin: .7rem 0 0; font-family: Manrope, sans-serif; font-size: clamp(2.7rem, 7vw, 5.8rem); letter-spacing: -.06em; line-height: .98; }
+.legal-name { margin: .8rem 0 0; color: #607166; font-size: 1.1rem; }
+.status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 1px; background: #bdccbf; border: 1px solid #bdccbf; }
+article { min-height: 12rem; padding: 1.4rem; background: #f8faf7; display: flex; flex-direction: column; gap: .8rem; }
+article strong { margin-top: auto; overflow-wrap: anywhere; font: 600 1.25rem/1.25 Manrope, sans-serif; }
+article em { color: #9c4c38; font-size: .85rem; font-style: normal; }
+article em.complete { color: #287245; }
+aside { margin-top: 1.5rem; padding: 1.4rem 1.6rem; border-radius: .35rem; color: #eff8f0; background: #153c27; }
+aside span { color: #a9ceb3; }
+aside p { margin: .5rem 0 0; font-size: 1.15rem; }
+@media (max-width: 760px) { .status-grid { grid-template-columns: 1fr 1fr; } .stage { position: static; display: inline-block; } }
+@media (max-width: 460px) { .status-grid { grid-template-columns: 1fr; } }

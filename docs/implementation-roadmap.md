@@ -38,3 +38,9 @@ Before relevant milestones: obtain legal/compliance decisions for identity docum
 # Milestone 4 status
 
 Identity, authentication, authorization policies, rotation/revocation, reset foundations, migration, tests, and security documentation are implemented. Milestone 5 should build registration/verification workflows on these contracts without weakening the active-only login rule until restricted onboarding access is explicitly designed.
+
+# Milestone 5 status
+
+Creator registration, hashed verification challenges, profile management, approval transitions, audit events, authorization, migration, tests, and onboarding dashboard are implemented. The active-only login rule remains unchanged.
+
+Milestone 6 should add merchant and primary Merchant Admin registration, verification, document metadata/review, and Platform Admin approval while reusing these provider and audit boundaries. It must not add partnerships, QR codes, wallets, commissions, or transactions.
