@@ -19,6 +19,7 @@ public sealed class Creator : Entity
     public DateTime? ApprovedAtUtc { get; private set; }
     public Guid? ApprovedByUserId { get; private set; }
     public ICollection<MerchantCreatorPartnership> MerchantPartnerships { get; } = [];
+    public ICollection<CreatorQrCode> QrCodes { get; } = [];
 
     public void Approve(DateTime approvedAtUtc, Guid approvedByUserId)
     {

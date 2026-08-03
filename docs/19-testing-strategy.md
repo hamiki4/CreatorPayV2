@@ -26,3 +26,6 @@ Acceptance criteria in [complete acceptance criteria](21-complete-acceptance-cri
 # Milestone 4 testing note
 
 Password policy, framework hashing, opaque-token hashing/randomness, JWT claims, and EF metadata are covered without substituting SQLite. PostgreSQL transaction/index integration should run against a dedicated PostgreSQL database or Testcontainers in CI.
+# Milestone 9 coverage
+
+QR tests cover deterministic signed tokens, tamper rejection, non-raw hash storage, PNG signatures, immediate revocation metadata, EF entity discovery, unique public/token identifiers, and the PostgreSQL filtered unique active-QR constraint. Solution and frontend builds, all test projects, migration discovery, and whitespace checks are release gates.

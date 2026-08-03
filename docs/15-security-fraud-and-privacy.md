@@ -20,3 +20,6 @@ Financial transactions and ledger/audit records are immutable; corrections are l
 # Milestone 4 controls
 
 Password hashing, temporary lockout, signed short-lived JWTs, hashed rotating refresh tokens, reuse-family revocation, hashed single-use reset tokens, authentication rate limits, safe audits, and baseline response headers are implemented. Raw passwords and tokens must never enter logs or audit rows.
+# Creator QR security
+
+Creator QR payloads expose no database IDs, contact details, documents, or payout data. A random public QR ID is protected by a versioned HMAC token derived from server configuration; only its SHA-256 hash is stored. Comparisons are constant-time. Raw tokens and signing keys are excluded from audit logs. Regeneration changes the public identifier/token and revokes the previous record immediately. Cross-merchant, invalid-location, tampered, successful, and failed attempts are audited using safe identifiers only.

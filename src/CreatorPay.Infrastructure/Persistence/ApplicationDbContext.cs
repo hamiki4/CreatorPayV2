@@ -7,6 +7,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
 {
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<Creator> Creators => Set<Creator>();
+    public DbSet<CreatorQrCode> CreatorQrCodes => Set<CreatorQrCode>();
     public DbSet<Merchant> Merchants => Set<Merchant>();
     public DbSet<MerchantLocation> MerchantLocations => Set<MerchantLocation>();
     public DbSet<Supervisor> Supervisors => Set<Supervisor>();

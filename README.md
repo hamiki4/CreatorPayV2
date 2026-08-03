@@ -38,3 +38,6 @@ CreatorPay now includes secure password hashing, JWT Bearer access tokens, rotat
 ## Milestone 5: creator onboarding
 
 Creators register at `/api/v1/creators/register`, complete development-provider email and phone verification, and enter the Platform Admin approval queue. Creator profile access is owner-scoped; approval decisions require `PlatformAdmin`. Verification tokens are hashed at rest and onboarding events are audited. The React shell presents a creator status dashboard. No merchant, partnership, QR, financial, or payout behavior is included.
+# Milestone 9: creator QR validation
+
+CreatorPay now supports one permanent active creator QR, secure regeneration/revocation with retained history, on-demand PNG output, and authenticated merchant-side validation against merchant/staff location scope and approved partnership eligibility. This milestone stops before transactions or financial processing. See `docs/09-qr-and-cashier-transaction-workflow.md` for endpoints, security, UI, and limitations.

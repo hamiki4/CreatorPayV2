@@ -32,3 +32,12 @@ The installable PWA may store encrypted/minimized pending operations in IndexedD
 Rejected syncs are immutable locally with a reason-safe code and correction/new-operation route. A duplicate-phone case becomes `ApprovalRequired`; a Supervisor approves/denies and customer confirms OTP before expiry. Conflicting reuse of a key with different content is rejected. Logout/device loss clears or makes encrypted data inaccessible. Service workers do not cache secrets or authenticated API responses indiscriminately.
 
 Acceptance: concurrent confirmations cannot overspend a wallet or double-credit; one logical operation produces at most one transaction/ledger set; failure rolls back all financial and outbox writes.
+# Milestone 9 implementation
+
+Creators receive one permanent, versioned QR at a time. The payload uses a random public QR identifier and an HMAC-protected token; database IDs and private creator data are never embedded. Only the token hash is persisted. Regeneration revokes the prior record immediately while retaining history; explicit revocation has the same immediate validation effect.
+
+Merchant Admins, active Supervisors, and active Cashiers validate at an active, in-scope location through `POST /api/v1/merchant/qr/validate`. Validation requires an active creator and merchant, an approved partnership within its date window, and any configured partnership location restriction. The result contains only public creator identity, partnership/merchant/location IDs, timestamp, and a safe status code. This milestone performs no purchase or other financial operation.
+
+Creator APIs are `GET /api/v1/creator/qr`, `GET /api/v1/creator/qr/image`, `GET /api/v1/creator/qr/history`, `POST /api/v1/creator/qr/regenerate`, and `POST /api/v1/creator/qr/revoke`. Image generation is on demand with QRCoder; image bytes are not stored in PostgreSQL.
+
+Known limitation: the staff UI accepts manual scanner payload entry and is camera-ready but does not implement live camera scanning or offline validation. Milestone 10 may consume a successful validation result when implementing cashier transactions.

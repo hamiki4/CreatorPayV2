@@ -12,7 +12,7 @@ public sealed class ApplicationDbContextModelTests
     [Fact]
     public void Model_CreatesAllMilestoneTwoEntities()
     {
-        Type[] expected = [typeof(UserAccount), typeof(Creator), typeof(Merchant), typeof(MerchantLocation), typeof(Supervisor), typeof(Cashier), typeof(CashierLocationAssignment), typeof(SupervisorLocationAssignment), typeof(MerchantCreatorPartnership), typeof(PartnershipLocation)];
+        Type[] expected = [typeof(UserAccount), typeof(Creator), typeof(CreatorQrCode), typeof(Merchant), typeof(MerchantLocation), typeof(Supervisor), typeof(Cashier), typeof(CashierLocationAssignment), typeof(SupervisorLocationAssignment), typeof(MerchantCreatorPartnership), typeof(PartnershipLocation)];
         Assert.All(expected, type => Assert.NotNull(_model.FindEntityType(type)));
     }
 

@@ -40,3 +40,6 @@ Creator APIs use `/api/v1/creator`; Merchant Admin APIs use `/api/v1/merchant`; 
 Audits cover requests, direct additions, transitions, date/location changes, invalid transitions, and cross-merchant attempts without sensitive search/profile data.
 
 Known limitations: no renewal/resubmission endpoint, automated expiration job, commissions, campaigns, notifications, QR validation, wallets, transactions, earnings, or payouts. Milestone 9 QR validation must call the eligibility service with supplied time and location.
+# Milestone 9 dependency
+
+QR validation requires an `Approved` partnership whose start/end window includes the validation time. Suspended, blocked, expired, not-yet-started, and absent partnerships return distinct safe results. When active partnership-location records exist, the selected location must be included.

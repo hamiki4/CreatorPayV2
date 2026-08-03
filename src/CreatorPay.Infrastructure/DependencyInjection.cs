@@ -10,6 +10,8 @@ using CreatorPay.Application.Merchants;
 using CreatorPay.Infrastructure.Merchants;
 using CreatorPay.Application.Organization;
 using CreatorPay.Infrastructure.Organization;
+using CreatorPay.Application.Qr;
+using CreatorPay.Infrastructure.Qr;
 
 namespace CreatorPay.Infrastructure;
 
@@ -35,6 +37,9 @@ public static class DependencyInjection
         services.AddScoped<ICreatorStore, CreatorStore>(); services.AddSingleton<ICreatorVerificationProvider, DevelopmentCreatorVerificationProvider>();
         services.AddScoped<IMerchantStore, MerchantStore>(); services.AddSingleton<IMerchantVerificationProvider, DevelopmentMerchantVerificationProvider>(); services.AddSingleton<IMerchantDocumentStorage, MetadataOnlyMerchantDocumentStorage>();
         services.AddScoped<IOrganizationService, OrganizationService>();
+        services.AddSingleton<IQrTokenService, QrTokenService>();
+        services.AddSingleton<IQrImageGenerator, QrImageGenerator>();
+        services.AddScoped<ICreatorQrService, CreatorQrService>();
         return services;
     }
 }

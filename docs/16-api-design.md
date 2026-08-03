@@ -53,3 +53,6 @@ Versioned authentication routes are under `/api/v1/auth`. They use request/respo
 ## Milestone 5 creator API
 
 Implemented routes under `/api/v1/creators` are public `POST /register`, `POST /verify-email`, and `POST /verify-phone`; Creator-only `GET /me` and `PUT /me`; and PlatformAdmin-only `GET /pending`, `GET /{creatorId}`, `POST /approve`, `POST /reject`, `POST /suspend`, and `POST /reactivate`. Decision DTOs carry `creatorId` and an optional reason (required for reject/suspend). No EF entity is serialized.
+# Milestone 9 QR endpoints
+
+Creator: `GET /api/v1/creator/qr`, `GET /api/v1/creator/qr/image`, `GET /api/v1/creator/qr/history`, `POST /api/v1/creator/qr/regenerate`, `POST /api/v1/creator/qr/revoke`. Merchant operations: `POST /api/v1/merchant/qr/validate` with `{ payload, locationId }`. Authentication derives creator and merchant/staff scope from claims. Errors use Problem Details; validation failures return a stable safe code in a successful validation response.

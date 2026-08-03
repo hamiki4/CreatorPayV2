@@ -43,3 +43,6 @@ Every authenticated shell includes language, notification center, profile/securi
 | Platform Admin: Reports/audit/health | Operate platform | revenue/performance/reconciliation, immutable audit search/export, job/dependency health |
 
 No Customer portal is planned for MVP: customer UI is the minimal OTP/consent confirmation flow opened from a secure expiring challenge.
+# Milestone 9 screens
+
+The creator workspace includes My QR, on-demand PNG display/download, issue status/history, and confirmed regeneration/revocation actions. Merchant Admin, Supervisor, and Cashier workspaces include assigned-location selection, manual QR payload entry, and clear validation results. Camera capture remains a future enhancement; no amount or transaction controls are present.

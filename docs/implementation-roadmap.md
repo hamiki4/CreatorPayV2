@@ -52,3 +52,6 @@ Identity, authentication, authorization policies, rotation/revocation, reset fou
 Creator registration, hashed verification challenges, profile management, approval transitions, audit events, authorization, migration, tests, and onboarding dashboard are implemented. The active-only login rule remains unchanged.
 
 Milestone 6 should add merchant and primary Merchant Admin registration, verification, document metadata/review, and Platform Admin approval while reusing these provider and audit boundaries. It must not add partnerships, QR codes, wallets, commissions, or transactions.
+# Milestone 9 — complete
+
+Permanent creator QR issuance, regeneration, revocation/history, on-demand PNG generation, merchant/staff location-scoped validation, audit events, APIs, and React workspaces are implemented. Purchase transactions, customer verification, commissions, wallets, earnings, notifications, payouts, and offline synchronization remain explicitly deferred.
