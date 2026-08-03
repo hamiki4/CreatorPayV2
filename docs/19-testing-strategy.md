@@ -1,5 +1,7 @@
 # Testing Strategy
 
+Milestone 13 unit coverage includes Ethiopian normalization, invalid formats, keyed deterministic hashing, masking, authenticated encryption, and OTP hashing/comparison. Database behavior remains Npgsql/PostgreSQL; SQLite is not substituted.
+
 Milestone 11 tests wallet non-negativity, balance transitions, journal balancing, and EF uniqueness metadata. True PostgreSQL concurrency integration remains environment-dependent; SQLite is not used as a concurrency substitute.
 
 Milestone 8 tests lifecycle and supplied-time/location eligibility in the domain suite. API behavior remains PostgreSQL-compatible; SQLite must not replace PostgreSQL integration coverage. Backend and production frontend builds are validation gates.

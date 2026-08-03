@@ -1,5 +1,7 @@
 # QR and Cashier Transaction Workflow
 
+Milestone 13 requires customer phone and idempotency data. Approved repeats revalidate merchant, location, QR, creator, partnership, commission, and wallet before the existing atomic purchase/earning/journal workflow runs.
+
 Milestone 11 purchase confirmation always invokes QR validation again inside the atomic workflow; a preview is never accepted as proof of eligibility.
 
 The creator has a permanent opaque QR credential. It contains no personal/financial data and is signed/versioned; rotation or revocation invalidates compromised credentials without changing the public creator identity.

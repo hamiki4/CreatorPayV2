@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 13 adds privacy-preserving Ethiopian customer-phone verification and supervised same-day repeat-use approval. Configure independent `CustomerVerification__HmacSecret` and `CustomerVerification__EncryptionKey` secrets of at least 32 characters. Real SMS is intentionally not integrated.
+
 Milestone 11 adds the merchant prepaid ETB wallet, manual deposit approval, and atomic cashier purchase confirmation. Configure `MerchantWallet:LowBalanceThreshold` and see [the wallet workflow](docs/11-merchant-wallet-and-deposits.md).
 
 Milestone 8 adds merchant-specific creator approval, audited partnership lifecycles, location/date eligibility, scoped APIs, and role-aware partnership screens. See [Merchant–Creator Partnerships](docs/08-merchant-creator-partnerships.md).

@@ -2,7 +2,7 @@ namespace CreatorPay.Application.Wallet;
 public sealed class WalletOptions { public const string SectionName="MerchantWallet"; public decimal LowBalanceThreshold { get; set; }=1000m; public string CurrencyCode { get; set; }="ETB"; }
 public sealed record SubmitDepositRequest(decimal Amount,string CurrencyCode,string ExternalReference,string? ProofMetadata);
 public sealed record RejectDepositRequest(string Reason);
-public sealed record ConfirmPurchaseRequest(string QrPayload,Guid MerchantLocationId,decimal PurchaseAmount,string CurrencyCode,string? ClientOperationId);
+public sealed record ConfirmPurchaseRequest(string QrPayload,Guid MerchantLocationId,decimal PurchaseAmount,string CurrencyCode,string? ClientOperationId,string CustomerPhoneNumber,Guid? RepeatUseApprovalRequestId=null);
 public sealed record WalletDto(Guid Id,string CurrencyCode,decimal AvailableBalance,decimal HeldBalance,string Status);
 public sealed record DepositDto(Guid Id,decimal Amount,string CurrencyCode,string Status,string ExternalReference,string? ProofMetadata,DateTime SubmittedAtUtc,DateTime? VerifiedAtUtc,string? FailureReason);
 public sealed record WalletEntryDto(Guid Id,string EntryType,decimal Amount,decimal BalanceBefore,decimal BalanceAfter,string Description,DateTime CreatedAtUtc);

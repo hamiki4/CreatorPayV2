@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+Milestone 13 is complete: customer phone protection, merchant-local duplicate detection, configurable OTP/supervisor approval, scoped APIs, audit history, PostgreSQL migration, and responsive UI. Payout, reversal, offline, general notification, and fraud-engine scope remains unchanged.
+
 Milestone 11 implements the prepaid ETB wallet, manual deposits, atomic purchases, immutable commission snapshots, idempotency, ledger/journal, APIs, and initial role-specific UI. Milestone 12 should build creator earnings from `CreatorPayable` without mutating posted journals.
 
 ## Milestone 8 — complete

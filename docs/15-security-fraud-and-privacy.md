@@ -1,5 +1,7 @@
 # Security, Fraud, and Privacy
 
+Customer phone plaintext is never persisted or returned. Equality uses secret-keyed HMAC and recovery uses AES-GCM. Audit detail excludes phone plaintext, raw OTP, secrets, encryption keys, and raw QR values. This is a repeat-use control, not a fraud engine.
+
 ## Baseline controls
 
 - Hash passwords with an approved adaptive algorithm (Argon2id preferred, or configured bcrypt/PBKDF2), unique salts and upgrade-on-login. Never encrypt passwords.

@@ -18,6 +18,8 @@ using CreatorPay.Application.Wallet;
 using CreatorPay.Infrastructure.Wallet;
 using CreatorPay.Application.Earnings;
 using CreatorPay.Infrastructure.Earnings;
+using CreatorPay.Application.CustomerVerification;
+using CreatorPay.Infrastructure.CustomerVerification;
 
 namespace CreatorPay.Infrastructure;
 
@@ -50,6 +52,7 @@ public static class DependencyInjection
         services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
         services.AddScoped<IWalletService, WalletService>();
         services.Configure<CreatorPayoutOptions>(configuration.GetSection(CreatorPayoutOptions.SectionName)); services.AddSingleton<IPayoutProvider,ManualPayoutProvider>(); services.AddScoped<ICreatorEarningsService,CreatorEarningsService>();
+        services.Configure<CustomerVerificationOptions>(configuration.GetSection(CustomerVerificationOptions.SectionName)); services.AddSingleton<IPhoneNumberNormalizer,EthiopianPhoneNumberNormalizer>(); services.AddSingleton<IPhoneHashService,PhoneHashService>(); services.AddSingleton<IPhoneEncryptionService,PhoneEncryptionService>(); services.AddSingleton<ICustomerVerificationProvider,DevelopmentCustomerVerificationProvider>(); services.AddScoped<IRepeatUseApprovalService,RepeatUseApprovalService>();
         return services;
     }
 }
