@@ -1,5 +1,9 @@
 # Implementation Roadmap
 
+## Milestone 7 — complete
+
+Merchant locations, Supervisor/Cashier profiles and assignments, secure staff invitations, claim-derived scoping, audit events, role-aware React pages, PostgreSQL constraints, and migration `AddMerchantOrganizationAndStaffInvitations` are implemented. Milestone 8 functionality is intentionally not included.
+
 Milestones 1–3 establish the foundation, persisted domain skeleton and approved requirements blueprint. Later milestones must link changes/tests to [MVP acceptance criteria](21-complete-acceptance-criteria.md), preserve clean architecture and use PostgreSQL integration tests for persistence behavior.
 
 ## Completed

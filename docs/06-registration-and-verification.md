@@ -1,5 +1,9 @@
 # Registration and Verification
 
+## Staff invitation registration
+
+Supervisor and Cashier accounts use a Merchant Admin invitation. A disabled profile is created first; the recipient uses the single-use, expiring token and chooses a password under the existing policy. Acceptance creates and links the user account atomically. Merchant invitations cannot create Creator, Merchant Admin, or Platform Admin accounts.
+
 All transitions and notification attempts are audited. Common failures are duplicate normalized identifiers, expired/single-use tokens, invalid files, rate limits, stale state, or unauthorized scope. Passwords are hashed; verification tokens are random, hashed at rest, expiring and single-use.
 
 | Workflow | Actor / preconditions | Required data and validation | Status transitions | Notifications / acceptance |

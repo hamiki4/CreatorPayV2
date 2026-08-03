@@ -35,6 +35,18 @@ public sealed class ApplicationDbContextModelTests
         Assert.Null(_model.FindEntityType(typeof(CreatorVerificationToken))!.FindProperty("Token"));
     }
 
+    [Fact]
+    public void Model_ConfiguresStaffInvitationAndPrimaryLocationConstraints()
+    {
+        Assert.NotNull(_model.FindEntityType(typeof(StaffInvitation)));
+        Assert.True(FindIndex(typeof(StaffInvitation), "TokenHash").IsUnique);
+        Assert.Null(_model.FindEntityType(typeof(StaffInvitation))!.FindProperty("Token"));
+        var primary = FindIndex(typeof(CashierLocationAssignment), "CashierId");
+        Assert.True(primary.IsUnique);
+        Assert.Contains("IsPrimary", primary.GetFilter());
+        Assert.Contains("IsActive", primary.GetFilter());
+    }
+
     [Theory]
     [InlineData(typeof(UserAccount), "NormalizedEmail")]
     [InlineData(typeof(Creator), "PublicCreatorId")]

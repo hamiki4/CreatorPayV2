@@ -8,6 +8,8 @@ using CreatorPay.Application.Creators;
 using CreatorPay.Infrastructure.Creators;
 using CreatorPay.Application.Merchants;
 using CreatorPay.Infrastructure.Merchants;
+using CreatorPay.Application.Organization;
+using CreatorPay.Infrastructure.Organization;
 
 namespace CreatorPay.Infrastructure;
 
@@ -26,11 +28,13 @@ public static class DependencyInjection
         services.Configure<LockoutOptions>(configuration.GetSection(LockoutOptions.SectionName));
         services.Configure<PasswordResetOptions>(configuration.GetSection(PasswordResetOptions.SectionName));
         services.Configure<CreatorVerificationOptions>(configuration.GetSection(CreatorVerificationOptions.SectionName));
+        services.Configure<StaffInvitationOptions>(configuration.GetSection(StaffInvitationOptions.SectionName));
         services.AddScoped<IAuthenticationStore, AuthenticationStore>();
         services.AddSingleton<IPasswordHasher, PasswordHasherService>();
         services.AddSingleton<IUtcClock, UtcClock>(); services.AddSingleton<ITokenService, TokenService>(); services.AddSingleton<IPasswordResetNotifier, SafePasswordResetNotifier>();
         services.AddScoped<ICreatorStore, CreatorStore>(); services.AddSingleton<ICreatorVerificationProvider, DevelopmentCreatorVerificationProvider>();
         services.AddScoped<IMerchantStore, MerchantStore>(); services.AddSingleton<IMerchantVerificationProvider, DevelopmentMerchantVerificationProvider>(); services.AddSingleton<IMerchantDocumentStorage, MetadataOnlyMerchantDocumentStorage>();
+        services.AddScoped<IOrganizationService, OrganizationService>();
         return services;
     }
 }

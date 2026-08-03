@@ -1,5 +1,9 @@
 # Testing Strategy
 
+## Milestone 7
+
+Model tests verify hashed invitation storage and PostgreSQL filtered indexes. Application tests verify reusable merchant/location scoping. API integration tests verify 401 and role-based 403 boundaries without replacing PostgreSQL semantics with SQLite. Full persistence flows should run against the PostgreSQL service from `docker-compose.yml`; the frontend TypeScript/Vite production build is part of acceptance.
+
 Tests follow the risk pyramid and use deterministic clock/ID/key/provider abstractions. Financial and authorization tests are release gates.
 
 | Layer | Required coverage |

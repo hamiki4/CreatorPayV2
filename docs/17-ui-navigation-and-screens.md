@@ -1,5 +1,9 @@
 # UI Navigation and Screens
 
+## Merchant organization
+
+Merchant Admin navigation exposes Locations, Supervisors, and Cashiers. Each area includes list/empty/loading/error states and contextual create, invite, edit, assignment, primary-location, activation, and deactivation actions. Invitation acceptance is public and token-based. Supervisor and Cashier navigation is restricted to My profile and Assigned locations. No QR UI is present.
+
 Every authenticated shell includes language, notification center, profile/security and sign-out. All screens use skeleton/progress loading, actionable inline/summary errors with retry, and explicit empty states. Destructive/financial/state-changing actions require confirmation and reason where applicable. Mobile layouts provide 44px-class touch targets, camera permission guidance, keyboard-safe forms, low-bandwidth behavior and accessible focus/labels. English and Amharic (`am-ET`) copy uses translation keys, locale-aware ETB/date/number formatting, flexible layouts for longer text and no text baked into images; terminology must be reviewed by fluent speakers.
 
 | Role / screen | Purpose and main components | Fields/actions and permission notes |

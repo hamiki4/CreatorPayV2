@@ -17,6 +17,8 @@ public sealed class MerchantLocationConfiguration : IEntityTypeConfiguration<Mer
         builder.Property(x => x.CountryCode).HasMaxLength(2).IsRequired();
         builder.Property(x => x.TimeZoneId).HasMaxLength(100).IsRequired();
         builder.HasIndex(x => x.MerchantId);
+        builder.HasIndex(x => new { x.MerchantId, x.Name }).IsUnique().HasFilter("\"IsActive\" = TRUE");
+        builder.HasIndex(x => new { x.MerchantId, x.IsActive });
         builder.HasOne(x => x.Merchant).WithMany(x => x.Locations).HasForeignKey(x => x.MerchantId).OnDelete(DeleteBehavior.Restrict);
     }
 }

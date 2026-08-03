@@ -23,6 +23,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<MerchantDocument> MerchantDocuments => Set<MerchantDocument>();
     public DbSet<MerchantVerificationToken> MerchantVerificationTokens => Set<MerchantVerificationToken>();
     public DbSet<MerchantAuditEvent> MerchantAuditEvents => Set<MerchantAuditEvent>();
+    public DbSet<StaffInvitation> StaffInvitations => Set<StaffInvitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

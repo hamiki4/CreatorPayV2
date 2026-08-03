@@ -1,5 +1,9 @@
 # API Design
 
+## Merchant organization endpoints
+
+Milestone 7 endpoints and authorization rules are catalogued in [23-merchant-organization-and-staff.md](23-merchant-organization-and-staff.md). They use versioned `/api/v1` routes, request/response DTOs, claim-derived merchant scope, role policies, and Problem Details failures. EF entities and secret hashes are never serialized.
+
 All future routes are under `/api/v1`, JSON over HTTPS (except health), use UTC ISO-8601 timestamps and decimal strings for money. IDs are opaque UUID/public IDs. Collection routes use bounded cursor pagination and filters. Errors use RFC 9457 Problem Details with stable `code`, `traceId` and field errors. Mutations use optimistic concurrency (`ETag`/version) where applicable. Financial, notification-triggering, offline and create routes marked **I** require `Idempotency-Key`; duplicate key/same canonical request returns the original response, while changed content returns `409`.
 
 ## Endpoint inventory

@@ -1,5 +1,13 @@
 # User Roles and Permissions
 
+## Milestone 7 organization permissions
+
+- Merchant Admin: manages only locations, supervisors, cashiers, assignments, statuses, and invitations for the `MerchantId` in authenticated claims.
+- Supervisor: reads only their own profile and assigned locations; cannot manage merchant settings or staff.
+- Cashier: reads only their own profile and assigned active locations; cannot manage merchant settings or staff.
+- Platform Admin: may inspect organization and audit data for support; the dedicated UI is deferred.
+- Creator: has no access to merchant organization APIs.
+
 ## Scope rules
 
 Authorization is deny-by-default and enforced server-side. `PlatformAdmin` is platform-scoped; merchant staff are restricted by `MerchantId`; supervisors and cashiers are additionally restricted to active location assignments. A customer is a transaction participant identified by protected phone/OTP data, not an MVP `UserAccount` role. Support impersonation is out of scope.
