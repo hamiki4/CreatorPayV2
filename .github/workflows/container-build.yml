@@ -14,7 +14,7 @@ jobs:
         with: { context: ., file: "${{ matrix.file }}", push: false, load: true, tags: "creatorpay/${{ matrix.name }}:${{ github.sha }}" }
       - uses: anchore/sbom-action@v0
         with: { image: "creatorpay/${{ matrix.name }}:${{ github.sha }}", artifact-name: "${{ matrix.name }}-${{ github.sha }}.spdx.json", output-file: "${{ matrix.name }}.spdx.json" }
-      - uses: aquasecurity/trivy-action@0.32.0
+      - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: "creatorpay/${{ matrix.name }}:${{ github.sha }}"
           format: table
