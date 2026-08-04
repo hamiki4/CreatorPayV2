@@ -21,6 +21,17 @@ public static class ProductionConfiguration
             if (phone.EncryptionKey.Length < 32) errors.Add("CustomerVerification:EncryptionKey (minimum 32 characters)");
             var flags = configuration.GetSection(FeatureFlagOptions.SectionName).Get<FeatureFlagOptions>() ?? new();
             if (flags.DevelopmentOtpReveal || flags.DevelopmentInvitationTokenReveal) errors.Add("development reveal feature flags must be false");
+            var cors = configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
+            if (cors.AllowedOrigins.Length == 0) errors.Add("Cors:AllowedOrigins (at least one explicit origin)");
+            if (environment.IsProduction() && cors.AllowedOrigins.Any(origin =>
+                    !Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
+                errors.Add("Cors:AllowedOrigins (Production origins must use HTTPS)");
+            var rateLimits = configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>() ?? new();
+            if (rateLimits.AuthPermitLimit <= 0 || rateLimits.FinancialPermitLimit <= 0 || rateLimits.WindowSeconds <= 0)
+                errors.Add("RateLimiting limits and window must be positive");
+            var proxy = configuration.GetSection(ReverseProxyOptions.SectionName).Get<ReverseProxyOptions>() ?? new();
+            if (proxy.KnownProxies.Any(value => !System.Net.IPAddress.TryParse(value, out _)))
+                errors.Add("ReverseProxy:KnownProxies (IP addresses only)");
         }
         if (errors.Count > 0) throw new InvalidOperationException($"Invalid production configuration: {string.Join(", ", errors)}.");
     }

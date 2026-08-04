@@ -1,0 +1,48 @@
+name: Promote immutable release
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: 'Previously built and scanned multi-service release digest/manifest identifier'
+        required: true
+        type: string
+      target:
+        description: 'Promotion target'
+        required: true
+        type: choice
+        options: [test, uat, production]
+      change_ticket:
+        description: 'Approved change or UAT evidence identifier'
+        required: true
+        type: string
+permissions: { contents: read }
+concurrency:
+  group: creatorpay-${{ inputs.target }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate immutable input
+        shell: bash
+        run: |
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'image_digest must be sha256:<64 lowercase hex>'; exit 1; }
+          [[ -n "${CHANGE_TICKET// }" ]] || { echo 'change_ticket is required'; exit 1; }
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          CHANGE_TICKET: ${{ inputs.change_ticket }}
+  approve-and-promote:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - name: Record approved promotion request
+        run: |
+          echo "Target: ${TARGET}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Digest: ${DIGEST}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Change/UAT evidence: ${TICKET}" >> "$GITHUB_STEP_SUMMARY"
+          echo "This control plane intentionally has no cloud credentials. The deployment adapter must consume this approved digest without rebuilding it." >> "$GITHUB_STEP_SUMMARY"
+        env:
+          TARGET: ${{ inputs.target }}
+          DIGEST: ${{ inputs.image_digest }}
+          TICKET: ${{ inputs.change_ticket }}

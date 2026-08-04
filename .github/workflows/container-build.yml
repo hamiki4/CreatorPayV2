@@ -11,4 +11,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
-        with: { context: ., file: "${{ matrix.file }}", push: false, tags: "creatorpay/${{ matrix.name }}:${{ github.sha }}" }
+        with: { context: ., file: "${{ matrix.file }}", push: false, load: true, tags: "creatorpay/${{ matrix.name }}:${{ github.sha }}" }
+      - uses: anchore/sbom-action@v0
+        with: { image: "creatorpay/${{ matrix.name }}:${{ github.sha }}", artifact-name: "${{ matrix.name }}-${{ github.sha }}.spdx.json", output-file: "${{ matrix.name }}.spdx.json" }
+      - uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: "creatorpay/${{ matrix.name }}:${{ github.sha }}"
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true

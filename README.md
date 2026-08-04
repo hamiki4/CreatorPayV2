@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 20 adds security and deployment-readiness controls without changing APIs or the database: stricter production configuration and response headers, SBOM/container scanning, immutable environment promotion gates, checksum-verified backup/restore, HTTPS readiness and load-test scripts, SLO/UAT gates, cloud prerequisites, and a final evidence-based checklist. Production remains blocked until external security, provider, restore, load, UAT, legal, and operational evidence is approved. See [security and production readiness](docs/33-security-and-production-readiness.md).
+
 Milestone 16 adds configurable fraud alerts, creator/merchant disputes, Platform Admin review queues, and idempotent append-only commission reversals. Original purchases, snapshots, earnings, payouts, wallet history, and journals are preserved; paid earnings create a manual recovery receivable. See [disputes and reversals](docs/29-disputes-and-reversals.md).
 
 Milestone 15 adds separate API/Worker/Web/PostgreSQL containers; startup validation; JSON structured logs and correlation IDs; `/health/live` and `/health/ready`; security headers, explicit CORS and partitioned rate limiting; PostgreSQL-safe worker locks and execution history; Docker-backed integration tests; GitHub Actions; and database/operations runbooks. Copy `.env.example` to ignored `.env`, replace placeholders, start PostgreSQL, and apply migrations separately. Production never auto-migrates and must use an external secret store. See [deployment](docs/20-deployment-and-environments.md), [operations](docs/24-operational-runbook.md), [observability](docs/25-observability-and-monitoring.md), [security](docs/26-security-hardening.md), [database operations](docs/27-database-operations.md), and [CI/CD](docs/28-ci-cd.md).
@@ -37,6 +39,7 @@ Infrastructure tests currently validate Npgsql EF metadata without substituting 
 - Commerce: [cashier/QR](docs/09-qr-and-cashier-transaction-workflow.md), [commission](docs/10-commission-engine.md), [wallet](docs/11-merchant-wallet-and-deposits.md), [earnings/payouts](docs/12-creator-earnings-and-payouts.md), [customer phone](docs/13-customer-phone-and-repeat-use.md), [notifications](docs/14-notifications.md)
 - Delivery: [security/privacy](docs/15-security-fraud-and-privacy.md), [API](docs/16-api-design.md), [UI](docs/17-ui-navigation-and-screens.md), [operations](docs/18-reporting-and-operations.md), [testing](docs/19-testing-strategy.md), [deployment](docs/20-deployment-and-environments.md), [MVP acceptance](docs/21-complete-acceptance-criteria.md)
 - Milestone 19: [localization, accessibility, and governed reporting](docs/32-localization-accessibility-and-reporting.md)
+- Milestone 20: [security hardening and production readiness](docs/33-security-and-production-readiness.md)
 - Delivery sequence: [implementation roadmap](docs/implementation-roadmap.md)
 
 Open legal, banking, tax, privacy, hosting and payment-provider questions are intentionally recorded as decision gates rather than invented implementation details.

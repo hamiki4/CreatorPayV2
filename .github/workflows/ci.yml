@@ -25,7 +25,9 @@ jobs:
         env: { TESTCONTAINERS_RYUK_DISABLED: false }
       - run: dotnet list CreatorPay.slnx package --vulnerable --include-transitive
       - run: dotnet format CreatorPay.slnx --verify-no-changes --no-restore
+      - run: dotnet ef migrations list --project src/CreatorPay.Infrastructure --startup-project src/CreatorPay.Api --no-build --configuration Release
       - run: npm ci --prefix src/CreatorPay.Web
+      - run: npm audit --prefix src/CreatorPay.Web --audit-level=high
       - run: npm run build --prefix src/CreatorPay.Web
       - uses: actions/upload-artifact@v4
         if: always()

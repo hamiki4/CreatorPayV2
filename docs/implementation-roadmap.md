@@ -85,3 +85,7 @@ The Platform Admin operational portal, reporting/support APIs, operational-alert
 # Milestone 19 — complete
 
 English/Amharic reporting localization, accessibility polish, scoped Admin/Merchant/Creator analytics, governed CSV/PDF exports, owner-scoped saved views, export audits, reviewed versioned alert thresholds, migration, tests, and documentation are implemented. Recommended Milestone 20 is security hardening and deployment readiness as described in `32-localization-accessibility-and-reporting.md`.
+
+# Milestone 20 — implementation complete; production evidence pending
+
+Runtime/configuration hardening, CI security gates, immutable promotion controls, checksum-verified backup/restore procedures, SLO definitions, readiness/load tooling, UAT gates, cloud prerequisites, deployment documentation, and the final readiness checklist are implemented. Production approval remains intentionally blocked on external penetration re-test, legal/provider approvals, environment restore/load/rollback drills, monitoring evidence, and signed UAT. Recommended Milestone 21 is production provider integration and certification, described in `33-security-and-production-readiness.md`.
