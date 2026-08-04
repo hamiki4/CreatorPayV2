@@ -1,5 +1,7 @@
 # API Design
 
+Milestone 16 adds tenant-scoped creator/merchant dispute create/list/detail APIs and Platform Admin dispute, fraud-alert, and reversal management APIs. Reversal creation requires a unique idempotency key; processing is PlatformAdmin-only and atomic. See `docs/29-disputes-and-reversals.md`.
+
 Milestone 13 adds cashier precheck/submit/request-detail; customer code send/verify; scoped supervisor and merchant-admin list/detail/approve/deny; and read-only platform-admin list/detail endpoints. Repeats return HTTP 202 approval data and failures use Problem Details.
 
 Milestone 11 adds `/api/v1/merchant/wallet`, merchant/admin deposit endpoints, and cashier/merchant/admin purchase endpoints. Financial POSTs require `Idempotency-Key` and return DTOs or RFC Problem Details.

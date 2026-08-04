@@ -23,6 +23,8 @@ using CreatorPay.Infrastructure.CustomerVerification;
 using CreatorPay.Application.Notifications;
 using CreatorPay.Infrastructure.Notifications;
 using CreatorPay.Application.Operations;
+using CreatorPay.Application.Risk;
+using CreatorPay.Infrastructure.Risk;
 
 namespace CreatorPay.Infrastructure;
 
@@ -66,6 +68,7 @@ public static class DependencyInjection
         services.AddSingleton<IEmailNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<ISmsNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>());
         services.AddSingleton<IPushNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<IInAppNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>());
         services.AddSingleton<INotificationDispatcher,NotificationDispatcher>(); services.AddScoped<INotificationService,NotificationService>(); services.AddScoped<INotificationOutboxProcessor,NotificationOutboxProcessor>();
+        services.AddScoped<IRiskOperationsService,RiskOperationsService>();
         return services;
     }
 }

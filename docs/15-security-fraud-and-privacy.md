@@ -1,5 +1,7 @@
 # Security, Fraud, and Privacy
 
+Milestone 16 adds configurable, effective-dated fraud rules and scoped alerts with severity, safe JSON evidence, assignment, resolution, and immutable review history. Decisions are Allow, AllowWithAlert, RequireManualReview, or Block; controllers contain no thresholds. Audit metadata excludes raw phones, OTPs, secrets, and payment credentials. See [Disputes and reversals](29-disputes-and-reversals.md).
+
 Customer phone plaintext is never persisted or returned. Equality uses secret-keyed HMAC and recovery uses AES-GCM. Audit detail excludes phone plaintext, raw OTP, secrets, encryption keys, and raw QR values. This is a repeat-use control, not a fraud engine.
 
 ## Baseline controls

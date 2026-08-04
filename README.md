@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 16 adds configurable fraud alerts, creator/merchant disputes, Platform Admin review queues, and idempotent append-only commission reversals. Original purchases, snapshots, earnings, payouts, wallet history, and journals are preserved; paid earnings create a manual recovery receivable. See [disputes and reversals](docs/29-disputes-and-reversals.md).
+
 Milestone 15 adds separate API/Worker/Web/PostgreSQL containers; startup validation; JSON structured logs and correlation IDs; `/health/live` and `/health/ready`; security headers, explicit CORS and partitioned rate limiting; PostgreSQL-safe worker locks and execution history; Docker-backed integration tests; GitHub Actions; and database/operations runbooks. Copy `.env.example` to ignored `.env`, replace placeholders, start PostgreSQL, and apply migrations separately. Production never auto-migrates and must use an external secret store. See [deployment](docs/20-deployment-and-environments.md), [operations](docs/24-operational-runbook.md), [observability](docs/25-observability-and-monitoring.md), [security](docs/26-security-hardening.md), [database operations](docs/27-database-operations.md), and [CI/CD](docs/28-ci-cd.md).
 
 Milestone 13 adds privacy-preserving Ethiopian customer-phone verification and supervised same-day repeat-use approval. Configure independent `CustomerVerification__HmacSecret` and `CustomerVerification__EncryptionKey` secrets of at least 32 characters. Real SMS is intentionally not integrated.

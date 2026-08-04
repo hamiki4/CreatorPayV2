@@ -1,5 +1,7 @@
 # Reporting and Operations
 
+Platform operations include fraud-alert, dispute, and reversal queues with assignment, timelines, accounting preview, confirmations, and append-only audit events. Recovery receivables and open creator recovery balances require manual review.
+
 Production reporting includes persisted `BackgroundJobExecution` history, notification outbox/dead-letter state, readiness health, correlation-aware structured logs, and OpenTelemetry-compatible metric foundations. See the operational and observability runbooks for response procedures and alerts.
 
 Posted wallet entries and balanced journals are append-only operational records. Platform support views can inspect purchases and pending deposits without editing posted financial history.

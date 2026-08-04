@@ -1,5 +1,7 @@
 # Testing Strategy
 
+Milestone 16 tests cover full/partial state transitions, balanced journals, paid-earning protection, non-negative creator balances, unique risk identifiers/idempotency keys, JSONB evidence, and money precision. PostgreSQL Testcontainers is used for serializable concurrency and rollback verification when Docker is available.
+
 Milestone 15 PostgreSQL integration tests use Testcontainers with PostgreSQL 17, apply the complete migration chain, validate advisory-lock behavior, and inspect critical unique constraints. Docker unavailability produces an explicit runtime skip; SQLite is never substituted. CI runs these beside unit/API tests. Extend scenario fixtures for wallet debit, creator balances, refresh rotation, phone rules, outbox claims, payout uniqueness and primary cashier assignment as builders mature.
 
 Milestone 13 unit coverage includes Ethiopian normalization, invalid formats, keyed deterministic hashing, masking, authenticated encryption, and OTP hashing/comparison. Database behavior remains Npgsql/PostgreSQL; SQLite is not substituted.

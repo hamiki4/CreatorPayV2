@@ -1,5 +1,7 @@
 # UI Navigation and Screens
 
+Creator and Merchant Admin workspaces include dispute creation and status timelines. Platform Admin includes fraud, dispute, and reversal queues, confirmation dialogs, and accounting-impact previews. Raw phone and OTP values are never rendered.
+
 Cashier phone entry includes privacy copy, masked approval state, expiry, and OTP controls. Supervisor and merchant-admin queues provide masked details, status, expiry, loading/empty states, confirmations, and approve/deny controls with English copy ready for future Amharic localization.
 
 Milestone 11 adds merchant wallet/deposit/purchase views, the Platform Admin pending-deposit queue, and cashier purchase entry, confirmation, insufficient-funds, and recent-submission states with ETB formatting.
