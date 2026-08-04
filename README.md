@@ -58,3 +58,7 @@ CreatorPay now prepares weekly ETB creator payouts from immutable confirmed-purc
 # Milestone 14: notifications
 
 CreatorPay includes a PostgreSQL notification outbox, safe versioned templates, in-app notifications, development email/SMS/push providers, retry/dead-letter operations, user preferences, Platform Admin operations, and hash-only customer verification integration. See [docs/14-notifications.md](docs/14-notifications.md).
+
+# Milestone 17: offline cashier PWA
+
+Cashiers can install the app, queue encrypted offline purchase requests in IndexedDB, and synchronize bounded batches. Every item is independently revalidated by the existing server purchase/approval workflow; queued work is never shown as paid. See [offline design](docs/30-offline-pwa-and-synchronization.md).

@@ -49,3 +49,7 @@ Audit request, reason, supervisor decision, OTP dispatch/result (never OTP), exp
 # Milestone 14 notification integration
 
 Verification requests now create `CustomerVerificationCode` SMS notifications through the outbox. Only the OTP hash is persisted; the raw value is never included in notification JSON, delivery attempts, audit data, or admin APIs. Development revelation requires an explicit notification configuration flag.
+
+## Offline synchronization
+
+The PWA masks and AES-GCM protects phones in IndexedDB. The server normalizes/protects them and resolves merchant-local day at receipt. Repeat retries reuse one approval request and never create OTP automatically; confirmed records discard sensitive ciphertext.

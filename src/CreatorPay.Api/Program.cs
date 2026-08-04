@@ -13,6 +13,7 @@ using CreatorPay.Api.Partnerships;
 using CreatorPay.Api.Qr;
 using CreatorPay.Api.Risk;
 using CreatorPay.Api.Wallet;
+using CreatorPay.Api.OfflineSync;
 using CreatorPay.Application;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Operations;
@@ -62,7 +63,7 @@ app.UseHttpsRedirection(); app.UseCors("Web"); app.UseRateLimiter(); app.UseAuth
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = x => x.Tags.Contains("live"), ResponseWriter = WriteHealth });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = x => x.Tags.Contains("ready"), ResponseWriter = WriteHealth });
 app.MapGet("/health", () => Results.Redirect("/health/live")).ExcludeFromDescription();
-app.MapAuthEndpoints(); app.MapCreatorEndpoints(); app.MapMerchantEndpoints(); app.MapOrganizationEndpoints(); app.MapPartnershipEndpoints(); app.MapQrEndpoints(); app.MapCommissionEndpoints(); app.MapWalletEndpoints(); app.MapEarningsEndpoints(); app.MapCustomerVerificationEndpoints(); app.MapNotificationEndpoints(); app.MapRiskEndpoints();
+app.MapAuthEndpoints(); app.MapCreatorEndpoints(); app.MapMerchantEndpoints(); app.MapOrganizationEndpoints(); app.MapPartnershipEndpoints(); app.MapQrEndpoints(); app.MapCommissionEndpoints(); app.MapWalletEndpoints(); app.MapOfflineSyncEndpoints(); app.MapEarningsEndpoints(); app.MapCustomerVerificationEndpoints(); app.MapNotificationEndpoints(); app.MapRiskEndpoints();
 app.Run();
 
 static Task WriteHealth(HttpContext context, HealthReport report) { context.Response.ContentType = "application/json"; return context.Response.WriteAsJsonAsync(new { status = report.Status.ToString(), service = "CreatorPay API", correlationId = context.TraceIdentifier }); }

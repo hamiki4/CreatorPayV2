@@ -25,6 +25,8 @@ using CreatorPay.Infrastructure.Notifications;
 using CreatorPay.Application.Operations;
 using CreatorPay.Application.Risk;
 using CreatorPay.Infrastructure.Risk;
+using CreatorPay.Application.OfflineSync;
+using CreatorPay.Infrastructure.OfflineSync;
 
 namespace CreatorPay.Infrastructure;
 
@@ -69,6 +71,7 @@ public static class DependencyInjection
         services.AddSingleton<IPushNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<IInAppNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>());
         services.AddSingleton<INotificationDispatcher,NotificationDispatcher>(); services.AddScoped<INotificationService,NotificationService>(); services.AddScoped<INotificationOutboxProcessor,NotificationOutboxProcessor>();
         services.AddScoped<IRiskOperationsService,RiskOperationsService>();
+        services.Configure<OfflineSyncOptions>(configuration.GetSection(OfflineSyncOptions.SectionName)); services.AddScoped<IOfflineSyncService,OfflineSyncService>();
         return services;
     }
 }

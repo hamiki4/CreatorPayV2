@@ -46,3 +46,7 @@ Domain tests cover category transfers, non-negative balances, time-gated maturat
 # Notification testing
 
 Notification tests cover safe rendering, unknown/unsafe placeholders, development provider metadata, and permanent mapping for reserved channels. Model/build validation uses Npgsql mappings; PostgreSQL-specific behavior must not be substituted with SQLite. Future integration suites should exercise concurrent claiming against ephemeral PostgreSQL.
+
+## Milestone 17 coverage
+
+Automated tests cover API authentication/role boundaries and sync contracts/default limits. Release validation includes all .NET tests, Vite/PWA build, migration listing, Compose parsing, and diff checks. Browser automation remains recommended for IndexedDB restart, uniqueness, cleanup, fallback, masking, and upgrade preservation.

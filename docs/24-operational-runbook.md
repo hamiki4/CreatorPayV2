@@ -18,3 +18,7 @@ Rollback application images to the last known-good digest. Database changes roll
 ## Incident response
 
 Declare severity and incident lead, preserve logs/audit evidence, contain access, rotate affected secrets, communicate using correlation IDs, recover, validate balances/outbox/payout reconciliation, and complete a blameless review. For data loss, restore the latest tested encrypted backup to an isolated database, replay WAL/PITR if configured, validate, then approve cutover.
+
+## Offline synchronization
+
+Use correlation ID and safe item error codes; never request raw QR/phone in logs or tickets. Retry only RetryLater, require login after 401, honor Retry-After, and never backdate. Lost-device response revokes the cashier session/account and follows the approved warned wipe policy.

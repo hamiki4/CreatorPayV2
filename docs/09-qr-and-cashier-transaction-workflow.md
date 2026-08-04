@@ -45,3 +45,7 @@ Merchant Admins, active Supervisors, and active Cashiers validate at an active, 
 Creator APIs are `GET /api/v1/creator/qr`, `GET /api/v1/creator/qr/image`, `GET /api/v1/creator/qr/history`, `POST /api/v1/creator/qr/regenerate`, and `POST /api/v1/creator/qr/revoke`. Image generation is on demand with QRCoder; image bytes are not stored in PostgreSQL.
 
 Known limitation: the staff UI accepts manual scanner payload entry and is camera-ready but does not implement live camera scanning or offline validation. Milestone 10 may consume a successful validation result when implementing cashier transactions.
+
+## Milestone 17 offline capture
+
+Cashiers may encrypt and queue QR purchase requests in IndexedDB. Queued is never paid; synchronization re-enters the same QR/purchase services and reruns all server checks. See [offline architecture](30-offline-pwa-and-synchronization.md).

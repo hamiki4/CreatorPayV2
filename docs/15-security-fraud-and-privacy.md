@@ -30,3 +30,7 @@ Creator QR payloads expose no database IDs, contact details, documents, or payou
 # Notification privacy controls
 
 Notification APIs scope user data by authenticated user ID. Platform Admin sees masked destinations and safe error metadata, never raw OTP or full sensitive destinations. Templates use an allow-listed non-executable formatter. Development providers make no network calls and delivery attempts omit rendered bodies.
+
+## Offline browser risk
+
+IndexedDB encryption is defense in depth, not protection from XSS, profile compromise, or an unlocked device. Offline capture needs an unexpired cashier session; API/authenticated requests are never service-worker cached. Audit records exclude raw phone and QR.

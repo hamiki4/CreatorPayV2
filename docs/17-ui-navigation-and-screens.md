@@ -61,3 +61,7 @@ The creator workspace includes balance summary, estimated payout, filtered earni
 # Notification screens
 
 All authenticated workspaces render a responsive notification center with unread count, type filter, status/priority indicators, mark-read actions, empty/loading/error states, and channel preferences. Platform Admin also receives outbox, dead-letter, retry/cancel/resolve, and template status views. Strings are English with data and language-code readiness for Amharic.
+
+## Offline cashier workspace
+
+The responsive cashier dashboard shows network state, draft/capture, masked phone, queue status, support ID, manual sync, unsent cancellation, and confirmed-record removal. Strong borders and explicit copy distinguish queued from server-confirmed work; strings remain Amharic-ready.

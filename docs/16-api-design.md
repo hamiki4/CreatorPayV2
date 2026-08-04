@@ -71,3 +71,7 @@ Creator read APIs: `GET /api/v1/creator/earnings`, `/earnings/summary`, `/earnin
 # Notification APIs
 
 Milestone 14 adds `/api/v1/notifications`, `/notifications/unread-count`, notification detail/read/read-all, and notification preferences. Platform Admin operations are under `/api/v1/admin/notifications`, `/notification-outbox`, `/notification-dead-letters`, and `/notification-templates`. User routes require authentication; administrative routes require `PlatformAdminOnly`.
+
+## Offline sync API
+
+`POST /api/v1/cashier/offline-sync` is Cashier-only, rate/size/schema bounded, and returns ordered per-item Confirmed, ApprovalRequired, DuplicateConfirmed, Rejected, Conflict, Expired, or RetryLater results with safe errors and correlation IDs.

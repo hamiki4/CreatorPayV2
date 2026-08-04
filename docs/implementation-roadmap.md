@@ -74,3 +74,7 @@ Creator earnings, category balances and entries, configurable maturation, weekly
 # Milestone 14 — complete
 
 The notification domain, PostgreSQL outbox, development provider abstractions, retry/dead-letter processing, template versions, preferences, user/admin APIs, React operations pages, OTP delivery foundation, migration, tests and documentation are implemented. Real providers and deployment remain future work.
+
+# Milestone 17 — complete
+
+The installable cashier PWA, encrypted/versioned IndexedDB queue, safe caching, synchronization audit entities, full existing-workflow revalidation, approval/idempotency recovery, migration, tests, and documentation are implemented. Milestone 18 remains the Platform Admin UI, including privacy-safe sync diagnostics.
