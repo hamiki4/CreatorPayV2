@@ -62,6 +62,15 @@ public sealed class Merchant : Entity
         Status = MerchantStatus.Active; UpdatedAtUtc = reactivatedAtUtc; UpdatedBy = updatedBy;
     }
 
+    public string EvaluateFunding(decimal balance, decimal minimum, decimal warning, DateTime now, string? updatedBy = null)
+    {
+        if (Status is MerchantStatus.Suspended or MerchantStatus.Rejected or MerchantStatus.Closed or MerchantStatus.PendingApproval) return "Unchanged";
+        var previous = Status;
+        Status = balance < minimum ? MerchantStatus.FundingRestricted : balance < warning ? MerchantStatus.LowBalance : MerchantStatus.Active;
+        UpdatedAtUtc = now; UpdatedBy = updatedBy;
+        return previous == Status ? "Unchanged" : $"{previous}->{Status}";
+    }
+
     private static void EnsureUtc(DateTime value)
     {
         if (value.Kind != DateTimeKind.Utc) throw new ArgumentException("Timestamp must be UTC.", nameof(value));

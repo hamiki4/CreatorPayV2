@@ -8,6 +8,6 @@ public sealed class CurrentUserService(IHttpContextAccessor accessor) : ICurrent
     private ClaimsPrincipal? User => accessor.HttpContext?.User;
     public bool IsAuthenticated => User?.Identity?.IsAuthenticated == true;
     public Guid? UserAccountId => Parse(ClaimTypes.NameIdentifier); public string? Role => User?.FindFirstValue(ClaimTypes.Role);
-    public Guid? MerchantId => Parse("merchant_id"); public Guid? CreatorId => Parse("creator_id"); public Guid? SupervisorId => Parse("supervisor_id"); public Guid? CashierId => Parse("cashier_id");
+    public Guid? MerchantId => Parse("merchant_id"); public Guid? CreatorId => Parse("creator_id"); public Guid? CustomerId => Parse("customer_id"); public Guid? SupervisorId => Parse("supervisor_id"); public Guid? CashierId => Parse("cashier_id");
     private Guid? Parse(string type) => Guid.TryParse(User?.FindFirstValue(type), out var value) ? value : null;
 }

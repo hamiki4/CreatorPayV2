@@ -11,6 +11,7 @@ public sealed class CommissionRuleVersion : Entity
     public int VersionNumber { get; set; }
     public decimal MerchantCommissionRatePercent { get; set; }
     public decimal CreatorSharePercent { get; set; }
+    public decimal CustomerCashbackSharePercent { get; set; }
     public decimal PlatformSharePercent { get; set; }
     public decimal MinimumPurchaseAmount { get; set; }
     public decimal? MaximumPurchaseAmount { get; set; }
@@ -22,7 +23,7 @@ public sealed class CommissionRuleVersion : Entity
     public void Validate()
     {
         if (MerchantCommissionRatePercent is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(MerchantCommissionRatePercent), "Commission rate must be between 0 and 100.");
-        if (CreatorSharePercent < 0 || PlatformSharePercent < 0 || CreatorSharePercent + PlatformSharePercent != 100) throw new ArgumentException("Creator and platform shares must be non-negative and total 100.");
+        if (CreatorSharePercent < 0 || CustomerCashbackSharePercent < 0 || PlatformSharePercent < 0 || CreatorSharePercent + CustomerCashbackSharePercent + PlatformSharePercent != 100) throw new ArgumentException("Creator, customer, and platform shares must be non-negative and total 100.");
         if (MinimumPurchaseAmount < 0 || MaximumPurchaseAmount < MinimumPurchaseAmount) throw new ArgumentException("Purchase amount bounds are invalid.");
         if (EffectiveFromUtc.Kind != DateTimeKind.Utc || EffectiveToUtc?.Kind is not (null or DateTimeKind.Utc) || EffectiveToUtc <= EffectiveFromUtc) throw new ArgumentException("Effective dates must be UTC and the end must be after the start.");
     }
@@ -42,6 +43,8 @@ public sealed class CommissionCalculationSnapshot : Entity
     public decimal TotalCommissionAmount { get; set; }
     public decimal CreatorSharePercent { get; set; }
     public decimal CreatorCommissionAmount { get; set; }
+    public decimal CustomerCashbackSharePercent { get; set; }
+    public decimal CustomerCashbackAmount { get; set; }
     public decimal PlatformSharePercent { get; set; }
     public decimal PlatformCommissionAmount { get; set; }
     public CommissionRoundingMode RoundingMode { get; set; }

@@ -20,11 +20,13 @@ public sealed class UserAccountConfiguration : IEntityTypeConfiguration<UserAcco
         builder.Property(x => x.LastFailedLoginAtUtc).HasColumnType("timestamp with time zone");
         builder.HasIndex(x => x.NormalizedEmail).IsUnique();
         builder.HasIndex(x => x.CreatorId).IsUnique().HasFilter("\"CreatorId\" IS NOT NULL");
+        builder.HasIndex(x => x.CustomerId).IsUnique().HasFilter("\"CustomerId\" IS NOT NULL");
         builder.HasIndex(x => x.MerchantId);
         builder.HasIndex(x => x.MerchantId).IsUnique().HasFilter("\"MerchantId\" IS NOT NULL AND \"Role\" = 'MerchantAdmin'");
         builder.HasIndex(x => x.SupervisorId).IsUnique().HasFilter("\"SupervisorId\" IS NOT NULL");
         builder.HasIndex(x => x.CashierId).IsUnique().HasFilter("\"CashierId\" IS NOT NULL");
         builder.HasOne<Creator>().WithMany().HasForeignKey(x => x.CreatorId).OnDelete(DeleteBehavior.NoAction);
+        builder.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<Merchant>().WithMany().HasForeignKey(x => x.MerchantId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<Supervisor>().WithMany().HasForeignKey(x => x.SupervisorId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<Cashier>().WithMany().HasForeignKey(x => x.CashierId).OnDelete(DeleteBehavior.NoAction);

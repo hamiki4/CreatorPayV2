@@ -11,6 +11,7 @@ public sealed class UserAccount : Entity
     public UserRole Role { get; set; }
     public AccountStatus Status { get; set; }
     public Guid? CreatorId { get; set; }
+    public Guid? CustomerId { get; set; }
     public Guid? MerchantId { get; set; }
     public Guid? SupervisorId { get; set; }
     public Guid? CashierId { get; set; }

@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+Milestone 20.1 adds merchant-specific campaign approval, opaque QR issuance, creator-controlled UTC start, scheduled activation, hard expiration, renewal by new record, transaction campaign snapshots, verified deposits, and funding eligibility. Milestone 21 is intentionally not implemented; see `34-campaign-lifecycle-and-manual-finance.md`.
+
 Milestone 16 is complete: versioned fraud rules, scoped disputes, append-only atomic reversals, paid-earning recovery, operational UI, authorization, audit events, tests, migration, and documentation. Recommended Milestone 17: advanced aggregate fraud strategies, secure evidence storage, recovery settlement/waiver tools, and case notifications.
 
 Milestone 15 is complete: production configuration validation, secret conventions, JSON logging, correlation/security middleware, live/ready health, telemetry foundations, a separate locked worker with execution history, Testcontainers, Docker/Compose, CI, database operations, frontend error handling, and runbooks were added without new business workflows.

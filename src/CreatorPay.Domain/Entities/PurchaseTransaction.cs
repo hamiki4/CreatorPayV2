@@ -6,11 +6,19 @@ namespace CreatorPay.Domain.Entities;
 public sealed class PurchaseTransaction : Entity
 {
     public string PublicTransactionId { get; set; } = ""; public Guid CreatorId { get; set; }
+    public Guid? CustomerId { get; set; }
+    public Guid? CheckoutSessionId { get; set; }
+    public decimal CustomerCashbackAmount { get; set; }
     public Guid MerchantId { get; set; }
     public Guid MerchantLocationId { get; set; }
     public Guid CashierId { get; set; }
-    public Guid CreatorQrCodeId { get; set; }
+    public Guid? CreatorQrCodeId { get; set; }
     public Guid MerchantCreatorPartnershipId { get; set; }
+    public Guid? CampaignId { get; set; }
+    public Guid? CampaignQrCodeId { get; set; }
+    public Guid? CampaignCommissionRuleVersionId { get; set; }
+    public DateTime? CampaignStartsAtUtc { get; set; }
+    public DateTime? CampaignExpiresAtUtc { get; set; }
     public decimal PurchaseAmount { get; set; }
     public string CurrencyCode { get; set; } = "ETB"; public Guid CommissionCalculationSnapshotId { get; set; }
     public TransactionStatus Status { get; private set; } = TransactionStatus.Pending; public DateTime TransactionDateUtc { get; set; }

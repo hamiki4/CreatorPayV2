@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 20.1 adds merchant discovery, discovery-only campaign QRs, and three-minute single-use checkout QRs. Only an authenticated customer's approval of a cashier-presented checkout session can post a purchase. Deposits and payouts remain manually verified external-money operations backed by immutable entries, balanced journals, audits, and reconciliation. See [campaign lifecycle and manual finance](docs/34-campaign-lifecycle-and-manual-finance.md).
+
 Milestone 20 adds security and deployment-readiness controls without changing APIs or the database: stricter production configuration and response headers, SBOM/container scanning, immutable environment promotion gates, checksum-verified backup/restore, HTTPS readiness and load-test scripts, SLO/UAT gates, cloud prerequisites, and a final evidence-based checklist. Production remains blocked until external security, provider, restore, load, UAT, legal, and operational evidence is approved. See [security and production readiness](docs/33-security-and-production-readiness.md).
 
 Milestone 16 adds configurable fraud alerts, creator/merchant disputes, Platform Admin review queues, and idempotent append-only commission reversals. Original purchases, snapshots, earnings, payouts, wallet history, and journals are preserved; paid earnings create a manual recovery receivable. See [disputes and reversals](docs/29-disputes-and-reversals.md).
@@ -65,7 +67,7 @@ CreatorPay includes a PostgreSQL notification outbox, safe versioned templates, 
 
 # Milestone 17: offline cashier PWA
 
-Cashiers can install the app, queue encrypted offline purchase requests in IndexedDB, and synchronize bounded batches. Every item is independently revalidated by the existing server purchase/approval workflow; queued work is never shown as paid. See [offline design](docs/30-offline-pwa-and-synchronization.md).
+Offline financial checkout is unsupported because customer approval and a live, single-use checkout session are mandatory. The authenticated legacy synchronization endpoint returns `410 Gone` and never posts money. See [offline design](docs/30-offline-pwa-and-synchronization.md).
 # Platform administration
 
 Milestone 18 adds the secure `/admin` operational workspace. See [docs/31-platform-admin-portal.md](docs/31-platform-admin-portal.md) for navigation, permissions, privacy controls, APIs, alert behavior, limitations, and the recommended next milestone.

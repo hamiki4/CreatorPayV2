@@ -7,7 +7,7 @@ public enum PasswordVerification { Failed, Success, SuccessRehashNeeded }
 public interface ITokenService { (string Token, DateTime ExpiresAtUtc) CreateAccessToken(UserAccount user); string CreateOpaqueToken(); string HashToken(string token); }
 public interface IUtcClock { DateTime UtcNow { get; } }
 public interface IPasswordResetNotifier { Task NotifyAsync(UserAccount user, string rawToken, CancellationToken cancellationToken); }
-public interface ICurrentUserService { bool IsAuthenticated { get; } Guid? UserAccountId { get; } string? Role { get; } Guid? MerchantId { get; } Guid? CreatorId { get; } Guid? SupervisorId { get; } Guid? CashierId { get; } }
+public interface ICurrentUserService { bool IsAuthenticated { get; } Guid? UserAccountId { get; } string? Role { get; } Guid? MerchantId { get; } Guid? CreatorId { get; } Guid? CustomerId { get; } Guid? SupervisorId { get; } Guid? CashierId { get; } }
 public interface IAuthenticationService
 {
     Task<Result<TokenPair>> LoginAsync(LoginRequest request, RequestContext context, CancellationToken ct);

@@ -1,0 +1,7 @@
+namespace CreatorPay.Application.Discovery;
+
+public sealed record PromotionDto(Guid CampaignId, string CampaignCode, string MerchantName, string CreatorName, string? ZoneCode, bool Featured, DateTime? ExpiresAtUtc);
+public sealed record MerchantDiscoveryDto(Guid MerchantId, string PublicMerchantId, string MerchantName, string? ZoneCode, Guid? FeaturedCreatorId, string FeaturedLabel, IReadOnlyList<PromotionDto> Promotions);
+public sealed record UpdateDiscoveryProfileRequest(Guid? FeaturedCreatorId, string? ZoneCode, IReadOnlyDictionary<string, string>? SocialLinks);
+public sealed record MerchantDiscoveryQrDto(string PublicQrId, string QrPayload, bool IsActive);
+public interface IDiscoveryService { Task<IReadOnlyList<MerchantDiscoveryDto>> SearchAsync(string? query, string? zone, CancellationToken ct); Task<MerchantDiscoveryDto> GetMerchantAsync(Guid merchantId, CancellationToken ct); Task<MerchantDiscoveryDto> ResolveStoreQrAsync(string publicQrId, CancellationToken ct); Task<MerchantDiscoveryQrDto> IssueOrGetStoreQrAsync(Guid merchantId, CancellationToken ct); Task SavePromotionAsync(Guid customerId, Guid campaignId, CancellationToken ct); Task RemoveSavedPromotionAsync(Guid customerId, Guid campaignId, CancellationToken ct); Task<IReadOnlyList<PromotionDto>> GetSavedAsync(Guid customerId, CancellationToken ct); Task<MerchantDiscoveryDto> UpdateProfileAsync(Guid merchantId, UpdateDiscoveryProfileRequest request, CancellationToken ct); }

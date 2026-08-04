@@ -19,14 +19,17 @@ using CreatorPay.Infrastructure.Wallet;
 using CreatorPay.Application.Earnings;
 using CreatorPay.Infrastructure.Earnings;
 using CreatorPay.Application.CustomerVerification;
-using CreatorPay.Infrastructure.CustomerVerification;
 using CreatorPay.Application.Notifications;
 using CreatorPay.Infrastructure.Notifications;
 using CreatorPay.Application.Operations;
 using CreatorPay.Application.Risk;
 using CreatorPay.Infrastructure.Risk;
-using CreatorPay.Application.OfflineSync;
-using CreatorPay.Infrastructure.OfflineSync;
+using CreatorPay.Application.Campaigns;
+using CreatorPay.Infrastructure.Campaigns;
+using CreatorPay.Application.Checkout;
+using CreatorPay.Infrastructure.Checkout;
+using CreatorPay.Application.Discovery;
+using CreatorPay.Infrastructure.Discovery;
 
 namespace CreatorPay.Infrastructure;
 
@@ -59,7 +62,7 @@ public static class DependencyInjection
         services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
         services.AddScoped<IWalletService, WalletService>();
         services.Configure<CreatorPayoutOptions>(configuration.GetSection(CreatorPayoutOptions.SectionName)); services.AddSingleton<IPayoutProvider, ManualPayoutProvider>(); services.AddScoped<ICreatorEarningsService, CreatorEarningsService>();
-        services.Configure<CustomerVerificationOptions>(configuration.GetSection(CustomerVerificationOptions.SectionName)); services.AddSingleton<IPhoneNumberNormalizer, EthiopianPhoneNumberNormalizer>(); services.AddSingleton<IPhoneHashService, PhoneHashService>(); services.AddSingleton<IPhoneEncryptionService, PhoneEncryptionService>(); services.AddSingleton<ICustomerVerificationProvider, DevelopmentCustomerVerificationProvider>(); services.AddScoped<IRepeatUseApprovalService, RepeatUseApprovalService>();
+        services.Configure<CustomerVerificationOptions>(configuration.GetSection(CustomerVerificationOptions.SectionName));
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
         services.Configure<WorkerOptions>(configuration.GetSection(WorkerOptions.SectionName));
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
@@ -71,7 +74,9 @@ public static class DependencyInjection
         services.AddSingleton<IPushNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<IInAppNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>());
         services.AddSingleton<INotificationDispatcher, NotificationDispatcher>(); services.AddScoped<INotificationService, NotificationService>(); services.AddScoped<INotificationOutboxProcessor, NotificationOutboxProcessor>();
         services.AddScoped<IRiskOperationsService, RiskOperationsService>();
-        services.Configure<OfflineSyncOptions>(configuration.GetSection(OfflineSyncOptions.SectionName)); services.AddScoped<IOfflineSyncService, OfflineSyncService>();
+        services.Configure<CampaignOptions>(configuration.GetSection(CampaignOptions.SectionName)); services.AddScoped<ICampaignService, CampaignService>();
+        services.Configure<CheckoutOptions>(configuration.GetSection(CheckoutOptions.SectionName)); services.AddScoped<ICheckoutService, CheckoutService>();
+        services.AddScoped<IDiscoveryService, DiscoveryService>();
         return services;
     }
 }

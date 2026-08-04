@@ -5,6 +5,6 @@ public enum MerchantWalletEntryType { Deposit, CommissionDebit, RefundCredit, Re
 public enum MerchantDepositStatus { Initiated, PendingVerification, Completed, Failed, Cancelled, Reversed }
 public enum MerchantWalletHoldStatus { Active, Released, Cancelled }
 public enum TransactionStatus { Pending, Confirmed, Rejected, Cancelled, Disputed, PartiallyReversed, Reversed, Settled }
-public enum JournalAccount { MerchantWalletLiability, CreatorPayable, CreatorRecoveryReceivable, PlatformCommissionRevenue, PaymentClearing, Suspense }
+public enum JournalAccount { MerchantWalletLiability, PlatformTrialCreditExpense, CustomerCashbackPayable, CustomerRecoveryReceivable, CreatorPayable, CreatorRecoveryReceivable, PlatformCommissionRevenue, PaymentClearing, Suspense }
 public enum JournalLineType { Debit, Credit }
 public enum IdempotencyStatus { Processing, Completed, Failed }

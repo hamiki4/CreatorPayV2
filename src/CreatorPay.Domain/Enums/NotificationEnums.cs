@@ -19,5 +19,6 @@ public enum NotificationType
     MerchantWalletInsufficient, PurchaseConfirmed, PurchaseRejected, CreatorEarningConfirmed, CreatorEarningAvailable,
     RepeatUseApprovalRequested, RepeatUseApproved, RepeatUseDenied, CustomerVerificationCode,
     CustomerConfirmationSucceeded, PayoutScheduled, PayoutSubmitted, PayoutPaid, PayoutFailed,
+    CheckoutApprovalRequired, CustomerCashbackEarned, CustomerCashbackThresholdReached, CustomerPayoutRequested, CustomerPayoutPaid,
     PasswordResetRequested, SecurityAlert, SystemOperationalAlert
 }

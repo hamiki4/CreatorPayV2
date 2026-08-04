@@ -5,6 +5,8 @@ using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using CreatorPay.Application.Campaigns;
+using CreatorPay.Application.Checkout;
 
 namespace CreatorPay.Worker;
 
@@ -18,6 +20,8 @@ public sealed class OperationalWorker(IServiceScopeFactory scopes, IOptions<Work
         while (!stoppingToken.IsCancellationRequested)
         {
             if (options.Enabled) await RunJob("NotificationOutbox", async (provider, ct) => await provider.GetRequiredService<INotificationOutboxProcessor>().ProcessBatchAsync(instanceId, ct), stoppingToken);
+            if (options.Enabled) await RunJob("CampaignLifecycle", async (provider, ct) => await provider.GetRequiredService<ICampaignService>().ProcessLifecycleAsync(ct), stoppingToken);
+            if (options.Enabled) await RunJob("CheckoutExpiration", async (provider, ct) => await provider.GetRequiredService<ICheckoutService>().ExpireAsync(ct), stoppingToken);
             try { await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, options.PollIntervalSeconds)), stoppingToken); } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
         }
         logger.LogInformation("CreatorPay worker {InstanceId} stopped gracefully", instanceId);

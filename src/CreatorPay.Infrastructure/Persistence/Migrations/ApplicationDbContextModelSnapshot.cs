@@ -208,6 +208,115 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.ToTable("CampaignCommissionAssignments");
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CampaignQrCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ActivatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("IssuedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublicQrId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId")
+                        .IsUnique();
+
+                    b.HasIndex("PublicQrId")
+                        .IsUnique();
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("CampaignQrCodes");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CampaignRenewalRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("CreatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatorNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("ExpiredCampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("NewCampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("RequestedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiredCampaignId", "Status");
+
+                    b.ToTable("CampaignRenewalRequests");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.Cashier", b =>
                 {
                     b.Property<Guid>("Id")
@@ -319,6 +428,116 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.ToTable("cashier_location_assignments", (string)null);
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CheckoutSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApprovalIdempotencyKey")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CashierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreateIdempotencyKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("CreatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CustomerApprovedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ExpectedCashbackAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("ExpectedCreatorAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MerchantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("MerchantLocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PresentIdempotencyKey")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PresentedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublicCheckoutId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("PurchaseAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("PurchaseTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("PublicCheckoutId")
+                        .IsUnique();
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId", "CreateIdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "ExpiresAtUtc");
+
+                    b.ToTable("CheckoutSessions");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.CommissionAuditEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -402,6 +621,12 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
+
+                    b.Property<decimal>("CustomerCashbackAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("CustomerCashbackSharePercent")
+                        .HasColumnType("numeric");
 
                     b.Property<decimal>("MerchantCommissionRatePercent")
                         .HasPrecision(9, 4)
@@ -558,6 +783,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("CreatorSharePercent")
                         .HasPrecision(9, 4)
                         .HasColumnType("numeric(9,4)");
+
+                    b.Property<decimal>("CustomerCashbackSharePercent")
+                        .HasColumnType("numeric");
 
                     b.Property<DateTime>("EffectiveFromUtc")
                         .HasColumnType("timestamp with time zone");
@@ -976,6 +1204,120 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.ToTable("CreatorEarnings");
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorMerchantCampaign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ApprovedByMerchantUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CampaignCode")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CommissionRuleVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Conditions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("CreatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DurationDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ExpirationOneDayReminderAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpirationSevenDayReminderAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("MerchantAllowedStartAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MerchantCreatorPartnershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MerchantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublicCampaignId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RenewedFromCampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<DateTime?>("StartsAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("SuspendedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommissionRuleVersionId");
+
+                    b.HasIndex("CreatorId");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("MerchantId");
+
+                    b.HasIndex("PublicCampaignId")
+                        .IsUnique();
+
+                    b.HasIndex("RenewedFromCampaignId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("MerchantCreatorPartnershipId", "Status");
+
+                    b.ToTable("CreatorMerchantCampaigns");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorPayout", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1239,6 +1581,128 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.ToTable("creator_verification_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.Customer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NormalizedPhoneNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PublicCustomerId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedPhoneNumber")
+                        .IsUnique();
+
+                    b.HasIndex("PublicCustomerId")
+                        .IsUnique();
+
+                    b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerCashbackEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("BalanceBefore")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerPayoutRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerWalletId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntryType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("PurchaseTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerWalletId");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId", "CreatedAtUtc");
+
+                    b.ToTable("CustomerCashbackEntries");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerConfirmation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1289,6 +1753,92 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.ToTable("CustomerConfirmations");
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerPayoutRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerWalletId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExternalMethod")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExternalReference")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("FailedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailureReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentConfirmationIdempotencyKey")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ProcessingAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublicPayoutId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RequestedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("PaymentConfirmationIdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"PaymentConfirmationIdempotencyKey\" IS NOT NULL");
+
+                    b.HasIndex("PublicPayoutId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "RequestedAtUtc");
+
+                    b.ToTable("CustomerPayoutRequests");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerPhoneReference", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1336,6 +1886,117 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("CustomerPhoneReferences");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerRecoveryBalance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("OriginalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("OutstandingAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TransactionReversalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransactionReversalId")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId", "Status");
+
+                    b.ToTable("CustomerRecoveryBalances");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerWallet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AvailableCashback")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("PaidLifetime")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("RecoveryBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("ReservedCashback")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId", "CurrencyCode")
+                        .IsUnique();
+
+                    b.ToTable("CustomerWallets");
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.Dispute", b =>
@@ -2564,6 +3225,146 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .HasFilter("\"IsActive\" = TRUE");
 
                     b.ToTable("merchant_locations", (string)null);
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantPromotionProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("FeaturedCreatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MerchantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SocialLinksJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ZoneCode")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MerchantId")
+                        .IsUnique();
+
+                    b.ToTable("MerchantPromotionProfiles");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantStoreQr", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MerchantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublicQrId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MerchantId")
+                        .IsUnique();
+
+                    b.HasIndex("PublicQrId")
+                        .IsUnique();
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("MerchantStoreQrs");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantTrialCredit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ConfirmedTransactionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal>("MaximumCommission")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("MaximumTransactions")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("MerchantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalCommissionFunded")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MerchantId")
+                        .IsUnique();
+
+                    b.ToTable("MerchantTrialCredits");
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantVerificationToken", b =>
@@ -4018,12 +4819,75 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.ToTable("PlatformCommissionAssignments");
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PlatformRevenueEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PurchaseTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("PurchaseTransactionId")
+                        .IsUnique();
+
+                    b.ToTable("PlatformRevenueEntries");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.PurchaseTransaction", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CampaignCommissionRuleVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CampaignExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CampaignQrCodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CampaignStartsAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("CashierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CheckoutSessionId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ClientOperationId")
@@ -4052,7 +4916,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CreatorId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CreatorQrCodeId")
+                    b.Property<Guid?>("CreatorQrCodeId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("CurrencyCode")
@@ -4060,7 +4924,13 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<decimal>("CustomerCashbackAmount")
+                        .HasColumnType("numeric");
+
                     b.Property<Guid?>("CustomerConfirmationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("CustomerPhoneHash")
@@ -4581,6 +5451,41 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.ToTable("ReversalStatusHistories");
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.SavedPromotion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("CustomerId", "CampaignId")
+                        .IsUnique();
+
+                    b.ToTable("SavedPromotions");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.SavedReportView", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4971,6 +5876,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatorId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(320)
@@ -5037,6 +5945,10 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"CreatorId\" IS NOT NULL");
 
+                    b.HasIndex("CustomerId")
+                        .IsUnique()
+                        .HasFilter("\"CustomerId\" IS NOT NULL");
+
                     b.HasIndex("MerchantId")
                         .IsUnique()
                         .HasFilter("\"MerchantId\" IS NOT NULL AND \"Role\" = 'MerchantAdmin'");
@@ -5060,6 +5972,26 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Rule");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CampaignQrCode", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.CreatorMerchantCampaign", "Campaign")
+                        .WithOne("QrCode")
+                        .HasForeignKey("CreatorPay.Domain.Entities.CampaignQrCode", "CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Campaign");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CampaignRenewalRequest", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.CreatorMerchantCampaign", null)
+                        .WithMany()
+                        .HasForeignKey("ExpiredCampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.Cashier", b =>
@@ -5090,6 +6022,21 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Navigation("Cashier");
 
                     b.Navigation("MerchantLocation");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CheckoutSession", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.CreatorMerchantCampaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CreatorPay.Domain.Entities.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CommissionCalculationSnapshot", b =>
@@ -5180,6 +6127,40 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorMerchantCampaign", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.CommissionRuleVersion", null)
+                        .WithMany()
+                        .HasForeignKey("CommissionRuleVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CreatorPay.Domain.Entities.Creator", null)
+                        .WithMany()
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CreatorPay.Domain.Entities.MerchantCreatorPartnership", "Partnership")
+                        .WithMany()
+                        .HasForeignKey("MerchantCreatorPartnershipId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CreatorPay.Domain.Entities.Merchant", null)
+                        .WithMany()
+                        .HasForeignKey("MerchantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CreatorPay.Domain.Entities.CreatorMerchantCampaign", null)
+                        .WithMany()
+                        .HasForeignKey("RenewedFromCampaignId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Partnership");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorPayout", b =>
                 {
                     b.HasOne("CreatorPay.Domain.Entities.PayoutBatch", "Batch")
@@ -5208,6 +6189,24 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserAccountId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerCashbackEntry", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.CustomerWallet", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerWalletId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerWallet", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -5622,6 +6621,21 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Navigation("Reversal");
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.SavedPromotion", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.CreatorMerchantCampaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CreatorPay.Domain.Entities.Customer", null)
+                        .WithMany("SavedPromotions")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.StaffInvitation", b =>
                 {
                     b.HasOne("CreatorPay.Domain.Entities.Cashier", null)
@@ -5702,6 +6716,11 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .HasForeignKey("CreatorId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("CreatorPay.Domain.Entities.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("CreatorPay.Domain.Entities.Merchant", null)
                         .WithMany()
                         .HasForeignKey("MerchantId")
@@ -5740,11 +6759,21 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Navigation("QrCodes");
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorMerchantCampaign", b =>
+                {
+                    b.Navigation("QrCode");
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorPayout", b =>
                 {
                     b.Navigation("Attempts");
 
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.Customer", b =>
+                {
+                    b.Navigation("SavedPromotions");
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.Dispute", b =>
