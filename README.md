@@ -51,3 +51,6 @@ CreatorPay now includes configurable commission plans/rules, immutable effective
 # Milestone 12
 
 CreatorPay now prepares weekly ETB creator payouts from immutable confirmed-purchase earnings. Creator views expose balances/history; Platform Admin views support idempotent batches and manual payout outcomes. No external payout rail is integrated. See `docs/12-creator-earnings-and-payouts.md`.
+# Milestone 14: notifications
+
+CreatorPay includes a PostgreSQL notification outbox, safe versioned templates, in-app notifications, development email/SMS/push providers, retry/dead-letter operations, user preferences, Platform Admin operations, and hash-only customer verification integration. See [docs/14-notifications.md](docs/14-notifications.md).

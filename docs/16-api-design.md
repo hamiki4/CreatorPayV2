@@ -66,3 +66,6 @@ Platform Admin manages `GET/POST/PUT /api/v1/admin/commission-plans`, `GET/POST 
 # Milestone 12 API
 
 Creator read APIs: `GET /api/v1/creator/earnings`, `/earnings/summary`, `/earnings/{id}`, `/payouts`, and `/payouts/{id}`. Platform Admin APIs cover payout-batch list/create/detail/process/cancel; payout list/detail/submit/mark-paid/mark-failed/retry/cancel; and `POST /api/v1/admin/earnings/mature`. Responses use DTOs and failures use Problem Details.
+# Notification APIs
+
+Milestone 14 adds `/api/v1/notifications`, `/notifications/unread-count`, notification detail/read/read-all, and notification preferences. Platform Admin operations are under `/api/v1/admin/notifications`, `/notification-outbox`, `/notification-dead-letters`, and `/notification-templates`. User routes require authentication; administrative routes require `PlatformAdminOnly`.

@@ -46,3 +46,6 @@ Base eligibility is once per customer phone HMAC, merchant and merchant-local ca
 On a duplicate, Cashier creates an expiring repeat-use request linked to the proposed operation and reason. An actively assigned Supervisor approves or denies it; approval alone is insufficient. The customer must confirm a single-use, rate-limited OTP before expiry. Only then may the server revalidate and confirm the transaction. Expiry/denial closes the request; a new request is required.
 
 Audit request, reason, supervisor decision, OTP dispatch/result (never OTP), expiration and final transaction. Customer phone access is purpose-limited; creators cannot view it, merchant reports use aggregates, and retention/deletion/consent rules remain a privacy/legal open item.
+# Milestone 14 notification integration
+
+Verification requests now create `CustomerVerificationCode` SMS notifications through the outbox. Only the OTP hash is persisted; the raw value is never included in notification JSON, delivery attempts, audit data, or admin APIs. Development revelation requires an explicit notification configuration flag.

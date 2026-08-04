@@ -23,3 +23,6 @@ Monitor structured logs, traces and metrics for API latency/error rate, database
 # Payout operations
 
 Operators mature earnings, create a cutoff-keyed weekly batch, start processing, submit through the manual adapter, and record paid or failed outcomes. Fail/cancel returns funds to Available. Audit events and immutable balance entries support investigation; posted payout journals are never edited.
+# Notification operations
+
+Operators can inspect outbox status and safe errors, manually retry or cancel eligible messages, and retry or resolve dead letters. Attempts and audit events remain append-only operational evidence. Provider references are metadata only in Milestone 14.

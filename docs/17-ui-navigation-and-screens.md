@@ -56,3 +56,6 @@ Platform administration includes rule inventory and commission preview, with the
 # Milestone 12 screens
 
 The creator workspace includes balance summary, estimated payout, filtered earning history, and payout history. Platform administration includes payout batch creation/details and a manual payout queue with confirmation gates. Destination credentials are never rendered.
+# Notification screens
+
+All authenticated workspaces render a responsive notification center with unread count, type filter, status/priority indicators, mark-read actions, empty/loading/error states, and channel preferences. Platform Admin also receives outbox, dead-letter, retry/cancel/resolve, and template status views. Strings are English with data and language-code readiness for Amharic.

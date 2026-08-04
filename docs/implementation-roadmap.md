@@ -65,3 +65,6 @@ The configurable commission domain, PostgreSQL persistence, version selection hi
 # Milestone 12 — complete
 
 Creator earnings, category balances and entries, configurable maturation, weekly payout batches, manual processing, payout attempts, settlement accounting, scoped APIs, React workspaces, PostgreSQL migration, tests, and operational documentation are implemented. Milestone 13 may add customer phone verification and repeat-use approval without changing historical earning or journal records.
+# Milestone 14 — complete
+
+The notification domain, PostgreSQL outbox, development provider abstractions, retry/dead-letter processing, template versions, preferences, user/admin APIs, React operations pages, OTP delivery foundation, migration, tests and documentation are implemented. Real providers and deployment remain future work.

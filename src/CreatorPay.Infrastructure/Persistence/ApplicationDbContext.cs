@@ -47,6 +47,10 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<CreatorEarning> CreatorEarnings => Set<CreatorEarning>(); public DbSet<CreatorBalanceAccount> CreatorBalanceAccounts => Set<CreatorBalanceAccount>(); public DbSet<CreatorBalanceEntry> CreatorBalanceEntries => Set<CreatorBalanceEntry>();
     public DbSet<PayoutBatch> PayoutBatches => Set<PayoutBatch>(); public DbSet<CreatorPayout> CreatorPayouts => Set<CreatorPayout>(); public DbSet<PayoutItem> PayoutItems => Set<PayoutItem>(); public DbSet<PayoutAttempt> PayoutAttempts => Set<PayoutAttempt>();
     public DbSet<CustomerPhoneReference> CustomerPhoneReferences => Set<CustomerPhoneReference>(); public DbSet<RepeatUseApprovalRequest> RepeatUseApprovalRequests => Set<RepeatUseApprovalRequest>(); public DbSet<CustomerConfirmation> CustomerConfirmations => Set<CustomerConfirmation>(); public DbSet<RepeatUseApprovalHistory> RepeatUseApprovalHistories => Set<RepeatUseApprovalHistory>();
+    public DbSet<Notification> Notifications => Set<Notification>(); public DbSet<NotificationRecipient> NotificationRecipients => Set<NotificationRecipient>();
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>(); public DbSet<NotificationOutboxMessage> NotificationOutboxMessages => Set<NotificationOutboxMessage>();
+    public DbSet<NotificationDeliveryAttempt> NotificationDeliveryAttempts => Set<NotificationDeliveryAttempt>(); public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<NotificationDeadLetter> NotificationDeadLetters => Set<NotificationDeadLetter>(); public DbSet<NotificationAuditEvent> NotificationAuditEvents => Set<NotificationAuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

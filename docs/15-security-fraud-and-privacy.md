@@ -25,3 +25,6 @@ Password hashing, temporary lockout, signed short-lived JWTs, hashed rotating re
 # Creator QR security
 
 Creator QR payloads expose no database IDs, contact details, documents, or payout data. A random public QR ID is protected by a versioned HMAC token derived from server configuration; only its SHA-256 hash is stored. Comparisons are constant-time. Raw tokens and signing keys are excluded from audit logs. Regeneration changes the public identifier/token and revokes the previous record immediately. Cross-merchant, invalid-location, tampered, successful, and failed attempts are audited using safe identifiers only.
+# Notification privacy controls
+
+Notification APIs scope user data by authenticated user ID. Platform Admin sees masked destinations and safe error metadata, never raw OTP or full sensitive destinations. Templates use an allow-listed non-executable formatter. Development providers make no network calls and delivery attempts omit rendered bodies.

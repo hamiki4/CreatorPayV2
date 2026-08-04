@@ -53,3 +53,6 @@ The React creator workspace provides balance cards, status-filtered earnings his
 ## Known limitations
 
 The only provider is a development/manual adapter; no Telebirr, bank, card, wallet, webhook, or reconciliation call exists. Payout destination enrollment, automated/manual-review approval, holds/releases, post-payment reversals, tax withholding, notifications, disputes, and fraud workflows remain future work. The PaymentClearing credit represents a manual external settlement pending future cash/bank reconciliation.
+# Milestone 14 notification integration
+
+Confirmed creator earnings and transitions to available create idempotent creator in-app notifications. The payload contains creator amount, currency, pending/available meaning, and weekly payout guidance; it excludes customer phone, gross purchase value, platform commission, and merchant wallet balance. Payout notification types and safe placeholder vocabulary are reserved for scheduled, submitted, paid and failed lifecycle integration.

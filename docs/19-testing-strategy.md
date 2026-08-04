@@ -39,3 +39,6 @@ Domain tests cover valid/zero calculations, invalid rates and splits, bounds, ef
 # Milestone 12 coverage
 
 Domain tests cover category transfers, non-negative balances, time-gated maturation, and prevention of double payment. Model/build validation covers PostgreSQL mappings, unique idempotency constraints, row-version concurrency, restrictive relationships, and money precision. Provider integration remains intentionally absent.
+# Notification testing
+
+Notification tests cover safe rendering, unknown/unsafe placeholders, development provider metadata, and permanent mapping for reserved channels. Model/build validation uses Npgsql mappings; PostgreSQL-specific behavior must not be substituted with SQLite. Future integration suites should exercise concurrent claiming against ephemeral PostgreSQL.

@@ -35,3 +35,6 @@ Daily automated and operator reconciliation compares internal deposits/ledger/pr
 # Milestone 12 liability settlement
 
 Purchase confirmation still creates CreatorPayable exactly once. Creator earning creation adds no journal. A successfully confirmed manual payout later debits CreatorPayable and credits PaymentClearing; failure or cancellation leaves the liability unchanged.
+# Milestone 14 notification readiness
+
+Notification types cover deposits, wallet low balance, insufficient balance and purchase outcomes. Low-balance integration must use the existing wallet status transition (`Active` to `LowBalance`) rather than emitting on every debit, allowing another warning only after recovery to `Active` and a later crossing.
