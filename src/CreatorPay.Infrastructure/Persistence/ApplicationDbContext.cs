@@ -51,6 +51,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>(); public DbSet<NotificationOutboxMessage> NotificationOutboxMessages => Set<NotificationOutboxMessage>();
     public DbSet<NotificationDeliveryAttempt> NotificationDeliveryAttempts => Set<NotificationDeliveryAttempt>(); public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<NotificationDeadLetter> NotificationDeadLetters => Set<NotificationDeadLetter>(); public DbSet<NotificationAuditEvent> NotificationAuditEvents => Set<NotificationAuditEvent>();
+    public DbSet<BackgroundJobExecution> BackgroundJobExecutions => Set<BackgroundJobExecution>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

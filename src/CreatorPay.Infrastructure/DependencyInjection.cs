@@ -22,6 +22,7 @@ using CreatorPay.Application.CustomerVerification;
 using CreatorPay.Infrastructure.CustomerVerification;
 using CreatorPay.Application.Notifications;
 using CreatorPay.Infrastructure.Notifications;
+using CreatorPay.Application.Operations;
 
 namespace CreatorPay.Infrastructure;
 
@@ -56,12 +57,15 @@ public static class DependencyInjection
         services.Configure<CreatorPayoutOptions>(configuration.GetSection(CreatorPayoutOptions.SectionName)); services.AddSingleton<IPayoutProvider,ManualPayoutProvider>(); services.AddScoped<ICreatorEarningsService,CreatorEarningsService>();
         services.Configure<CustomerVerificationOptions>(configuration.GetSection(CustomerVerificationOptions.SectionName)); services.AddSingleton<IPhoneNumberNormalizer,EthiopianPhoneNumberNormalizer>(); services.AddSingleton<IPhoneHashService,PhoneHashService>(); services.AddSingleton<IPhoneEncryptionService,PhoneEncryptionService>(); services.AddSingleton<ICustomerVerificationProvider,DevelopmentCustomerVerificationProvider>(); services.AddScoped<IRepeatUseApprovalService,RepeatUseApprovalService>();
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
+        services.Configure<WorkerOptions>(configuration.GetSection(WorkerOptions.SectionName));
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+        services.Configure<ObservabilityOptions>(configuration.GetSection(ObservabilityOptions.SectionName));
+        services.Configure<FeatureFlagOptions>(configuration.GetSection(FeatureFlagOptions.SectionName));
         services.AddSingleton<INotificationTemplateRenderer,SafeNotificationTemplateRenderer>();
         services.AddSingleton<DevelopmentNotificationProvider>();
         services.AddSingleton<IEmailNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<ISmsNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>());
         services.AddSingleton<IPushNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<IInAppNotificationProvider>(s=>s.GetRequiredService<DevelopmentNotificationProvider>());
         services.AddSingleton<INotificationDispatcher,NotificationDispatcher>(); services.AddScoped<INotificationService,NotificationService>(); services.AddScoped<INotificationOutboxProcessor,NotificationOutboxProcessor>();
-        services.AddHostedService<NotificationOutboxBackgroundService>();
         return services;
     }
 }

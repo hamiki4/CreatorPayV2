@@ -1,21 +1,44 @@
+name: creatorpay
 services:
-  creatorpay-postgres:
+  postgres:
     image: postgres:17-alpine
-    container_name: creatorpay-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-CreatorPayV2Db}
       POSTGRES_USER: ${POSTGRES_USER:-creatorpay}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env file}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - creatorpay-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  creatorpay-postgres-data:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes: [creatorpay-postgres-data:/var/lib/postgresql/data]
+    networks: [backend]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"], interval: 10s, timeout: 5s, retries: 10 }
+  api:
+    build: { context: ., dockerfile: src/CreatorPay.Api/Dockerfile }
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__CreatorPayDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:-CreatorPayV2Db};Username=${POSTGRES_USER:-creatorpay};Password=${POSTGRES_PASSWORD}
+      Authentication__Jwt__Issuer: ${Authentication__Jwt__Issuer:-CreatorPay}
+      Authentication__Jwt__Audience: ${Authentication__Jwt__Audience:-CreatorPay.Web}
+      Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey:?Set JWT signing key}
+      CustomerVerification__HmacSecret: ${CustomerVerification__HmacSecret:?Set HMAC secret}
+      CustomerVerification__EncryptionKey: ${CustomerVerification__EncryptionKey:?Set encryption key}
+      Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:8081}
+    ports: ["${API_PORT:-8080}:8080"]
+    depends_on: { postgres: { condition: service_healthy } }
+    networks: [backend, edge]
+    healthcheck: { test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health/live || exit 1"], interval: 15s, timeout: 5s, retries: 5 }
+  worker:
+    build: { context: ., dockerfile: src/CreatorPay.Worker/Dockerfile }
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__CreatorPayDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:-CreatorPayV2Db};Username=${POSTGRES_USER:-creatorpay};Password=${POSTGRES_PASSWORD}
+    depends_on: { postgres: { condition: service_healthy } }
+    networks: [backend]
+  web:
+    build: { context: ., dockerfile: src/CreatorPay.Web/Dockerfile, args: { VITE_API_URL: ${VITE_API_URL:-http://localhost:8080} } }
+    restart: unless-stopped
+    ports: ["${WEB_PORT:-8081}:8080"]
+    depends_on: { api: { condition: service_healthy } }
+    networks: [edge]
+volumes: { creatorpay-postgres-data: {} }
+networks: { backend: { internal: true }, edge: {} }

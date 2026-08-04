@@ -1,5 +1,7 @@
 # Testing Strategy
 
+Milestone 15 PostgreSQL integration tests use Testcontainers with PostgreSQL 17, apply the complete migration chain, validate advisory-lock behavior, and inspect critical unique constraints. Docker unavailability produces an explicit runtime skip; SQLite is never substituted. CI runs these beside unit/API tests. Extend scenario fixtures for wallet debit, creator balances, refresh rotation, phone rules, outbox claims, payout uniqueness and primary cashier assignment as builders mature.
+
 Milestone 13 unit coverage includes Ethiopian normalization, invalid formats, keyed deterministic hashing, masking, authenticated encryption, and OTP hashing/comparison. Database behavior remains Npgsql/PostgreSQL; SQLite is not substituted.
 
 Milestone 11 tests wallet non-negativity, balance transitions, journal balancing, and EF uniqueness metadata. True PostgreSQL concurrency integration remains environment-dependent; SQLite is not used as a concurrency substitute.

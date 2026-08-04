@@ -1,0 +1,38 @@
+name: CI
+on:
+  pull_request:
+  push: { branches: [main] }
+permissions: { contents: read }
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_DB: creatorpay_ci, POSTGRES_USER: creatorpay, POSTGRES_PASSWORD: ci-only-password }
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U creatorpay -d creatorpay_ci" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 10.0.x }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: src/CreatorPay.Web/package-lock.json }
+      - run: dotnet restore CreatorPay.slnx
+      - run: dotnet build CreatorPay.slnx --no-restore --configuration Release
+      - run: dotnet test CreatorPay.slnx --no-build --configuration Release --logger "trx;LogFileName=tests.trx"
+        env: { TESTCONTAINERS_RYUK_DISABLED: false }
+      - run: dotnet list CreatorPay.slnx package --vulnerable --include-transitive
+      - run: dotnet format CreatorPay.slnx --verify-no-changes --no-restore
+      - run: npm ci --prefix src/CreatorPay.Web
+      - run: npm run build --prefix src/CreatorPay.Web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: test-results, path: "**/tests.trx" }
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2

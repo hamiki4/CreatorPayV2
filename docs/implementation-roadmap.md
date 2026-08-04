@@ -1,5 +1,9 @@
 # Implementation Roadmap
 
+Milestone 15 is complete: production configuration validation, secret conventions, JSON logging, correlation/security middleware, live/ready health, telemetry foundations, a separate locked worker with execution history, Testcontainers, Docker/Compose, CI, database operations, frontend error handling, and runbooks were added without new business workflows.
+
+Recommended Milestone 16: production-provider certification and load/recovery validation. Add managed secret-provider adapters and zero-downtime JWT rotation, complete business metrics, exercise full concurrency scenarios under load, conduct authorization/tenant penetration tests, benchmark Ethiopian network routes, and run restore/failover drills before enabling real notifications or automatic payouts.
+
 Milestone 13 is complete: customer phone protection, merchant-local duplicate detection, configurable OTP/supervisor approval, scoped APIs, audit history, PostgreSQL migration, and responsive UI. Payout, reversal, offline, general notification, and fraud-engine scope remains unchanged.
 
 Milestone 11 implements the prepaid ETB wallet, manual deposits, atomic purchases, immutable commission snapshots, idempotency, ledger/journal, APIs, and initial role-specific UI. Milestone 12 should build creator earnings from `CreatorPayable` without mutating posted journals.

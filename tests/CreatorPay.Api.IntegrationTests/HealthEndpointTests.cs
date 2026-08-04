@@ -27,6 +27,22 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task LiveHealthAndCorrelationIdAreAvailable()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/health/live"); request.Headers.Add("X-Correlation-ID", "test-correlation-15");
+        using var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode); Assert.Equal("test-correlation-15", response.Headers.GetValues("X-Correlation-ID").Single());
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single()); Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+    }
+
+    [Fact]
+    public async Task InvalidCorrelationIdIsReplaced()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/health/live"); request.Headers.Add("X-Correlation-ID", "invalid value with spaces");
+        using var response = await _client.SendAsync(request); Assert.NotEqual("invalid value with spaces", response.Headers.GetValues("X-Correlation-ID").Single());
+    }
+
+    [Fact]
     public async Task CurrentUserRequiresAuthentication()
     {
         using HttpResponseMessage response = await _client.GetAsync("/api/v1/auth/me");

@@ -4,6 +4,7 @@
     <Project Path="src/CreatorPay.Application/CreatorPay.Application.csproj" />
     <Project Path="src/CreatorPay.Domain/CreatorPay.Domain.csproj" />
     <Project Path="src/CreatorPay.Infrastructure/CreatorPay.Infrastructure.csproj" />
+    <Project Path="src/CreatorPay.Worker/CreatorPay.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CreatorPay.Api.IntegrationTests/CreatorPay.Api.IntegrationTests.csproj" />

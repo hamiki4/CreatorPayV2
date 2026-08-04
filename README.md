@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 15 adds separate API/Worker/Web/PostgreSQL containers; startup validation; JSON structured logs and correlation IDs; `/health/live` and `/health/ready`; security headers, explicit CORS and partitioned rate limiting; PostgreSQL-safe worker locks and execution history; Docker-backed integration tests; GitHub Actions; and database/operations runbooks. Copy `.env.example` to ignored `.env`, replace placeholders, start PostgreSQL, and apply migrations separately. Production never auto-migrates and must use an external secret store. See [deployment](docs/20-deployment-and-environments.md), [operations](docs/24-operational-runbook.md), [observability](docs/25-observability-and-monitoring.md), [security](docs/26-security-hardening.md), [database operations](docs/27-database-operations.md), and [CI/CD](docs/28-ci-cd.md).
+
 Milestone 13 adds privacy-preserving Ethiopian customer-phone verification and supervised same-day repeat-use approval. Configure independent `CustomerVerification__HmacSecret` and `CustomerVerification__EncryptionKey` secrets of at least 32 characters. Real SMS is intentionally not integrated.
 
 Milestone 11 adds the merchant prepaid ETB wallet, manual deposit approval, and atomic cashier purchase confirmation. Configure `MerchantWallet:LowBalanceThreshold` and see [the wallet workflow](docs/11-merchant-wallet-and-deposits.md).
