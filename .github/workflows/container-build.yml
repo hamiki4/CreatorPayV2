@@ -12,6 +12,18 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with: { context: ., file: "${{ matrix.file }}", push: false, load: true, pull: true, tags: "creatorpay/${{ matrix.name }}:${{ github.sha }}" }
+      - name: Apply available Alpine security updates
+        if: matrix.name == 'web'
+        env:
+          IMAGE: creatorpay/web:${{ github.sha }}
+        run: |
+          docker build --tag "$IMAGE" --build-arg BASE_IMAGE="$IMAGE" --file - . <<'EOF'
+          ARG BASE_IMAGE
+          FROM ${BASE_IMAGE}
+          USER root
+          RUN apk upgrade --no-cache
+          USER 101
+          EOF
       - uses: anchore/sbom-action@v0
         with: { image: "creatorpay/${{ matrix.name }}:${{ github.sha }}", artifact-name: "${{ matrix.name }}-${{ github.sha }}.spdx.json", output-file: "${{ matrix.name }}.spdx.json" }
       - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
