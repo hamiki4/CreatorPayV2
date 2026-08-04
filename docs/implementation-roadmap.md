@@ -81,3 +81,7 @@ The installable cashier PWA, encrypted/versioned IndexedDB queue, safe caching, 
 # Milestone 18 — complete
 
 The Platform Admin operational portal, reporting/support APIs, operational-alert persistence, authorization coverage, and documentation are implemented. Recommended Milestone 19 work is described in `31-platform-admin-portal.md` and is intentionally out of scope here.
+
+# Milestone 19 — complete
+
+English/Amharic reporting localization, accessibility polish, scoped Admin/Merchant/Creator analytics, governed CSV/PDF exports, owner-scoped saved views, export audits, reviewed versioned alert thresholds, migration, tests, and documentation are implemented. Recommended Milestone 20 is security hardening and deployment readiness as described in `32-localization-accessibility-and-reporting.md`.

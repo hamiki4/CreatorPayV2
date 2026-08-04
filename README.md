@@ -36,6 +36,7 @@ Infrastructure tests currently validate Npgsql EF metadata without substituting 
 - Participants: [roles](docs/05-user-roles-and-permissions.md), [registration](docs/06-registration-and-verification.md), [platform approval](docs/07-platform-approval-workflows.md), [partnerships](docs/08-merchant-creator-partnerships.md)
 - Commerce: [cashier/QR](docs/09-qr-and-cashier-transaction-workflow.md), [commission](docs/10-commission-engine.md), [wallet](docs/11-merchant-wallet-and-deposits.md), [earnings/payouts](docs/12-creator-earnings-and-payouts.md), [customer phone](docs/13-customer-phone-and-repeat-use.md), [notifications](docs/14-notifications.md)
 - Delivery: [security/privacy](docs/15-security-fraud-and-privacy.md), [API](docs/16-api-design.md), [UI](docs/17-ui-navigation-and-screens.md), [operations](docs/18-reporting-and-operations.md), [testing](docs/19-testing-strategy.md), [deployment](docs/20-deployment-and-environments.md), [MVP acceptance](docs/21-complete-acceptance-criteria.md)
+- Milestone 19: [localization, accessibility, and governed reporting](docs/32-localization-accessibility-and-reporting.md)
 - Delivery sequence: [implementation roadmap](docs/implementation-roadmap.md)
 
 Open legal, banking, tax, privacy, hosting and payment-provider questions are intentionally recorded as decision gates rather than invented implementation details.

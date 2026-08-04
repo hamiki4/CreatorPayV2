@@ -26,6 +26,13 @@ public sealed class ApplicationDbContextModelTests
         Assert.True(cooldown.IsUnique);
         Assert.Contains("Resolved", cooldown.GetFilter());
     }
+    [Fact]
+    public void Reporting_governance_entities_have_owner_and_version_constraints()
+    {
+        Assert.NotNull(_model.FindEntityType(typeof(ReportExportAudit)));
+        Assert.Contains(_model.FindEntityType(typeof(SavedReportView))!.GetIndexes(), x => x.IsUnique && x.Properties.Select(p => p.Name).SequenceEqual(["OwnerUserId", "ReportType", "Name"]));
+        Assert.Contains(_model.FindEntityType(typeof(AlertThresholdPolicy))!.GetIndexes(), x => x.IsUnique && x.Properties.Select(p => p.Name).SequenceEqual(["AlertType", "Version"]));
+    }
     private readonly IModel _model = CreateContext().Model;
 
     [Fact]
