@@ -9,17 +9,20 @@ namespace CreatorPay.Infrastructure.Tests;
 
 public sealed class AuthenticationSecurityTests
 {
-    [Fact] public void Password_hash_verifies_and_does_not_contain_password()
+    [Fact]
+    public void Password_hash_verifies_and_does_not_contain_password()
     {
         var service = new PasswordHasherService(); var user = new UserAccount(); var hash = service.Hash(user, "SecurePass1!");
         Assert.DoesNotContain("SecurePass1!", hash); Assert.NotEqual(PasswordVerification.Failed, service.Verify(user, hash, "SecurePass1!")); Assert.Equal(PasswordVerification.Failed, service.Verify(user, hash, "wrong"));
     }
-    [Fact] public void Opaque_tokens_are_random_and_hash_is_stable()
+    [Fact]
+    public void Opaque_tokens_are_random_and_hash_is_stable()
     {
         var service = Service(); var first = service.CreateOpaqueToken(); var second = service.CreateOpaqueToken();
         Assert.NotEqual(first, second); Assert.Equal(service.HashToken(first), service.HashToken(first)); Assert.DoesNotContain(first, service.HashToken(first));
     }
-    [Fact] public void Jwt_contains_required_and_scoping_claims_only()
+    [Fact]
+    public void Jwt_contains_required_and_scoping_claims_only()
     {
         var user = new UserAccount { Id = Guid.NewGuid(), Email = "a@example.com", Role = UserRole.MerchantAdmin, MerchantId = Guid.NewGuid() };
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(Service().CreateAccessToken(user).Token);

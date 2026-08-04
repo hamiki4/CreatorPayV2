@@ -2,6 +2,7 @@ using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 namespace CreatorPay.Api.Operations;
+
 public sealed class DatabaseHealthCheck(IServiceScopeFactory scopes) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)

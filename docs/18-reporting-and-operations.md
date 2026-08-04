@@ -30,3 +30,6 @@ Operators mature earnings, create a cutoff-keyed weekly batch, start processing,
 # Notification operations
 
 Operators can inspect outbox status and safe errors, manually retry or cancel eligible messages, and retry or resolve dead letters. Attempts and audit events remain append-only operational evidence. Provider references are metadata only in Milestone 14.
+# Milestone 18 reporting
+
+Platform Admin dashboard/report queries use server-side aggregation, UTC date filters, optional merchant scope, projections, cancellation tokens, bounded pagination, and `AsNoTracking`. See [31-platform-admin-portal.md](31-platform-admin-portal.md).

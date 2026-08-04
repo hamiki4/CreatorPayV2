@@ -65,3 +65,6 @@ All authenticated workspaces render a responsive notification center with unread
 ## Offline cashier workspace
 
 The responsive cashier dashboard shows network state, draft/capture, masked phone, queue status, support ID, manual sync, unsent cancellation, and confirmed-record removal. Strong borders and explicit copy distinguish queued from server-confirmed work; strings remain Amharic-ready.
+# Milestone 18 admin navigation
+
+The dedicated `/admin` workspace and its dashboard, creator, merchant, account, partnership, commission, deposit, wallet, purchase, earning, payout, repeat-use, notification, fraud, dispute, reversal, offline-sync, audit, and system routes are documented in [31-platform-admin-portal.md](31-platform-admin-portal.md). All routes render explicit loading, empty, error, and authorization states.

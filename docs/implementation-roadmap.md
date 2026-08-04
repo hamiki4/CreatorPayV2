@@ -78,3 +78,6 @@ The notification domain, PostgreSQL outbox, development provider abstractions, r
 # Milestone 17 — complete
 
 The installable cashier PWA, encrypted/versioned IndexedDB queue, safe caching, synchronization audit entities, full existing-workflow revalidation, approval/idempotency recovery, migration, tests, and documentation are implemented. Milestone 18 remains the Platform Admin UI, including privacy-safe sync diagnostics.
+# Milestone 18 — complete
+
+The Platform Admin operational portal, reporting/support APIs, operational-alert persistence, authorization coverage, and documentation are implemented. Recommended Milestone 19 work is described in `31-platform-admin-portal.md` and is intentionally out of scope here.

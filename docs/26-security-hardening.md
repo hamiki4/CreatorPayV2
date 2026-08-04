@@ -7,3 +7,6 @@ The API applies HSTS outside Development, forwarded-header handling, `nosniff`, 
 Endpoint authorization uses server-side identity/merchant claims. Financial and authentication endpoints use partitioned rate-limit policies; new sensitive endpoints must opt in. Development notification providers and reveal features must remain disabled in UAT/Production. Validate uploaded file content signatures, size and metadata before a real storage provider is enabled.
 
 Dependency, secret and container builds run in CI. Perform periodic authorization/tenant-boundary tests, dependency review, restore drills and secret rotation. Current limitation: JWT signing has one active symmetric key; add key identifiers and overlap for zero-downtime rotation later.
+# Platform Admin hardening
+
+All `/api/v1/admin` endpoints enforce `PlatformAdminOnly`; report/search endpoints are rate limited. DTO projections mask contact and idempotency data and omit credentials, tokens, OTPs, QR secrets, and payout destinations. Unlock and session-revocation actions require reasons and are audited. Impersonation is prohibited.

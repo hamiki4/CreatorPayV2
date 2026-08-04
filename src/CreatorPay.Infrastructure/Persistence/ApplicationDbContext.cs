@@ -56,6 +56,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<Dispute> Disputes => Set<Dispute>(); public DbSet<DisputeEvidence> DisputeEvidence => Set<DisputeEvidence>(); public DbSet<DisputeStatusHistory> DisputeStatusHistories => Set<DisputeStatusHistory>(); public DbSet<DisputeDecision> DisputeDecisions => Set<DisputeDecision>();
     public DbSet<TransactionReversal> TransactionReversals => Set<TransactionReversal>(); public DbSet<ReversalItem> ReversalItems => Set<ReversalItem>(); public DbSet<ReversalJournalReference> ReversalJournalReferences => Set<ReversalJournalReference>(); public DbSet<ReversalStatusHistory> ReversalStatusHistories => Set<ReversalStatusHistory>(); public DbSet<CreatorRecoveryBalance> CreatorRecoveryBalances => Set<CreatorRecoveryBalance>(); public DbSet<OperationalAuditEvent> OperationalAuditEvents => Set<OperationalAuditEvent>();
     public DbSet<OfflineSyncBatch> OfflineSyncBatches => Set<OfflineSyncBatch>(); public DbSet<OfflineSyncItemResult> OfflineSyncItemResults => Set<OfflineSyncItemResult>();
+    public DbSet<OperationalAlert> OperationalAlerts => Set<OperationalAlert>(); public DbSet<OperationalAlertHistory> OperationalAlertHistories => Set<OperationalAlertHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

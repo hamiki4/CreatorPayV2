@@ -1,6 +1,7 @@
 using CreatorPay.Domain.Common;
 using CreatorPay.Domain.Enums;
 namespace CreatorPay.Domain.Entities;
+
 public sealed class BackgroundJobExecution : Entity
 {
     public string JobName { get; set; } = string.Empty;

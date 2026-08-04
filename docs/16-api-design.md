@@ -75,3 +75,6 @@ Milestone 14 adds `/api/v1/notifications`, `/notifications/unread-count`, notifi
 ## Offline sync API
 
 `POST /api/v1/cashier/offline-sync` is Cashier-only, rate/size/schema bounded, and returns ordered per-item Confirmed, ApprovalRequired, DuplicateConfirmed, Rejected, Conflict, Expired, or RetryLater results with safe errors and correlation IDs.
+# Platform Admin API
+
+Milestone 18 consolidates bounded support endpoints under `/api/v1/admin`, including dashboard summary/trends, creators, merchants, accounts, partnerships, purchases, offline sync, audit, global search, system status, and operational alerts. Existing domain endpoints remain the authority for financial and approval mutations.

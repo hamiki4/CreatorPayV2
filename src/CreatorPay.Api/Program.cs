@@ -1,6 +1,7 @@
 using System.Text;
 using System.Threading.RateLimiting;
 using CreatorPay.Api.Authentication;
+using CreatorPay.Api.Admin;
 using CreatorPay.Api.Commission;
 using CreatorPay.Api.Creators;
 using CreatorPay.Api.CustomerVerification;
@@ -51,6 +52,7 @@ builder.Services.AddRateLimiter(o =>
     o.OnRejected = async (c, ct) => { CreatorPayTelemetry.RateLimitViolations.Add(1); c.HttpContext.Response.ContentType = "application/problem+json"; await c.HttpContext.Response.WriteAsJsonAsync(new { type = "https://httpstatuses.com/429", title = "Too many requests", status = 429, correlationId = c.HttpContext.TraceIdentifier }, ct); };
     o.AddPolicy("auth-sensitive", h => RateLimitPartition.GetFixedWindowLimiter($"{h.Connection.RemoteIpAddress}:{h.Request.Path}", _ => new() { PermitLimit = rateLimits.AuthPermitLimit, Window = TimeSpan.FromSeconds(rateLimits.WindowSeconds), QueueLimit = 0 }));
     o.AddPolicy("financial-sensitive", h => RateLimitPartition.GetFixedWindowLimiter($"{h.User.FindFirst("merchant_id")?.Value ?? h.Connection.RemoteIpAddress?.ToString()}:{h.Request.Path}", _ => new() { PermitLimit = rateLimits.FinancialPermitLimit, Window = TimeSpan.FromSeconds(rateLimits.WindowSeconds), QueueLimit = 0 }));
+    o.AddPolicy("admin-report", h => RateLimitPartition.GetFixedWindowLimiter($"{h.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value}:{h.Request.Path}", _ => new() { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 
 var app = builder.Build();
@@ -64,6 +66,7 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = x => x.
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = x => x.Tags.Contains("ready"), ResponseWriter = WriteHealth });
 app.MapGet("/health", () => Results.Redirect("/health/live")).ExcludeFromDescription();
 app.MapAuthEndpoints(); app.MapCreatorEndpoints(); app.MapMerchantEndpoints(); app.MapOrganizationEndpoints(); app.MapPartnershipEndpoints(); app.MapQrEndpoints(); app.MapCommissionEndpoints(); app.MapWalletEndpoints(); app.MapOfflineSyncEndpoints(); app.MapEarningsEndpoints(); app.MapCustomerVerificationEndpoints(); app.MapNotificationEndpoints(); app.MapRiskEndpoints();
+app.MapAdminEndpoints();
 app.Run();
 
 static Task WriteHealth(HttpContext context, HealthReport report) { context.Response.ContentType = "application/json"; return context.Response.WriteAsJsonAsync(new { status = report.Status.ToString(), service = "CreatorPay API", correlationId = context.TraceIdentifier }); }

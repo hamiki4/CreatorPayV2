@@ -5,3 +5,6 @@ CreatorPay emits structured JSON console logs with scopes for correlation, reque
 `CreatorPayTelemetry` provides an OpenTelemetry-compatible `ActivitySource`, `Meter`, authentication/rate-limit counters and a database-duration histogram. Configuration reserves `Observability:EnableOtlpExporter` and `OtlpEndpoint`; an exporter is optional and no collector is needed locally. Instrument purchase, wallet, notification, payout, outbox and job counters at service boundaries as provider implementations mature.
 
 Alert on readiness failures, sustained 5xx/429 rates, latency percentiles, outbox age/count, dead letters, failed jobs, failed payouts and PostgreSQL connection/lock/storage pressure. Correlate logs, traces, and metrics with correlation ID and deployment version.
+# Milestone 18 operational alerts
+
+Operational alerts use a cooldown key and unresolved-state uniqueness to prevent duplicate alert storms. State transitions preserve history and correlation IDs. Admin system responses expose readiness labels and counts, not secrets or connection strings.

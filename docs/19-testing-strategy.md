@@ -50,3 +50,6 @@ Notification tests cover safe rendering, unknown/unsafe placeholders, developmen
 ## Milestone 17 coverage
 
 Automated tests cover API authentication/role boundaries and sync contracts/default limits. Release validation includes all .NET tests, Vite/PWA build, migration listing, Compose parsing, and diff checks. Browser automation remains recommended for IndexedDB restart, uniqueness, cleanup, fallback, masking, and upgrade preservation.
+# Milestone 18 coverage
+
+Admin tests cover anonymous authorization boundaries and operational-alert model constraints. Existing workflow suites continue to cover approvals, atomic deposits, payouts, notifications, fraud, disputes, reversals, and offline synchronization. Run PostgreSQL Testcontainers when Docker is available and always run the production React build.

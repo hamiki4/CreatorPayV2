@@ -16,6 +16,16 @@ public sealed class ApplicationDbContextModelTests
         var purchase = db.Model.FindEntityType(typeof(CreatorPay.Domain.Entities.PurchaseTransaction))!;
         Assert.Contains(purchase.GetIndexes(), x => x.IsUnique && x.Properties.Any(p => p.Name == "PublicTransactionId"));
     }
+
+    [Fact]
+    public void Operational_alerts_have_history_and_active_cooldown_deduplication()
+    {
+        var alert = _model.FindEntityType(typeof(OperationalAlert))!;
+        Assert.NotNull(_model.FindEntityType(typeof(OperationalAlertHistory)));
+        var cooldown = alert.GetIndexes().Single(x => x.Properties.Select(p => p.Name).SequenceEqual(["CooldownKey", "Status"]));
+        Assert.True(cooldown.IsUnique);
+        Assert.Contains("Resolved", cooldown.GetFilter());
+    }
     private readonly IModel _model = CreateContext().Model;
 
     [Fact]

@@ -2,6 +2,7 @@ using CreatorPay.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace CreatorPay.Infrastructure.Persistence.Configurations;
+
 internal sealed class BackgroundJobExecutionConfiguration : IEntityTypeConfiguration<BackgroundJobExecution>
 {
     public void Configure(EntityTypeBuilder<BackgroundJobExecution> b)

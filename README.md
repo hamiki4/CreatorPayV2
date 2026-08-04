@@ -62,3 +62,6 @@ CreatorPay includes a PostgreSQL notification outbox, safe versioned templates, 
 # Milestone 17: offline cashier PWA
 
 Cashiers can install the app, queue encrypted offline purchase requests in IndexedDB, and synchronize bounded batches. Every item is independently revalidated by the existing server purchase/approval workflow; queued work is never shown as paid. See [offline design](docs/30-offline-pwa-and-synchronization.md).
+# Platform administration
+
+Milestone 18 adds the secure `/admin` operational workspace. See [docs/31-platform-admin-portal.md](docs/31-platform-admin-portal.md) for navigation, permissions, privacy controls, APIs, alert behavior, limitations, and the recommended next milestone.

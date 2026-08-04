@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 namespace CreatorPay.Api.Operations;
+
 public static class CreatorPayTelemetry
 {
     public const string Name = "CreatorPay";

@@ -7,11 +7,17 @@ public sealed class CommissionPlan : Entity { public string Name { get; set; } =
 public sealed class CommissionRule : Entity { public Guid CommissionPlanId { get; set; } public string Name { get; set; } = ""; public CommissionScopeType ScopeType { get; set; } public string CurrencyCode { get; set; } = ""; public bool IsActive { get; set; } = true; public CommissionPlan Plan { get; set; } = null!; public ICollection<CommissionRuleVersion> Versions { get; } = []; }
 public sealed class CommissionRuleVersion : Entity
 {
-    public Guid CommissionRuleId { get; set; } public int VersionNumber { get; set; }
-    public decimal MerchantCommissionRatePercent { get; set; } public decimal CreatorSharePercent { get; set; } public decimal PlatformSharePercent { get; set; }
-    public decimal MinimumPurchaseAmount { get; set; } public decimal? MaximumPurchaseAmount { get; set; }
-    public DateTime EffectiveFromUtc { get; set; } public DateTime? EffectiveToUtc { get; set; }
-    public CommissionRoundingMode RoundingMode { get; set; } public bool IsActive { get; set; } = true; public Guid CreatedByUserId { get; set; }
+    public Guid CommissionRuleId { get; set; }
+    public int VersionNumber { get; set; }
+    public decimal MerchantCommissionRatePercent { get; set; }
+    public decimal CreatorSharePercent { get; set; }
+    public decimal PlatformSharePercent { get; set; }
+    public decimal MinimumPurchaseAmount { get; set; }
+    public decimal? MaximumPurchaseAmount { get; set; }
+    public DateTime EffectiveFromUtc { get; set; }
+    public DateTime? EffectiveToUtc { get; set; }
+    public CommissionRoundingMode RoundingMode { get; set; }
+    public bool IsActive { get; set; } = true; public Guid CreatedByUserId { get; set; }
     public CommissionRule Rule { get; set; } = null!; public ICollection<CommissionCalculationSnapshot> Snapshots { get; } = [];
     public void Validate()
     {
@@ -28,10 +34,20 @@ public sealed class PartnershipCommissionAssignment : CommissionAssignment { pub
 public sealed class CampaignCommissionAssignment : CommissionAssignment { public Guid CampaignId { get; set; } public Guid? MerchantCreatorPartnershipId { get; set; } }
 public sealed class CommissionCalculationSnapshot : Entity
 {
-    public Guid CommissionRuleId { get; set; } public Guid CommissionRuleVersionId { get; set; } public string CurrencyCode { get; set; } = "";
-    public decimal PurchaseAmount { get; set; } public decimal MerchantCommissionRatePercent { get; set; } public decimal TotalCommissionAmount { get; set; }
-    public decimal CreatorSharePercent { get; set; } public decimal CreatorCommissionAmount { get; set; } public decimal PlatformSharePercent { get; set; } public decimal PlatformCommissionAmount { get; set; }
-    public CommissionRoundingMode RoundingMode { get; set; } public DateTime CalculatedAtUtc { get; set; } public CommissionRuleSourceType RuleSourceType { get; set; } public Guid RuleSourceId { get; set; }
+    public Guid CommissionRuleId { get; set; }
+    public Guid CommissionRuleVersionId { get; set; }
+    public string CurrencyCode { get; set; } = "";
+    public decimal PurchaseAmount { get; set; }
+    public decimal MerchantCommissionRatePercent { get; set; }
+    public decimal TotalCommissionAmount { get; set; }
+    public decimal CreatorSharePercent { get; set; }
+    public decimal CreatorCommissionAmount { get; set; }
+    public decimal PlatformSharePercent { get; set; }
+    public decimal PlatformCommissionAmount { get; set; }
+    public CommissionRoundingMode RoundingMode { get; set; }
+    public DateTime CalculatedAtUtc { get; set; }
+    public CommissionRuleSourceType RuleSourceType { get; set; }
+    public Guid RuleSourceId { get; set; }
     public int CalculationVersion { get; set; } = 1; public CommissionRuleVersion RuleVersion { get; set; } = null!;
 }
 public sealed class CommissionAuditEvent : Entity { public Guid? ActorUserAccountId { get; set; } public Guid? MerchantId { get; set; } public string EventType { get; set; } = ""; public string? BeforeValues { get; set; } public string? AfterValues { get; set; } public string? CorrelationId { get; set; } }

@@ -22,3 +22,6 @@ Declare severity and incident lead, preserve logs/audit evidence, contain access
 ## Offline synchronization
 
 Use correlation ID and safe item error codes; never request raw QR/phone in logs or tickets. Retry only RetryLater, require login after 401, honor Retry-After, and never backdate. Lost-device response revokes the cashier session/account and follows the approved warned wipe policy.
+# Platform Admin runbook addition
+
+Use `/admin/system` for safe readiness and backlog data, `/admin/audit` for correlation-led investigation, and `/admin/offline-sync` for batch diagnostics. Acknowledge or resolve operational alerts with a reason; never place secrets in the reason or support notes.
