@@ -15,7 +15,8 @@ public interface ICreatorStore
     Task<CreatorVerificationToken?> FindTokenAsync(string hash, string purpose, CancellationToken ct);
     Task<IReadOnlyList<Creator>> FindByStatusAsync(CreatorStatus status, CancellationToken ct);
     Task InvalidateTokensAsync(Guid userId, string purpose, DateTime usedAtUtc, CancellationToken ct);
-    void Add(UserAccount user); void Add(Creator creator); void Add(CreatorVerificationToken token); void Add(CreatorAuditEvent audit);
+    void Add(UserAccount user); void Add(Creator creator); void Add(CreatorVerificationToken token); void Add(CreatorAuditEvent audit); void Add(CreatorSocialProfile profile);
+    void RemoveSocialProfiles(IEnumerable<CreatorSocialProfile> profiles);
     Task<int> SaveAsync(CancellationToken ct);
     Task<T> InTransactionAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken ct);
 }

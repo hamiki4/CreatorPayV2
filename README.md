@@ -1,5 +1,7 @@
 # Weymela
 
+Public users may register as a Customer, Creator, or Merchant; Platform Admin has no public registration. Creator earnings (4%) are paid manually, creators never receive customer purchase totals, and campaign QR/deep links only enter Weymela—they cannot directly post financial transactions. See [creator onboarding](docs/55-creator-registration-and-onboarding.md) and the [campaign guide](docs/58-creator-partnership-and-campaign-guide.md).
+
 **ወይ መላ! — The smarter way to shop, promote, and earn.**
 
 Weymela is the user-facing identity for this creator, customer, and merchant pilot. Internal projects, namespaces, database objects, Docker images, telemetry, and migration history intentionally retain the CreatorPay name for now.

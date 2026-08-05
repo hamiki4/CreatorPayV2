@@ -7,6 +7,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
 {
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<Creator> Creators => Set<Creator>();
+    public DbSet<CreatorSocialProfile> CreatorSocialProfiles => Set<CreatorSocialProfile>();
     public DbSet<Customer> Customers => Set<Customer>(); public DbSet<CustomerWallet> CustomerWallets => Set<CustomerWallet>(); public DbSet<CustomerCashbackEntry> CustomerCashbackEntries => Set<CustomerCashbackEntry>(); public DbSet<CustomerRecoveryBalance> CustomerRecoveryBalances => Set<CustomerRecoveryBalance>(); public DbSet<CustomerPayoutRequest> CustomerPayoutRequests => Set<CustomerPayoutRequest>(); public DbSet<CheckoutSession> CheckoutSessions => Set<CheckoutSession>(); public DbSet<SavedPromotion> SavedPromotions => Set<SavedPromotion>(); public DbSet<MerchantStoreQr> MerchantStoreQrs => Set<MerchantStoreQr>(); public DbSet<MerchantPromotionProfile> MerchantPromotionProfiles => Set<MerchantPromotionProfile>(); public DbSet<MerchantTrialCredit> MerchantTrialCredits => Set<MerchantTrialCredit>(); public DbSet<PlatformRevenueEntry> PlatformRevenueEntries => Set<PlatformRevenueEntry>();
     public DbSet<CreatorQrCode> CreatorQrCodes => Set<CreatorQrCode>();
     public DbSet<Merchant> Merchants => Set<Merchant>();

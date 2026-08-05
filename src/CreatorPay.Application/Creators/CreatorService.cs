@@ -13,6 +13,8 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
     {
         var error = ValidateIdentity(request.FirstName, request.LastName, request.DisplayName, request.Email, request.PhoneNumber);
         if (error is not null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(error));
+        error = ValidatePilotProfile(request.TermsAccepted, request.City, request.Biography, request.ContentCategories, request.SocialProfiles);
+        if (error is not null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(error));
         var passwordErrors = passwordPolicy.Validate(request.Password);
         if (passwordErrors.Count > 0) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(string.Join(" ", passwordErrors)));
         return RegisterValidatedAsync(request, ct);
@@ -24,9 +26,9 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         if (await store.EmailExistsAsync(normalizedEmail, null, innerCt)) return CreatorResult<CreatorRegistrationResponse>.Failure("Email is already registered.");
         if (await store.PhoneExistsAsync(normalizedPhone, null, innerCt)) return CreatorResult<CreatorRegistrationResponse>.Failure("Phone number is already registered.");
         var now = clock.UtcNow; var creatorId = Guid.NewGuid(); var userId = Guid.NewGuid();
-        var creator = new Creator { Id = creatorId, PublicCreatorId = $"CR-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), DisplayName = request.DisplayName.Trim(), PhoneNumber = FormatPhone(normalizedPhone), NormalizedPhoneNumber = normalizedPhone, Email = request.Email.Trim(), Status = CreatorStatus.Draft, CreatedAtUtc = now, CreatedBy = userId.ToString() };
+        var creator = new Creator { Id = creatorId, PublicCreatorId = $"CR-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), DisplayName = request.DisplayName.Trim(), PhoneNumber = FormatPhone(normalizedPhone), NormalizedPhoneNumber = normalizedPhone, Email = request.Email.Trim(), PreferredLanguage = request.PreferredLanguage.Trim(), City = request.City.Trim(), Zone = request.Zone?.Trim(), Biography = request.Biography.Trim(), ContentCategories = request.ContentCategories.Trim(), GovernmentIdReference = request.GovernmentIdReference?.Trim(), TaxIdentificationNumber = request.TaxIdentificationNumber?.Trim(), PreferredPayoutChannel = request.PreferredPayoutChannel?.Trim(), PreferredPayoutAccountIdentifier = request.PreferredPayoutAccountIdentifier?.Trim(), TermsAcceptedAtUtc = now, Status = CreatorStatus.PendingVerification, CreatedAtUtc = now, CreatedBy = userId.ToString() };
         var user = new UserAccount { Id = userId, Email = request.Email.Trim(), NormalizedEmail = normalizedEmail, Role = UserRole.Creator, Status = AccountStatus.PendingVerification, CreatorId = creatorId, CreatedAtUtc = now, CreatedBy = userId.ToString() };
-        user.PasswordHash = passwords.Hash(user, request.Password); store.Add(creator); store.Add(user);
+        user.PasswordHash = passwords.Hash(user, request.Password); store.Add(creator); store.Add(user); AddSocialProfiles(creatorId, request.SocialProfiles!, now, userId);
         var emailToken = Issue(userId, "Email", now); var phoneToken = Issue(userId, "Phone", now); store.Add(emailToken.Item); store.Add(phoneToken.Item);
         Audit(creatorId, userId, "Registration", null, now); await store.SaveAsync(innerCt);
         await provider.SendEmailVerificationAsync(user, emailToken.Raw, innerCt); await provider.SendPhoneVerificationAsync(creator, phoneToken.Raw, innerCt);
@@ -65,12 +67,16 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         var pair = await store.FindByUserAsync(userId, innerCt); if (pair is null) return CreatorResult<CreatorProfileResponse>.Failure("Creator not found.");
         var error = ValidateIdentity(request.FirstName, request.LastName, request.DisplayName, request.Email, request.PhoneNumber);
         if (error is not null) return CreatorResult<CreatorProfileResponse>.Failure(error);
+        error = ValidatePilotProfile(true, request.City, request.Biography, request.ContentCategories, request.SocialProfiles);
+        if (error is not null) return CreatorResult<CreatorProfileResponse>.Failure(error);
         if (request.ProfileImage is { } image && (image.SizeBytes is <= 0 or > 5_000_000 || image.FileName.Trim().Length is 0 or > 255 || image.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))) return CreatorResult<CreatorProfileResponse>.Failure("Profile image metadata is invalid.");
         var normalizedEmail = NormalizeEmail(request.Email); var normalizedPhone = NormalizePhone(request.PhoneNumber);
         if (await store.EmailExistsAsync(normalizedEmail, userId, innerCt)) return CreatorResult<CreatorProfileResponse>.Failure("Email is already registered.");
         if (await store.PhoneExistsAsync(normalizedPhone, pair.Value.Creator.Id, innerCt)) return CreatorResult<CreatorProfileResponse>.Failure("Phone number is already registered.");
         var now = clock.UtcNow; var emailChanged = pair.Value.User.NormalizedEmail != normalizedEmail; var phoneChanged = pair.Value.Creator.NormalizedPhoneNumber != normalizedPhone;
         pair.Value.Creator.FirstName = request.FirstName.Trim(); pair.Value.Creator.LastName = request.LastName.Trim(); pair.Value.Creator.DisplayName = request.DisplayName.Trim(); pair.Value.Creator.Email = request.Email.Trim(); pair.Value.Creator.PhoneNumber = FormatPhone(normalizedPhone); pair.Value.Creator.NormalizedPhoneNumber = normalizedPhone;
+        pair.Value.Creator.PreferredLanguage = request.PreferredLanguage.Trim(); pair.Value.Creator.City = request.City.Trim(); pair.Value.Creator.Zone = request.Zone?.Trim(); pair.Value.Creator.Biography = request.Biography.Trim(); pair.Value.Creator.ContentCategories = request.ContentCategories.Trim(); pair.Value.Creator.PreferredPayoutChannel = request.PreferredPayoutChannel?.Trim(); pair.Value.Creator.PreferredPayoutAccountIdentifier = request.PreferredPayoutAccountIdentifier?.Trim();
+        store.RemoveSocialProfiles(pair.Value.Creator.SocialProfiles.ToArray()); AddSocialProfiles(pair.Value.Creator.Id, request.SocialProfiles!, now, userId);
         pair.Value.User.Email = request.Email.Trim(); pair.Value.User.NormalizedEmail = normalizedEmail; pair.Value.Creator.UpdatedAtUtc = now; pair.Value.Creator.UpdatedBy = userId.ToString(); pair.Value.User.UpdatedAtUtc = now; pair.Value.User.UpdatedBy = userId.ToString();
         if (request.ProfileImage is { } metadata) { pair.Value.Creator.ProfileImageFileName = metadata.FileName.Trim(); pair.Value.Creator.ProfileImageContentType = metadata.ContentType; pair.Value.Creator.ProfileImageSizeBytes = metadata.SizeBytes; }
         if (emailChanged) { pair.Value.User.IsEmailVerified = false; await store.InvalidateTokensAsync(userId, "Email", now, innerCt); var issued = Issue(userId, "Email", now); store.Add(issued.Item); await provider.SendEmailVerificationAsync(pair.Value.User, issued.Raw, innerCt); }
@@ -84,6 +90,7 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
     public async Task<CreatorResult<CreatorProfileResponse>> GetAsync(Guid creatorId, CancellationToken ct) { var c = await store.FindCreatorAsync(creatorId, ct); if (c is null) return CreatorResult<CreatorProfileResponse>.Failure("Creator not found."); var u = await FindCreatorUser(c, ct); return u is null ? CreatorResult<CreatorProfileResponse>.Failure("Creator not found.") : CreatorResult<CreatorProfileResponse>.Success(ToProfile(u, c)); }
     public Task<CreatorResult> ApproveAsync(Guid id, Guid admin, CancellationToken ct) => DecideAsync(id, admin, null, "Approval", (c, now, actor) => c.Approve(now, actor), CreatorStatus.PendingApproval, AccountStatus.Active, ct);
     public Task<CreatorResult> RejectAsync(Guid id, Guid admin, string? reason, CancellationToken ct) => DecideAsync(id, admin, reason, "Rejection", (c, now, actor) => c.Reject(now, actor.ToString()), CreatorStatus.PendingApproval, AccountStatus.Rejected, ct, true);
+    public Task<CreatorResult> RequestCorrectionAsync(Guid id, Guid admin, string? reason, CancellationToken ct) => DecideAsync(id, admin, reason, "CorrectionRequested", (c, now, actor) => c.RequestCorrection(now, actor.ToString()), CreatorStatus.PendingApproval, AccountStatus.PendingApproval, ct, true);
     public Task<CreatorResult> SuspendAsync(Guid id, Guid admin, string? reason, CancellationToken ct) => DecideAsync(id, admin, reason, "Suspension", (c, now, actor) => c.Suspend(now, actor.ToString()), CreatorStatus.Active, AccountStatus.Suspended, ct, true);
     public Task<CreatorResult> ReactivateAsync(Guid id, Guid admin, string? reason, CancellationToken ct) => DecideAsync(id, admin, reason, "Reactivation", (c, now, actor) => c.Reactivate(now, actor.ToString()), CreatorStatus.Suspended, AccountStatus.Active, ct);
 
@@ -104,6 +111,18 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
     internal static string NormalizeEmail(string value) => value.Trim().ToUpperInvariant();
     internal static string NormalizePhone(string value) => new(value.Where(char.IsDigit).ToArray());
     private static string FormatPhone(string normalized) => $"+{normalized}";
-    private static CreatorProfileResponse ToProfile(UserAccount user, Creator c) => new(c.Id, c.PublicCreatorId, c.FirstName, c.LastName, c.DisplayName, c.PhoneNumber, user.Email, user.IsEmailVerified, user.IsPhoneVerified, user.Status, c.Status, c.ProfileImageFileName is null ? null : new(c.ProfileImageFileName, c.ProfileImageContentType!, c.ProfileImageSizeBytes!.Value), Next(user, c));
+    private static CreatorProfileResponse ToProfile(UserAccount user, Creator c) => new(c.Id, c.PublicCreatorId, c.FirstName, c.LastName, c.DisplayName, c.PhoneNumber, user.Email, user.IsEmailVerified, user.IsPhoneVerified, user.Status, c.Status, c.ProfileImageFileName is null ? null : new(c.ProfileImageFileName, c.ProfileImageContentType!, c.ProfileImageSizeBytes!.Value), Next(user, c), c.PreferredLanguage, c.City, c.Zone, c.Biography, c.ContentCategories, c.SocialProfiles.Select(x => new SocialProfileResponse(x.Id, x.Platform, x.Handle, x.ProfileUrl, x.FollowerCount, x.IsPrimary, x.VerificationStatus, x.CreatedAtUtc, x.UpdatedAtUtc)).ToArray(), c.PreferredPayoutChannel, c.PreferredPayoutAccountIdentifier);
     private static string Next(UserAccount u, Creator c) => !u.IsEmailVerified ? "Verify your email address." : !u.IsPhoneVerified ? "Verify your phone number." : c.Status == CreatorStatus.PendingApproval ? "Your profile is awaiting platform approval." : c.Status == CreatorStatus.Active ? "Your creator account is active." : c.Status == CreatorStatus.Rejected ? "Your application was rejected. Contact platform support." : c.Status == CreatorStatus.Suspended ? "Your creator account is suspended. Contact platform support." : "Complete creator onboarding.";
+    private static string? ValidatePilotProfile(bool terms, string city, string bio, string categories, IReadOnlyList<SocialProfileRequest>? profiles)
+    {
+        if (!terms) return "Terms acceptance is required."; if (string.IsNullOrWhiteSpace(city) || city.Trim().Length > 120) return "Primary city is required.";
+        if (string.IsNullOrWhiteSpace(bio) || bio.Trim().Length > 1000) return "Biography is required and must not exceed 1000 characters.";
+        if (string.IsNullOrWhiteSpace(categories) || categories.Trim().Length > 500) return "At least one content category is required.";
+        if (profiles is null || profiles.Count == 0 || profiles.Count(x => x.IsPrimary) != 1) return "Exactly one primary social profile is required.";
+        if (profiles.Any(x => string.IsNullOrWhiteSpace(x.Handle) || x.Handle.Trim().Length > 200 || x.FollowerCount < 0)) return "Social profile details are invalid.";
+        if (profiles.GroupBy(x => new { x.Platform, Handle = x.Handle.Trim().ToUpperInvariant() }).Any(x => x.Count() > 1)) return "Duplicate social platform and handle combinations are not allowed.";
+        return null;
+    }
+    private void AddSocialProfiles(Guid creatorId, IReadOnlyList<SocialProfileRequest> profiles, DateTime now, Guid actor)
+    { foreach (var x in profiles) store.Add(new CreatorSocialProfile { Id = Guid.NewGuid(), CreatorId = creatorId, Platform = x.Platform, Handle = x.Handle.Trim(), ProfileUrl = x.ProfileUrl?.Trim(), FollowerCount = x.FollowerCount, IsPrimary = x.IsPrimary, VerificationStatus = SocialProfileVerificationStatus.Unverified, CreatedAtUtc = now, CreatedBy = actor.ToString() }); }
 }

@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+Milestone 24 implements the Weymela creator pilot: public creator registration, verification and PendingReview workflow, structured social profiles, audited correction/review actions, creator-facing campaign/QR/earnings/manual-payout experience, and privacy boundaries. Existing partnership, campaign, ledger, and notification foundations are reused. No automatic finance or payment provider is introduced. Recommended Milestone 25: supervised creator/merchant pilot usability and lifecycle evidence, production identity-provider evaluation, and operational review of manual payout reconciliation.
+
 Milestone 23 implements user-facing Weymela branding, centralized brand configuration, bilingual authentication/registration, `PendingReview` merchant onboarding, audited review/correction decisions, and merchant pilot summaries. Internal technical naming remains CreatorPay; payment providers and automatic transfers remain out of scope.
 
 Milestone 21 is complete: pilot role journeys, connected customer/cashier confirmation, low-bandwidth UX, operational reconciliation SQL, deployment guidance, support guides, and scenario validation. The 4% / 3% / 3% allocation and manual-finance boundary remain unchanged. Recommended Milestone 22: supervised pilot feedback, accessibility/usability measurement, and production-provider evaluation behind the existing abstractions.
