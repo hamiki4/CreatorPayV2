@@ -1,8 +1,9 @@
 using CreatorPay.Domain.Enums;
+using System.Text.Json.Serialization;
 
 namespace CreatorPay.Application.Creators;
 
-public sealed record SocialProfileRequest(SocialPlatform Platform, string Handle, string? ProfileUrl, long FollowerCount, bool IsPrimary);
+public sealed record SocialProfileRequest([property: JsonConverter(typeof(JsonStringEnumConverter))] SocialPlatform Platform, string Handle, string? ProfileUrl, long FollowerCount, bool IsPrimary);
 public sealed record RegisterCreatorRequest(string FirstName, string LastName, string DisplayName, string PhoneNumber, string Email, string Password,
     string PreferredLanguage = "en", string City = "", string? Zone = null, string Biography = "", string ContentCategories = "", bool TermsAccepted = false,
     IReadOnlyList<SocialProfileRequest>? SocialProfiles = null, string? GovernmentIdReference = null, string? TaxIdentificationNumber = null,

@@ -9,7 +9,7 @@ namespace CreatorPay.Infrastructure.Creators;
 public sealed class CreatorStore(ApplicationDbContext db) : ICreatorStore
 {
     public Task<bool> EmailExistsAsync(string value, Guid? exclude, CancellationToken ct) => db.UserAccounts.AnyAsync(x => x.NormalizedEmail == value && (!exclude.HasValue || x.Id != exclude), ct);
-    public Task<bool> PhoneExistsAsync(string value, Guid? exclude, CancellationToken ct) => db.Creators.AnyAsync(x => x.NormalizedPhoneNumber == value && (!exclude.HasValue || x.Id != exclude), ct);
+    public async Task<bool> PhoneExistsAsync(string value, Guid? exclude, CancellationToken ct) => await db.Creators.AnyAsync(x => x.NormalizedPhoneNumber == value && (!exclude.HasValue || x.Id != exclude), ct) || await db.Merchants.AnyAsync(x => x.NormalizedPhoneNumber == value, ct) || await db.Customers.AnyAsync(x => x.NormalizedPhoneNumber == value, ct);
     public Task<UserAccount?> FindUserAsync(Guid id, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<UserAccount?> FindUserByCreatorAsync(Guid creatorId, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.CreatorId == creatorId, ct);
     public Task<Creator?> FindCreatorAsync(Guid id, CancellationToken ct) => db.Creators.Include(x => x.SocialProfiles).SingleOrDefaultAsync(x => x.Id == id, ct);

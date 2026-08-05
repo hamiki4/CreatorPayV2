@@ -24,5 +24,5 @@ public static class MerchantEndpoints
         admin.MapPost("/reactivate", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.ReactivateAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));
         return endpoints;
     }
-    private static IResult ToHttp(MerchantResult r) => r.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(r.Error!); private static IResult ToHttp<T>(MerchantResult<T> r, int status = 200) => r.Succeeded ? Results.Json(r.Value, statusCode: status) : Problem(r.Error!); private static IResult Problem(string d) => Results.Problem(d, statusCode: 400, title: "Merchant request failed");
+    private static IResult ToHttp(MerchantResult r) => r.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(r.Error!); private static IResult ToHttp<T>(MerchantResult<T> r, int status = 200) => r.Succeeded ? Results.Json(r.Value, statusCode: status) : Problem(r.Error!); private static IResult Problem(string d) => Results.Problem(d, statusCode: d.Contains("already registered", StringComparison.OrdinalIgnoreCase) ? 409 : 400, title: "Merchant request failed");
 }

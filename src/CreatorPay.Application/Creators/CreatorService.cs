@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.CustomerVerification;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using Microsoft.Extensions.Options;
@@ -107,22 +108,23 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
     private Task<UserAccount?> FindCreatorUser(Creator creator, CancellationToken ct) => store.FindUserByCreatorAsync(creator.Id, ct);
     private (CreatorVerificationToken Item, string Raw) Issue(Guid userId, string purpose, DateTime now) { var raw = tokens.CreateOpaqueToken(); return (new CreatorVerificationToken { Id = Guid.NewGuid(), UserAccountId = userId, Purpose = purpose, TokenHash = tokens.HashToken(raw), ExpiresAtUtc = now.AddMinutes(options.Value.TokenLifetimeMinutes), CreatedAtUtc = now }, raw); }
     private void Audit(Guid creatorId, Guid? actor, string type, string? detail, DateTime now) => store.Add(new CreatorAuditEvent { Id = Guid.NewGuid(), CreatorId = creatorId, ActorUserAccountId = actor, EventType = type, Detail = detail, CreatedAtUtc = now, CreatedBy = actor?.ToString() });
-    private static string? ValidateIdentity(string first, string last, string display, string email, string phone) { if (string.IsNullOrWhiteSpace(first) || first.Trim().Length > 100) return "First name is required and must not exceed 100 characters."; if (string.IsNullOrWhiteSpace(last) || last.Trim().Length > 100) return "Last name is required and must not exceed 100 characters."; if (string.IsNullOrWhiteSpace(display) || display.Trim().Length is < 2 or > 200) return "Display name must be between 2 and 200 characters."; if (string.IsNullOrWhiteSpace(email) || !new EmailAddressAttribute().IsValid(email.Trim()) || email.Trim().Length > 320) return "Email is invalid."; if (string.IsNullOrWhiteSpace(phone)) return "Phone number must contain 8 to 15 digits."; var normalized = NormalizePhone(phone); if (normalized.Length is < 8 or > 15) return "Phone number must contain 8 to 15 digits."; return null; }
+    private static string? ValidateIdentity(string first, string last, string display, string email, string phone) { if (string.IsNullOrWhiteSpace(first) || first.Trim().Length > 100) return "First name is required and must not exceed 100 characters."; if (string.IsNullOrWhiteSpace(last) || last.Trim().Length > 100) return "Last name is required and must not exceed 100 characters."; if (string.IsNullOrWhiteSpace(display) || display.Trim().Length is < 2 or > 200) return "Display name must be between 2 and 200 characters."; if (string.IsNullOrWhiteSpace(email) || !new EmailAddressAttribute().IsValid(email.Trim()) || email.Trim().Length > 320) return "Email is invalid."; if (!EthiopianMobileNumber.TryNormalize(phone, out _)) return EthiopianMobileNumber.ValidationMessage; return null; }
     internal static string NormalizeEmail(string value) => value.Trim().ToUpperInvariant();
-    internal static string NormalizePhone(string value) => new(value.Where(char.IsDigit).ToArray());
-    private static string FormatPhone(string normalized) => $"+{normalized}";
+    internal static string NormalizePhone(string value) => EthiopianMobileNumber.Normalize(value);
+    private static string FormatPhone(string normalized) => normalized;
     private static CreatorProfileResponse ToProfile(UserAccount user, Creator c) => new(c.Id, c.PublicCreatorId, c.FirstName, c.LastName, c.DisplayName, c.PhoneNumber, user.Email, user.IsEmailVerified, user.IsPhoneVerified, user.Status, c.Status, c.ProfileImageFileName is null ? null : new(c.ProfileImageFileName, c.ProfileImageContentType!, c.ProfileImageSizeBytes!.Value), Next(user, c), c.PreferredLanguage, c.City, c.Zone, c.Biography, c.ContentCategories, c.SocialProfiles.Select(x => new SocialProfileResponse(x.Id, x.Platform, x.Handle, x.ProfileUrl, x.FollowerCount, x.IsPrimary, x.VerificationStatus, x.CreatedAtUtc, x.UpdatedAtUtc)).ToArray(), c.PreferredPayoutChannel, c.PreferredPayoutAccountIdentifier);
     private static string Next(UserAccount u, Creator c) => !u.IsEmailVerified ? "Verify your email address." : !u.IsPhoneVerified ? "Verify your phone number." : c.Status == CreatorStatus.PendingApproval ? "Your profile is awaiting platform approval." : c.Status == CreatorStatus.Active ? "Your creator account is active." : c.Status == CreatorStatus.Rejected ? "Your application was rejected. Contact platform support." : c.Status == CreatorStatus.Suspended ? "Your creator account is suspended. Contact platform support." : "Complete creator onboarding.";
     private static string? ValidatePilotProfile(bool terms, string city, string bio, string categories, IReadOnlyList<SocialProfileRequest>? profiles)
     {
         if (!terms) return "Terms acceptance is required."; if (string.IsNullOrWhiteSpace(city) || city.Trim().Length > 120) return "Primary city is required.";
-        if (string.IsNullOrWhiteSpace(bio) || bio.Trim().Length > 1000) return "Biography is required and must not exceed 1000 characters.";
-        if (string.IsNullOrWhiteSpace(categories) || categories.Trim().Length > 500) return "At least one content category is required.";
+        if (bio.Trim().Length > 1000) return "Biography must not exceed 1000 characters.";
+        if (categories.Trim().Length > 500) return "Content categories must not exceed 500 characters.";
         if (profiles is null || profiles.Count == 0 || profiles.Count(x => x.IsPrimary) != 1) return "Exactly one primary social profile is required.";
-        if (profiles.Any(x => string.IsNullOrWhiteSpace(x.Handle) || x.Handle.Trim().Length > 200 || x.FollowerCount < 0)) return "Social profile details are invalid.";
-        if (profiles.GroupBy(x => new { x.Platform, Handle = x.Handle.Trim().ToUpperInvariant() }).Any(x => x.Count() > 1)) return "Duplicate social platform and handle combinations are not allowed.";
+        if (profiles.Any(x => (string.IsNullOrWhiteSpace(x.Handle) && string.IsNullOrWhiteSpace(x.ProfileUrl)) || SocialKey(x).Length > 200 || x.FollowerCount < 0)) return "Social profile details are invalid.";
+        if (profiles.GroupBy(x => new { x.Platform, Handle = SocialKey(x) }).Any(x => x.Count() > 1)) return "Duplicate social platform and handle combinations are not allowed.";
         return null;
     }
     private void AddSocialProfiles(Guid creatorId, IReadOnlyList<SocialProfileRequest> profiles, DateTime now, Guid actor)
-    { foreach (var x in profiles) store.Add(new CreatorSocialProfile { Id = Guid.NewGuid(), CreatorId = creatorId, Platform = x.Platform, Handle = x.Handle.Trim(), ProfileUrl = x.ProfileUrl?.Trim(), FollowerCount = x.FollowerCount, IsPrimary = x.IsPrimary, VerificationStatus = SocialProfileVerificationStatus.Unverified, CreatedAtUtc = now, CreatedBy = actor.ToString() }); }
+    { foreach (var x in profiles) store.Add(new CreatorSocialProfile { Id = Guid.NewGuid(), CreatorId = creatorId, Platform = x.Platform, Handle = SocialKey(x), ProfileUrl = x.ProfileUrl?.Trim(), FollowerCount = x.FollowerCount, IsPrimary = x.IsPrimary, VerificationStatus = SocialProfileVerificationStatus.Unverified, CreatedAtUtc = now, CreatedBy = actor.ToString() }); }
+    private static string SocialKey(SocialProfileRequest profile) => string.IsNullOrWhiteSpace(profile.Handle) ? profile.ProfileUrl!.Trim().ToUpperInvariant() : profile.Handle.Trim().ToUpperInvariant();
 }

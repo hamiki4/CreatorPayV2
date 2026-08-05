@@ -24,5 +24,5 @@ public static class CreatorEndpoints
     }
     private static IResult ToHttp(CreatorResult result) => result.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(result.Error!);
     private static IResult ToHttp<T>(CreatorResult<T> result, int successStatus = StatusCodes.Status200OK) => result.Succeeded ? Results.Json(result.Value, statusCode: successStatus) : Problem(result.Error!);
-    private static IResult Problem(string detail) => Results.Problem(detail, statusCode: StatusCodes.Status400BadRequest, title: "Creator request failed");
+    private static IResult Problem(string detail) => Results.Problem(detail, statusCode: detail.Contains("already registered", StringComparison.OrdinalIgnoreCase) ? StatusCodes.Status409Conflict : StatusCodes.Status400BadRequest, title: "Creator request failed");
 }
