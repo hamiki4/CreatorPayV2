@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 21 adds the pilot entry experience, customer discovery/checkout/cashback journey, cashier split preview and recovery guidance, real-time-with-polling confirmation behavior, reporting SQL, and pilot deployment/support documentation. Start with [the pilot scenario](docs/40-end-to-end-pilot-scenario.md) and [deployment guide](docs/41-pilot-deployment-guide.md). Deposits and creator/customer payouts remain manual; no payment provider is integrated.
+
 Milestone 20.1 adds merchant discovery, discovery-only campaign QRs, and three-minute single-use checkout QRs. Only an authenticated customer's approval of a cashier-presented checkout session can post a purchase. Deposits and payouts remain manually verified external-money operations backed by immutable entries, balanced journals, audits, and reconciliation. See [campaign lifecycle and manual finance](docs/34-campaign-lifecycle-and-manual-finance.md).
 
 Milestone 20 adds security and deployment-readiness controls without changing APIs or the database: stricter production configuration and response headers, SBOM/container scanning, immutable environment promotion gates, checksum-verified backup/restore, HTTPS readiness and load-test scripts, SLO/UAT gates, cloud prerequisites, and a final evidence-based checklist. Production remains blocked until external security, provider, restore, load, UAT, legal, and operational evidence is approved. See [security and production readiness](docs/33-security-and-production-readiness.md).

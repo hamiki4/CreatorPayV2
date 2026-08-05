@@ -1,6 +1,8 @@
 # Implementation Roadmap
 
-Milestone 20.1 adds merchant-specific campaign approval, opaque QR issuance, creator-controlled UTC start, scheduled activation, hard expiration, renewal by new record, transaction campaign snapshots, verified deposits, and funding eligibility. Milestone 21 is intentionally not implemented; see `34-campaign-lifecycle-and-manual-finance.md`.
+Milestone 21 is complete: pilot role journeys, connected customer/cashier confirmation, low-bandwidth UX, operational reconciliation SQL, deployment guidance, support guides, and scenario validation. The 4% / 3% / 3% allocation and manual-finance boundary remain unchanged. Recommended Milestone 22: supervised pilot feedback, accessibility/usability measurement, and production-provider evaluation behind the existing abstractions.
+
+Milestone 20.1 adds merchant-specific campaign approval, opaque QR issuance, creator-controlled UTC start, scheduled activation, hard expiration, renewal by new record, transaction campaign snapshots, verified deposits, and funding eligibility.
 
 Milestone 16 is complete: versioned fraud rules, scoped disputes, append-only atomic reversals, paid-earning recovery, operational UI, authorization, audit events, tests, migration, and documentation. Recommended Milestone 17: advanced aggregate fraud strategies, secure evidence storage, recovery settlement/waiver tools, and case notifications.
 
