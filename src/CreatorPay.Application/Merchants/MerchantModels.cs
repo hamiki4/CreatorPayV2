@@ -2,7 +2,7 @@ using CreatorPay.Domain.Enums;
 
 namespace CreatorPay.Application.Merchants;
 
-public sealed record RegisterMerchantRequest(string LegalBusinessName, string TradingName, string BusinessType, string? TaxRegistrationNumber, string PhoneNumber, string Email, string Password, string BusinessAddress, string City, string Region, string Country, string TimeZone, IReadOnlyList<MerchantDocumentMetadata>? Documents);
+public sealed record RegisterMerchantRequest(string LegalBusinessName, string TradingName, string BusinessType, string? TaxRegistrationNumber, string PhoneNumber, string Email, string Password, string BusinessAddress, string City, string Region, string Country, string TimeZone, IReadOnlyList<MerchantDocumentMetadata>? Documents, string? PrimaryContactName = null, string? BusinessRegistrationNumber = null, string PreferredLanguage = "en", bool TermsAccepted = false);
 public sealed record VerifyMerchantRequest(string Token);
 public sealed record MerchantFileMetadata(string FileName, string ContentType, long SizeBytes);
 public sealed record MerchantDocumentMetadata(string DocumentType, string FileName, string ContentType, long SizeBytes);
@@ -25,6 +25,7 @@ public interface IMerchantService
     Task<MerchantResult<MerchantProfileResponse>> GetAsync(Guid merchantId, CancellationToken ct);
     Task<MerchantResult> ApproveAsync(Guid merchantId, Guid adminId, CancellationToken ct);
     Task<MerchantResult> RejectAsync(Guid merchantId, Guid adminId, string? reason, CancellationToken ct);
+    Task<MerchantResult> RequestCorrectionAsync(Guid merchantId, Guid adminId, string? reason, CancellationToken ct);
     Task<MerchantResult> SuspendAsync(Guid merchantId, Guid adminId, string? reason, CancellationToken ct);
     Task<MerchantResult> ReactivateAsync(Guid merchantId, Guid adminId, string? reason, CancellationToken ct);
 }

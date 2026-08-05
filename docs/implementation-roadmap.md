@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+Milestone 23 implements user-facing Weymela branding, centralized brand configuration, bilingual authentication/registration, `PendingReview` merchant onboarding, audited review/correction decisions, and merchant pilot summaries. Internal technical naming remains CreatorPay; payment providers and automatic transfers remain out of scope.
+
 Milestone 21 is complete: pilot role journeys, connected customer/cashier confirmation, low-bandwidth UX, operational reconciliation SQL, deployment guidance, support guides, and scenario validation. The 4% / 3% / 3% allocation and manual-finance boundary remain unchanged. Recommended Milestone 22: supervised pilot feedback, accessibility/usability measurement, and production-provider evaluation behind the existing abstractions.
 
 Milestone 20.1 adds merchant-specific campaign approval, opaque QR issuance, creator-controlled UTC start, scheduled activation, hard expiration, renewal by new record, transaction campaign snapshots, verified deposits, and funding eligibility.

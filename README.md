@@ -1,4 +1,12 @@
-# CreatorPay V2
+# Weymela
+
+**ወይ መላ! — The smarter way to shop, promote, and earn.**
+
+Weymela is the user-facing identity for this creator, customer, and merchant pilot. Internal projects, namespaces, database objects, Docker images, telemetry, and migration history intentionally retain the CreatorPay name for now.
+
+## Milestone 23
+
+Milestone 23 adds bilingual sign-in and customer/merchant registration, verified `PendingReview` merchant onboarding, audited Platform Admin review, and merchant status/dashboard presentation. No banking credential, payment-provider, automatic transfer, or wallet-balance editing integration is included.
 
 Milestone 22 adds the guarded pilot reset/reseed workflow, executable health/migration/seed/scenario verifier, admin pilot metrics report, expanded read-only reconciliation pack, usability/accessibility evidence, operational runbook, and measurable go/no-go checklist. Start with [pilot seeding](docs/45-pilot-seeding-and-demo-accounts.md) and the [test harness](docs/46-pilot-test-harness.md). The 4% creator / 3% customer / 3% platform split and manual-money boundary are unchanged.
 

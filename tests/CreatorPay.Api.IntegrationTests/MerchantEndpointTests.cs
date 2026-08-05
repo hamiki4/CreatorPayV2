@@ -18,7 +18,8 @@ public sealed class MerchantEndpointTests : IClassFixture<WebApplicationFactory<
     [InlineData("/api/v1/merchants/me")]
     [InlineData("/api/v1/admin/merchants/pending")]
     [InlineData("/api/v1/admin/merchants/approve")]
-    public async Task ProtectedEndpointsRequireAuthentication(string path) { using var client = factory.CreateClient(); using var response = path.EndsWith("approve") ? await client.PostAsJsonAsync(path, new { merchantId = Guid.NewGuid() }) : await client.GetAsync(path); Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode); }
+    [InlineData("/api/v1/admin/merchants/request-correction")]
+    public async Task ProtectedEndpointsRequireAuthentication(string path) { using var client = factory.CreateClient(); using var response = path.Contains("/admin/merchants/") && !path.EndsWith("pending") ? await client.PostAsJsonAsync(path, new { merchantId = Guid.NewGuid() }) : await client.GetAsync(path); Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode); }
     [Theory]
     [InlineData("Creator")]
     [InlineData("MerchantAdmin")]

@@ -19,6 +19,7 @@ public static class MerchantEndpoints
         admin.MapGet("/{merchantId:guid}", async (Guid merchantId, IMerchantService s, CancellationToken ct) => ToHttp(await s.GetAsync(merchantId, ct)));
         admin.MapPost("/approve", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.ApproveAsync(r.MerchantId, u.UserAccountId!.Value, ct)));
         admin.MapPost("/reject", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.RejectAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));
+        admin.MapPost("/request-correction", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.RequestCorrectionAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));
         admin.MapPost("/suspend", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.SuspendAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));
         admin.MapPost("/reactivate", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.ReactivateAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));
         return endpoints;

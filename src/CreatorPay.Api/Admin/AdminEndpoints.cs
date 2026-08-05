@@ -43,7 +43,7 @@ public static class AdminEndpoints
         {
             range = new { from = start, to = end },
             pendingCreatorApprovals = await db.Creators.CountAsync(x => x.Status == CreatorStatus.PendingApproval, ct),
-            pendingMerchantApprovals = await db.Merchants.CountAsync(x => x.Status == MerchantStatus.PendingApproval && (!merchantId.HasValue || x.Id == merchantId), ct),
+            pendingMerchantApprovals = await db.Merchants.CountAsync(x => x.Status == MerchantStatus.PendingReview && (!merchantId.HasValue || x.Id == merchantId), ct),
             pendingDeposits = await db.MerchantDeposits.CountAsync(x => x.Status == MerchantDepositStatus.PendingVerification && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
             openFraudAlerts = await db.FraudAlerts.CountAsync(x => x.Status == FraudAlertStatus.Open && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
             openDisputes = await db.Disputes.CountAsync(x => x.Status == DisputeStatus.Open && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
