@@ -1,0 +1,5 @@
+# Pilot metrics and acceptance criteria
+
+Platform Admins can query `GET /api/v1/admin/dashboard/pilot-metrics?from=&to=`. The bounded report returns sessions created/completed, approval/rejection/expiration rates, median completion time, posting failures, duplicate attempts, remaining trial transactions, Funding Required/low-balance merchants, creator/customer queue amounts, notification failures, reversals, and journal imbalances. OpenTelemetry retains latency/failure operational instruments; the database report is the auditable source for pilot decisions.
+
+Go only when: all A–H seeded scenarios pass; duplicate posting and ledger imbalance counts are zero; every purchase has customer approval; normal/Slow-3G approval is under 10/20 seconds; authorization tests show no cross-role access; no Critical/High security finding is open; no direct balance mutation exists; deposit/payout/reversal audits reconcile; no payment provider exists; CI, Release build/test, Web build and compose validation pass; backup/restore and rollback smoke tests have evidence; and support/on-call owners approve the runbook. Any failed condition is a no-go.

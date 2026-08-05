@@ -1,5 +1,7 @@
 # CreatorPay V2
 
+Milestone 22 adds the guarded pilot reset/reseed workflow, executable health/migration/seed/scenario verifier, admin pilot metrics report, expanded read-only reconciliation pack, usability/accessibility evidence, operational runbook, and measurable go/no-go checklist. Start with [pilot seeding](docs/45-pilot-seeding-and-demo-accounts.md) and the [test harness](docs/46-pilot-test-harness.md). The 4% creator / 3% customer / 3% platform split and manual-money boundary are unchanged.
+
 Milestone 21 adds the pilot entry experience, customer discovery/checkout/cashback journey, cashier split preview and recovery guidance, real-time-with-polling confirmation behavior, reporting SQL, and pilot deployment/support documentation. Start with [the pilot scenario](docs/40-end-to-end-pilot-scenario.md) and [deployment guide](docs/41-pilot-deployment-guide.md). Deposits and creator/customer payouts remain manual; no payment provider is integrated.
 
 Milestone 20.1 adds merchant discovery, discovery-only campaign QRs, and three-minute single-use checkout QRs. Only an authenticated customer's approval of a cashier-presented checkout session can post a purchase. Deposits and payouts remain manually verified external-money operations backed by immutable entries, balanced journals, audits, and reconciliation. See [campaign lifecycle and manual finance](docs/34-campaign-lifecycle-and-manual-finance.md).

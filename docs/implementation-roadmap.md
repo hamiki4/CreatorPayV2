@@ -93,3 +93,6 @@ English/Amharic reporting localization, accessibility polish, scoped Admin/Merch
 # Milestone 20 — implementation complete; production evidence pending
 
 Runtime/configuration hardening, CI security gates, immutable promotion controls, checksum-verified backup/restore procedures, SLO definitions, readiness/load tooling, UAT gates, cloud prerequisites, deployment documentation, and the final readiness checklist are implemented. Production approval remains intentionally blocked on external penetration re-test, legal/provider approvals, environment restore/load/rollback drills, monitoring evidence, and signed UAT. Recommended Milestone 21 is production provider integration and certification, described in `33-security-and-production-readiness.md`.
+# Milestone 22 — supervised pilot validation (implemented)
+
+Milestone 22 packages the existing end-to-end commerce capabilities into a repeatable supervised pilot: environment-guarded reset/reseed guidance, executable verification with timestamped evidence, role/mobile/accessibility and low-bandwidth review, Platform Admin metrics, read-only reconciliation SQL, operating runbooks, and objective go/no-go gates. Deposits and creator/customer payouts remain manual. No provider integration or later milestone work is included.

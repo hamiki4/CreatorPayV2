@@ -1,0 +1,7 @@
+# Usability and accessibility review
+
+The Milestone 21 responsive workspaces were reviewed against the supervised script. Customer discovery identifies merchant and supported creator; checkout is reachable within three actions after campaign selection; the three-minute expiry, 2,000 ETB approval detail, cashback amount/progress, payout eligibility and manual state are explicit. Cashiers enter only amount; checkout-token validation rejects discovery/campaign QR; pending, rejected, expired, completed and retry states are distinct and submission locks prevent duplicates.
+
+Merchant views distinguish trial usage, wallet, low balance and Funding Required, and link campaign/featured creator, deposit and transaction history. Creator views expose campaign promotion/QR, earnings and manual payout state without customer contact data. Admin views expose deposits, manual payout queues, alerts, reversals, reconciliation and the pilot metrics endpoint; no balance-edit endpoint exists.
+
+Keyboard order follows visual order, interactive controls use visible `:focus-visible`, named labels, status/live regions and minimum 44px targets. Primary layouts wrap at 320px without horizontal scrolling. Errors are announced and loading/retry text does not rely on color. English and Amharic copy requires supervised native-speaker sign-off before go-live. Automated build/type checking is the current baseline; browser screen-reader, contrast, mobile viewport and axe evidence remain an environment-dependent go-live gate.

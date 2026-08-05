@@ -16,6 +16,7 @@ public static class AdminEndpoints
         var admin = endpoints.MapGroup("/api/v1/admin").WithTags("Platform administration").RequireAuthorization("PlatformAdminOnly");
         admin.MapGet("/dashboard/summary", Dashboard).RequireRateLimiting("admin-report");
         admin.MapGet("/dashboard/trends", Trends).RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/pilot-metrics", PilotMetrics).RequireRateLimiting("admin-report");
         admin.MapGet("/creators", Creators);
         admin.MapGet("/merchants", Merchants);
         admin.MapGet("/accounts", Accounts);
@@ -68,6 +69,39 @@ public static class AdminEndpoints
         var rows = await db.PurchaseTransactions.AsNoTracking().Where(x => x.TransactionDateUtc >= start && x.TransactionDateUtc <= end)
             .GroupBy(x => x.TransactionDateUtc.Date).Select(g => new { date = g.Key, purchases = g.Count(), volume = g.Sum(x => x.PurchaseAmount) }).OrderBy(x => x.date).ToListAsync(ct);
         return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> PilotMetrics(DateTime? from, DateTime? to, ApplicationDbContext db, CancellationToken ct)
+    {
+        var end = Normalize(to, DateTime.UtcNow); var start = Normalize(from, end.AddDays(-7));
+        if (start > end) return Results.BadRequest(new { error = "from must not be after to" });
+        var sessions = db.CheckoutSessions.AsNoTracking().Where(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end);
+        var completed = await sessions.Where(x => x.Status == CheckoutSessionStatus.Completed).Select(x => new { x.CreatedAtUtc, x.CompletedAtUtc }).ToListAsync(ct);
+        var approvalTimes = completed.Where(x => x.CompletedAtUtc.HasValue).Select(x => (x.CompletedAtUtc!.Value - x.CreatedAtUtc).TotalSeconds).OrderBy(x => x).ToArray();
+        var journals = await db.FinancialJournals.AsNoTracking().Where(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end)
+            .Select(x => new { x.Id, Lines = x.Lines.Select(l => new { l.Type, l.Amount }).ToList() }).ToListAsync(ct);
+        var created = await sessions.CountAsync(ct); var rejected = await sessions.CountAsync(x => x.Status == CheckoutSessionStatus.Rejected, ct);
+        var expired = await sessions.CountAsync(x => x.Status == CheckoutSessionStatus.Expired, ct); var completedCount = completed.Count;
+        return Results.Ok(new
+        {
+            range = new { from = start, to = end },
+            checkoutSessionsCreated = created,
+            checkoutSessionsCompleted = completedCount,
+            customerApprovalRate = created == 0 ? 0 : Math.Round(completedCount * 100m / created, 2),
+            customerRejectionRate = created == 0 ? 0 : Math.Round(rejected * 100m / created, 2),
+            qrExpirationRate = created == 0 ? 0 : Math.Round(expired * 100m / created, 2),
+            medianApprovalSeconds = approvalTimes.Length == 0 ? (double?)null : approvalTimes[approvalTimes.Length / 2],
+            postingFailureCount = await db.OperationalAuditEvents.CountAsync(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end && x.EventType == "CheckoutPostingFailed", ct),
+            duplicateAttemptCount = await db.OperationalAuditEvents.CountAsync(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end && x.EventType.Contains("Duplicate"), ct),
+            trialTransactionsRemaining = await db.MerchantTrialCredits.SumAsync(x => (int?)(x.MaximumTransactions - x.ConfirmedTransactionCount), ct) ?? 0,
+            merchantsInFundingRequired = await db.Merchants.CountAsync(x => x.Status == MerchantStatus.FundingRestricted, ct),
+            lowBalanceMerchants = await db.Merchants.CountAsync(x => x.Status == MerchantStatus.LowBalance, ct),
+            creatorPayoutQueueAmount = await db.CreatorPayouts.Where(x => x.Status == CreatorPayoutStatus.Scheduled || x.Status == CreatorPayoutStatus.Processing).SumAsync(x => (decimal?)x.Amount, ct) ?? 0,
+            customerPayoutQueueAmount = await db.CustomerPayoutRequests.Where(x => x.Status == CustomerPayoutStatus.Requested || x.Status == CustomerPayoutStatus.Processing).SumAsync(x => (decimal?)x.Amount, ct) ?? 0,
+            notificationDeliveryFailures = await db.NotificationDeliveryAttempts.CountAsync(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end && x.Status == DeliveryAttemptStatus.Failed, ct),
+            reversalCount = await db.TransactionReversals.CountAsync(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end, ct),
+            ledgerImbalanceCount = journals.Count(x => x.Lines.Sum(l => l.Type == JournalLineType.Debit ? l.Amount : -l.Amount) != 0)
+        });
     }
 
     private static async Task<IResult> Creators(string? q, CreatorStatus? status, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
