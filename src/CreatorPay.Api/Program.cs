@@ -132,6 +132,7 @@ app.MapCampaignEndpoints();
 app.MapCheckoutEndpoints(); app.MapHub<CheckoutHub>("/hubs/checkout");
 app.MapDiscoveryEndpoints();
 app.MapSupportEndpoints();
+app.MapPilotExperienceEndpoints();
 app.MapE2eSeedEndpoints(app.Environment);
 app.Run();
 

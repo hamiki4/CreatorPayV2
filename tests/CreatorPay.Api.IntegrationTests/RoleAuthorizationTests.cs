@@ -63,6 +63,20 @@ public sealed class RoleAuthorizationTests : IClassFixture<WebApplicationFactory
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/api/v1/merchant/repeat-use-approvals/{Guid.NewGuid()}/approve", new { reason = "Self approval attempt" })).StatusCode);
     }
 
+    [Fact]
+    public async Task Pilot_feedback_requires_authentication()
+    {
+        client.DefaultRequestHeaders.Authorization = null;
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/pilot/feedback", new { category = "Usability", message = "The navigation could be clearer.", preferredLanguage = "en", context = "/shopper" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Checkout_survey_is_limited_to_shoppers()
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token(UserRole.Creator, AccountStatus.Active));
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/pilot/checkout-survey", new { checkoutId = "CHK-test", rating = 5, preferredLanguage = "en" })).StatusCode);
+    }
+
     private static string Token(UserRole role, AccountStatus status, DateTime? expires = null)
     {
         var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Key)), SecurityAlgorithms.HmacSha256);
