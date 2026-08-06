@@ -85,6 +85,13 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(afterFirst, await Snapshot());
         await using (var db = Db()) Assert.True(await db.Notifications.CountAsync() >= 2);
 
+        await using (var db = Db()) { var merchant = await db.Merchants.SingleAsync(x => x.Id == Guid.Parse("20000000-0000-0000-0000-000000000001")); merchant.Status = MerchantStatus.PendingReview; await db.SaveChangesAsync(); }
+        var beforeUnapprovedBusiness = await Snapshot();
+        var unapprovedBusiness = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = payload, merchantLocationId = location, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "unapproved-business");
+        Assert.Equal(HttpStatusCode.Conflict, unapprovedBusiness.StatusCode);
+        Assert.Equal(beforeUnapprovedBusiness, await Snapshot());
+        await using (var db = Db()) { var merchant = await db.Merchants.SingleAsync(x => x.Id == Guid.Parse("20000000-0000-0000-0000-000000000001")); merchant.Status = MerchantStatus.Active; await db.SaveChangesAsync(); }
+
         var expired = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = seed.GetProperty("expiredOfferQrPayload").GetString(), merchantLocationId = location, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "expired-offer");
         Assert.Equal(HttpStatusCode.Conflict, expired.StatusCode);
         var invalid = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = payload + "tampered", merchantLocationId = location, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "invalid-offer");

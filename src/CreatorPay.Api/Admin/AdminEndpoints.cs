@@ -17,6 +17,7 @@ public static class AdminEndpoints
         admin.MapGet("/dashboard/summary", Dashboard).RequireRateLimiting("admin-report");
         admin.MapGet("/dashboard/trends", Trends).RequireRateLimiting("admin-report");
         admin.MapGet("/dashboard/pilot-metrics", PilotMetrics).RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/pilot-operations", PilotOperations).RequireRateLimiting("admin-report");
         admin.MapGet("/creators", Creators);
         admin.MapGet("/merchants", Merchants);
         admin.MapGet("/accounts", Accounts);
@@ -109,6 +110,40 @@ public static class AdminEndpoints
             notificationDeliveryFailures = await db.NotificationDeliveryAttempts.CountAsync(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end && x.Status == DeliveryAttemptStatus.Failed, ct),
             reversalCount = await db.TransactionReversals.CountAsync(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end, ct),
             ledgerImbalanceCount = journals.Count(x => x.Lines.Sum(l => l.Type == JournalLineType.Debit ? l.Amount : -l.Amount) != 0)
+        });
+    }
+
+    private static async Task<IResult> PilotOperations(DateTime? from, DateTime? to, Guid? merchantId, Guid? creatorId, Guid? locationId, Guid? offerId, TransactionStatus? status, ApplicationDbContext db, CancellationToken ct)
+    {
+        var end = Normalize(to, DateTime.UtcNow); var start = Normalize(from, end.Date);
+        if (start > end) return Results.BadRequest(new { error = "from must not be after to" });
+        var purchases = db.PurchaseTransactions.AsNoTracking().Where(x => x.TransactionDateUtc >= start && x.TransactionDateUtc <= end
+            && (!merchantId.HasValue || x.MerchantId == merchantId) && (!creatorId.HasValue || x.CreatorId == creatorId)
+            && (!locationId.HasValue || x.MerchantLocationId == locationId) && (!offerId.HasValue || x.CampaignId == offerId)
+            && (!status.HasValue || x.Status == status));
+        var sessions = db.CheckoutSessions.AsNoTracking().Where(x => x.CreatedAtUtc >= start && x.CreatedAtUtc <= end
+            && (!merchantId.HasValue || x.MerchantId == merchantId) && (!creatorId.HasValue || x.CreatorId == creatorId)
+            && (!locationId.HasValue || x.MerchantLocationId == locationId) && (!offerId.HasValue || x.CampaignId == offerId));
+        return Results.Ok(new
+        {
+            range = new { from = start, to = end }, filters = new { merchantId, creatorId, locationId, offerId, status },
+            pilotBusinesses = await db.Merchants.CountAsync(x => x.Status == MerchantStatus.Active, ct),
+            pilotCreators = await db.Creators.CountAsync(x => x.Status == CreatorStatus.Active, ct),
+            pilotCashiers = await db.Cashiers.CountAsync(x => x.IsActive && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
+            pilotShoppers = await db.Customers.CountAsync(x => x.Status == CustomerStatus.Active, ct),
+            activePilotOffers = await db.CreatorMerchantCampaigns.CountAsync(x => x.Status == CampaignStatus.Active && (!merchantId.HasValue || x.MerchantId == merchantId) && (!creatorId.HasValue || x.CreatorId == creatorId), ct),
+            todaysCheckouts = await sessions.CountAsync(ct), successfulCheckouts = await sessions.CountAsync(x => x.Status == CheckoutSessionStatus.Completed, ct),
+            failedCheckouts = await sessions.CountAsync(x => x.Status == CheckoutSessionStatus.Rejected || x.Status == CheckoutSessionStatus.Expired || x.Status == CheckoutSessionStatus.Cancelled, ct),
+            walletBalances = await db.MerchantWallets.Where(x => !merchantId.HasValue || x.MerchantId == merchantId).SumAsync(x => (decimal?)x.AvailableBalance, ct) ?? 0,
+            lowBalanceBusinesses = await db.MerchantWallets.CountAsync(x => x.Status == MerchantWalletStatus.LowBalance && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
+            pendingCreatorEarnings = await db.CreatorEarnings.Where(x => x.Status == CreatorEarningStatus.Pending && (!creatorId.HasValue || x.CreatorId == creatorId)).SumAsync(x => (decimal?)x.Amount, ct) ?? 0,
+            pendingShopperCashback = await db.CustomerPayoutRequests.Where(x => x.Status == CustomerPayoutStatus.Requested || x.Status == CustomerPayoutStatus.Processing).SumAsync(x => (decimal?)x.Amount, ct) ?? 0,
+            pendingPayouts = await db.CreatorPayouts.CountAsync(x => x.Status == CreatorPayoutStatus.Scheduled || x.Status == CreatorPayoutStatus.Processing || x.Status == CreatorPayoutStatus.Submitted, ct),
+            failedNotifications = await db.NotificationOutboxMessages.CountAsync(x => x.Status == NotificationOutboxStatus.Failed || x.Status == NotificationOutboxStatus.DeadLettered, ct),
+            supportRequests = await db.SupportRequests.CountAsync(x => x.Status == "Open", ct), disputes = await db.Disputes.CountAsync(x => x.Status == DisputeStatus.Open, ct),
+            suspiciousActivity = await db.FraudAlerts.CountAsync(x => x.Status == FraudAlertStatus.Open, ct), serviceHealth = "API and database available",
+            onboardingProgress = new { businessesApproved = await db.Merchants.CountAsync(x => x.Status == MerchantStatus.Active, ct), creatorsApproved = await db.Creators.CountAsync(x => x.Status == CreatorStatus.Active, ct), activePartnerships = await db.MerchantCreatorPartnerships.CountAsync(x => x.Status == PartnershipStatus.Approved, ct) },
+            purchaseCount = await purchases.CountAsync(ct)
         });
     }
 

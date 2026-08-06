@@ -7,6 +7,7 @@ using CreatorPay.Application.Checkout;
 using CreatorPay.Application.Commission;
 using CreatorPay.Application.Earnings;
 using CreatorPay.Application.Notifications;
+using CreatorPay.Application.Operations;
 using CreatorPay.Application.Qr;
 using CreatorPay.Application.Wallet;
 using CreatorPay.Domain.Entities;
@@ -16,10 +17,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 namespace CreatorPay.Infrastructure.Checkout;
 
-public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IPasswordHasher passwords, PasswordPolicyValidator policy, ICommissionEngine commissions, ICreatorEarningsService earnings, INotificationService notifications, IPhoneNumberNormalizer phoneNumbers, IQrTokenService qrTokens, IOptions<CheckoutOptions> configured, IOptions<WalletOptions> walletConfigured) : ICheckoutService
+public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IPasswordHasher passwords, PasswordPolicyValidator policy, ICommissionEngine commissions, ICreatorEarningsService earnings, INotificationService notifications, IPhoneNumberNormalizer phoneNumbers, IQrTokenService qrTokens, IOptions<CheckoutOptions> configured, IOptions<WalletOptions> walletConfigured, IOptions<PilotOptions> pilotConfigured) : ICheckoutService
 {
     readonly CheckoutOptions options = configured.Value;
     readonly WalletOptions walletOptions = walletConfigured.Value;
+    readonly PilotOptions pilotOptions = pilotConfigured.Value;
     public async Task<CheckoutDto> CreateFromOfferAsync(Guid customer, string key, CreateOfferCheckoutRequest r, CancellationToken ct) { var code = r.OfferCode?.Trim(); if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Offer code is required."); var id = await db.CreatorMerchantCampaigns.Where(x => x.CampaignCode == code || x.PublicCampaignId == code).Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct) ?? throw new KeyNotFoundException("Offer not found."); return await CreateAsync(customer, key, new(id), ct); }
     public async Task<Guid> RegisterCustomerAsync(RegisterCustomerRequest r, CancellationToken ct) { if (r.Password != r.Confirmation) throw new ArgumentException("Passwords do not match."); var errors = policy.Validate(r.Password); if (errors.Count > 0) throw new ArgumentException(string.Join(" ", errors)); var phone = EthiopianMobileNumber.Normalize(r.PhoneNumber); var email = r.Email.Trim().ToUpperInvariant(); if (await db.UserAccounts.AnyAsync(x => x.NormalizedEmail == email, ct)) throw new InvalidOperationException("Email is already registered."); if (await db.Customers.AnyAsync(x => x.NormalizedPhoneNumber == phone, ct) || await db.Creators.AnyAsync(x => x.NormalizedPhoneNumber == phone, ct) || await db.Merchants.AnyAsync(x => x.NormalizedPhoneNumber == phone, ct)) throw new InvalidOperationException("Phone number is already registered."); var now = clock.UtcNow; var customer = new Customer { Id = Guid.NewGuid(), PublicCustomerId = $"CUS-{Guid.NewGuid():N}", DisplayName = r.DisplayName.Trim(), PhoneNumber = phone, NormalizedPhoneNumber = phone, CreatedAtUtc = now }; var user = new UserAccount { Id = Guid.NewGuid(), Email = r.Email.Trim(), NormalizedEmail = email, Role = UserRole.Customer, Status = AccountStatus.Active, CustomerId = customer.Id, IsEmailVerified = true, CreatedAtUtc = now }; user.PasswordHash = passwords.Hash(user, r.Password); db.Add(customer); db.Add(user); db.Add(new CustomerWallet { Id = Guid.NewGuid(), CustomerId = customer.Id, CurrencyCode = options.CurrencyCode, CreatedAtUtc = now }); Audit("CustomerRegistered", user.Id, customer.Id, null, now); await db.SaveChangesAsync(ct); return customer.Id; }
     public async Task<CheckoutDto> CreateAsync(Guid customer, string key, CreateCheckoutRequest r, CancellationToken ct) { Key(key); var old = await db.CheckoutSessions.SingleOrDefaultAsync(x => x.CustomerId == customer && x.CreateIdempotencyKey == key, ct); if (old != null) return Map(old); var now = clock.UtcNow; var c = await EligibleCampaign(r.CampaignId, now, ct); if (!await db.Customers.AnyAsync(x => x.Id == customer && x.Status == CustomerStatus.Active, ct)) throw new InvalidOperationException("Customer is not active."); var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)); var x = new CheckoutSession { Id = Guid.NewGuid(), PublicCheckoutId = $"CHK-{Guid.NewGuid():N}", CustomerId = customer, CampaignId = c.Id, MerchantId = c.MerchantId, CreatorId = c.CreatorId, TokenHash = Hash(raw), ExpiresAtUtc = now.AddMinutes(options.LifetimeMinutes), CreateIdempotencyKey = key, CreatedAtUtc = now }; db.Add(x); Audit("CheckoutCreated", null, customer, x.Id, now); await db.SaveChangesAsync(ct); return Map(x, $"creatorpay:checkout:{x.PublicCheckoutId}:{raw}"); }
@@ -27,6 +29,7 @@ public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IP
     public async Task<OfferCheckoutResult> SubmitOfferAsync(Guid merchant, Guid cashier, Guid actor, string key, SubmitOfferCheckoutRequest r, CancellationToken ct)
     {
         Key(key);
+        if (pilotOptions.Enabled && r.PurchaseAmount > pilotOptions.MaximumPurchaseAmount) throw new InvalidOperationException("Pilot maximum purchase amount exceeded.");
         if (r.PurchaseAmount <= 0) throw new ArgumentException("Purchase amount must be positive.");
         var phone = EthiopianMobileNumber.Normalize(r.ShopperPhoneNumber);
         var masked = MaskShopperPhone(phone);
@@ -55,6 +58,17 @@ public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IP
         var customer = await db.Customers.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == phone && x.Status == CustomerStatus.Active, ct);
         if (customer is null) return new("ShopperRegistrationRequired", "shopper_not_registered", "Shopper must register with this same phone number before cashback can be issued.", masked, null);
         var preview = await commissions.PreviewAsync(new(r.PurchaseAmount, merchant, campaign.CreatorId, campaign.MerchantCreatorPartnershipId, campaign.Id, options.CurrencyCode, now), false, ct);
+        if (pilotOptions.Enabled)
+        {
+            if (preview.Calculation.TotalCommissionAmount > pilotOptions.MaximumCommissionAmount) throw new InvalidOperationException("Pilot maximum commission amount exceeded.");
+            var today = now.Date;
+            var merchantSpend = await db.PurchaseTransactions.Where(x => x.TransactionDateUtc >= today && x.MerchantId == merchant).SumAsync(x => (decimal?)x.PurchaseAmount, ct) ?? 0;
+            var creatorEarned = await db.CreatorEarnings.Where(x => x.CreatorId == campaign.CreatorId && x.CreatedAtUtc >= today).SumAsync(x => (decimal?)x.Amount, ct) ?? 0;
+            var shopperCashback = await db.CustomerCashbackEntries.Where(x => x.CustomerId == customer.Id && x.CreatedAtUtc >= today && x.EntryType == CustomerCashbackEntryType.Earned).SumAsync(x => (decimal?)x.Amount, ct) ?? 0;
+            if (merchantSpend + r.PurchaseAmount > pilotOptions.DailyMerchantSpendingLimit) throw new InvalidOperationException("Pilot daily Business spending limit exceeded.");
+            if (creatorEarned + preview.Calculation.CreatorCommissionAmount > pilotOptions.CreatorEarningLimit) throw new InvalidOperationException("Pilot Creator earning limit exceeded.");
+            if (shopperCashback + preview.Calculation.CustomerCashbackAmount > pilotOptions.ShopperCashbackLimit) throw new InvalidOperationException("Pilot Shopper cashback limit exceeded.");
+        }
         if (!await db.MerchantWallets.AnyAsync(x => x.MerchantId == merchant && x.CurrencyCode == options.CurrencyCode && x.AvailableBalance >= preview.Calculation.TotalCommissionAmount, ct))
             return new("InsufficientWallet", "insufficient_wallet", "Merchant wallet has insufficient balance for this checkout.", masked, null);
 

@@ -41,6 +41,27 @@ public static class ProductionConfiguration
             if (proxy.KnownProxies.Any(value => !System.Net.IPAddress.TryParse(value, out _)))
                 errors.Add("ReverseProxy:KnownProxies (IP addresses only)");
         }
+        if (environment.IsEnvironment("Pilot"))
+        {
+            var pilot = configuration.GetSection(PilotOptions.SectionName).Get<PilotOptions>() ?? new();
+            var flags = configuration.GetSection(FeatureFlagOptions.SectionName).Get<FeatureFlagOptions>() ?? new();
+            if (!pilot.Enabled) errors.Add("Pilot:Enabled must be true");
+            if (!pilot.RequireHttps) errors.Add("Pilot:RequireHttps must be true");
+            if (!pilot.AuditLoggingEnabled) errors.Add("Pilot:AuditLoggingEnabled must be true");
+            if (!pilot.HealthMonitoringEnabled) errors.Add("Pilot:HealthMonitoringEnabled must be true");
+            if (!pilot.ManualWalletFundingOnly) errors.Add("Pilot:ManualWalletFundingOnly must be true");
+            if (pilot.MaximumBusinesses <= 0 || pilot.MaximumCreators <= 0) errors.Add("Pilot participant limits must be positive");
+            if (pilot.MaximumPurchaseAmount <= 0 || pilot.MaximumCommissionAmount <= 0 || pilot.DailyMerchantSpendingLimit <= 0 || pilot.ShopperCashbackLimit <= 0 || pilot.CreatorEarningLimit <= 0) errors.Add("Pilot financial limits must be positive");
+            if (pilot.PayoutHoldDays < 1) errors.Add("Pilot:PayoutHoldDays must be at least one day");
+            if (flags.AutomaticPayouts) errors.Add("FeatureFlags:AutomaticPayouts must be false in Pilot");
+            if (flags.ExternalPaymentProvider) errors.Add("FeatureFlags:ExternalPaymentProvider must be false in Pilot unless separately reviewed");
+            var supportEmail = configuration["Support:Email"];
+            if (string.IsNullOrWhiteSpace(supportEmail) || !supportEmail.Contains('@')) errors.Add("Support:Email");
+            var storage = configuration.GetSection(StorageOptions.SectionName).Get<StorageOptions>() ?? new();
+            if (string.IsNullOrWhiteSpace(storage.Provider)) errors.Add("Storage:Provider");
+            var pilotCors = configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
+            if (pilotCors.AllowedOrigins.Any(origin => !Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)) errors.Add("Cors:AllowedOrigins (Pilot origins must use HTTPS)");
+        }
         if (errors.Count > 0) throw new InvalidOperationException($"Invalid production configuration: {string.Join(", ", errors)}.");
     }
 }

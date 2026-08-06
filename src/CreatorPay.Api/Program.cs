@@ -40,6 +40,7 @@ var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOption
 var rateLimits = builder.Configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>() ?? new();
 if (builder.Environment.IsEnvironment("E2E")) rateLimits.AuthPermitLimit = Math.Max(rateLimits.AuthPermitLimit, 1000);
 var cors = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
+var featureFlags = builder.Configuration.GetSection(FeatureFlagOptions.SectionName).Get<FeatureFlagOptions>() ?? new();
 var reverseProxy = builder.Configuration.GetSection(ReverseProxyOptions.SectionName).Get<ReverseProxyOptions>() ?? new();
 
 builder.Logging.ClearProviders();
@@ -111,6 +112,16 @@ if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.UseExceptionHandler(); app.UseMiddleware<ErrorMonitoringMiddleware>(); app.UseResponseCompression(); app.UseMiddleware<RequestContextMiddleware>();
 app.Use(async (context, next) => { context.Response.Headers.XContentTypeOptions = "nosniff"; context.Response.Headers.XFrameOptions = "DENY"; context.Response.Headers["Referrer-Policy"] = "no-referrer"; context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"; context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"; context.Response.Headers["Cross-Origin-Resource-Policy"] = "same-site"; context.Response.Headers["Cache-Control"] = "no-store"; await next(); });
 app.UseHttpsRedirection(); app.UseCors("Web"); app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
+app.Use(async (context, next) =>
+{
+    if (app.Environment.IsEnvironment("Pilot") && featureFlags.MaintenanceMode && context.Request.Path.StartsWithSegments("/api/v1/cashier/checkouts"))
+    { context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable; await context.Response.WriteAsJsonAsync(new { title = "Maintenance in progress", status = 503, correlationId = context.TraceIdentifier }); return; }
+    if (app.Environment.IsEnvironment("Pilot") && !featureFlags.PublicRegistration && context.Request.Path == "/api/v1/customers/register")
+    { context.Response.StatusCode = StatusCodes.Status404NotFound; return; }
+    if (app.Environment.IsEnvironment("Pilot") && !featureFlags.PublicDiscovery && context.Request.Path.StartsWithSegments("/api/v1/discovery"))
+    { context.Response.StatusCode = StatusCodes.Status404NotFound; return; }
+    await next();
+});
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = x => x.Tags.Contains("live"), ResponseWriter = WriteHealth });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = x => x.Tags.Contains("ready"), ResponseWriter = WriteHealth });
 app.MapGet("/health", () => Results.Redirect("/health/live")).ExcludeFromDescription();

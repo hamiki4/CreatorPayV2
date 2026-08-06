@@ -77,7 +77,7 @@ public static class DependencyInjection
         services.AddSingleton<INotificationDispatcher, NotificationDispatcher>(); services.AddScoped<INotificationService, NotificationService>(); services.AddScoped<INotificationOutboxProcessor, NotificationOutboxProcessor>();
         services.AddScoped<IRiskOperationsService, RiskOperationsService>();
         services.Configure<CampaignOptions>(configuration.GetSection(CampaignOptions.SectionName)); services.AddScoped<ICampaignService, CampaignService>();
-        services.Configure<CheckoutOptions>(configuration.GetSection(CheckoutOptions.SectionName)); services.AddScoped<ICheckoutService, CheckoutService>();
+        services.Configure<CheckoutOptions>(configuration.GetSection(CheckoutOptions.SectionName)); services.Configure<PilotOptions>(configuration.GetSection(PilotOptions.SectionName)); services.AddScoped<ICheckoutService, CheckoutService>();
         services.AddScoped<IDiscoveryService, DiscoveryService>();
         return services;
     }

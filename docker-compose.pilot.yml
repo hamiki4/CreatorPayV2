@@ -1,0 +1,24 @@
+services:
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Pilot
+      Support__Email: ${Support__Email:?Set pilot support email}
+      Storage__Provider: ${Storage__Provider:-MetadataOnly}
+      Storage__ConnectionString: ${Storage__ConnectionString:-}
+      FeatureFlags__ExternalSms: ${FeatureFlags__ExternalSms:-false}
+      FeatureFlags__ExternalEmail: ${FeatureFlags__ExternalEmail:-false}
+      FeatureFlags__ExternalPaymentProvider: ${FeatureFlags__ExternalPaymentProvider:-false}
+      FeatureFlags__AutomaticPayouts: ${FeatureFlags__AutomaticPayouts:-false}
+      FeatureFlags__PublicRegistration: ${FeatureFlags__PublicRegistration:-false}
+      FeatureFlags__PublicDiscovery: ${FeatureFlags__PublicDiscovery:-false}
+      FeatureFlags__SupportNotifications: ${FeatureFlags__SupportNotifications:-false}
+      FeatureFlags__ProductionMonitoring: ${FeatureFlags__ProductionMonitoring:-false}
+      FeatureFlags__MaintenanceMode: ${FeatureFlags__MaintenanceMode:-false}
+  worker:
+    environment:
+      DOTNET_ENVIRONMENT: Pilot
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/creatorpay-worker-ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

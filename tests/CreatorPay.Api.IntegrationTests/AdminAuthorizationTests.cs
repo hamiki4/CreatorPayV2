@@ -13,6 +13,7 @@ public sealed class AdminAuthorizationTests : IClassFixture<WebApplicationFactor
     [Theory]
     [InlineData("/api/v1/admin/dashboard/summary")]
     [InlineData("/api/v1/admin/dashboard/pilot-metrics")]
+    [InlineData("/api/v1/admin/dashboard/pilot-operations")]
     [InlineData("/api/v1/admin/search?q=public-id")]
     [InlineData("/api/v1/admin/audit")]
     [InlineData("/api/v1/admin/system")]
