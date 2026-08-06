@@ -1,8 +1,9 @@
 namespace CreatorPay.Application.Operations;
 
-public sealed class WorkerOptions { public const string SectionName = "BackgroundWorkers"; public bool Enabled { get; set; } = true; public int PollIntervalSeconds { get; set; } = 10; public int LockTimeoutMinutes { get; set; } = 15; }
+public sealed class WorkerOptions { public const string SectionName = "BackgroundWorkers"; public bool Enabled { get; set; } = true; public int PollIntervalSeconds { get; set; } = 10; public int LockTimeoutMinutes { get; set; } = 15; public string? HealthFilePath { get; set; } }
 public sealed class StorageOptions { public const string SectionName = "Storage"; public string Provider { get; set; } = "MetadataOnly"; public string? ConnectionString { get; set; } }
 public sealed class ObservabilityOptions { public const string SectionName = "Observability"; public string ServiceName { get; set; } = "CreatorPay"; public string? OtlpEndpoint { get; set; } public bool EnableOtlpExporter { get; set; } }
+public sealed class ErrorMonitoringOptions { public const string SectionName = "ErrorMonitoring"; public bool Enabled { get; set; } public string? Endpoint { get; set; } public string? Environment { get; set; } }
 public sealed class CorsOptions { public const string SectionName = "Cors"; public string[] AllowedOrigins { get; set; } = []; }
 public sealed class HealthOptions { public const string SectionName = "HealthChecks"; public int TimeoutSeconds { get; set; } = 5; public string? OperationsKey { get; set; } }
 public sealed class RateLimitOptions { public const string SectionName = "RateLimiting"; public int AuthPermitLimit { get; set; } = 10; public int FinancialPermitLimit { get; set; } = 20; public int WindowSeconds { get; set; } = 60; }

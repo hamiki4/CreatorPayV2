@@ -17,12 +17,14 @@ public sealed class OperationalWorker(IServiceScopeFactory scopes, IOptions<Work
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("CreatorPay worker {InstanceId} starting", instanceId);
+        WriteHealthFile();
         while (!stoppingToken.IsCancellationRequested)
         {
             if (options.Enabled) await RunJob("NotificationOutbox", async (provider, ct) => await provider.GetRequiredService<INotificationOutboxProcessor>().ProcessBatchAsync(instanceId, ct), stoppingToken);
             if (options.Enabled) await RunJob("CampaignLifecycle", async (provider, ct) => await provider.GetRequiredService<ICampaignService>().ProcessLifecycleAsync(ct), stoppingToken);
             if (options.Enabled) await RunJob("CheckoutExpiration", async (provider, ct) => await provider.GetRequiredService<ICheckoutService>().ExpireAsync(ct), stoppingToken);
             try { await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, options.PollIntervalSeconds)), stoppingToken); } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+            WriteHealthFile();
         }
         logger.LogInformation("CreatorPay worker {InstanceId} stopped gracefully", instanceId);
     }
@@ -40,4 +42,5 @@ public sealed class OperationalWorker(IServiceScopeFactory scopes, IOptions<Work
         finally { await db.SaveChangesAsync(CancellationToken.None); await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_unlock({0})", lockKey); }
     }
     private static long StableLockKey(string value) { unchecked { long hash = 1469598103934665603; foreach (var c in value) hash = (hash ^ c) * 1099511628211; return hash; } }
+    private void WriteHealthFile() { if (!string.IsNullOrWhiteSpace(options.HealthFilePath)) File.WriteAllText(options.HealthFilePath, DateTime.UtcNow.ToString("O")); }
 }

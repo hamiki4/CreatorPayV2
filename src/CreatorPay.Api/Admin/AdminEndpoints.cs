@@ -25,6 +25,7 @@ public static class AdminEndpoints
         admin.MapGet("/offline-sync", OfflineSync);
         admin.MapGet("/audit", Audit);
         admin.MapGet("/search", Search).RequireRateLimiting("admin-report");
+        admin.MapGet("/support", Support).RequireRateLimiting("admin-report");
         admin.MapGet("/system", SystemStatus);
         admin.MapGet("/operational-alerts", Alerts);
         admin.MapPost("/accounts/{id:guid}/unlock", UnlockAccount);
@@ -34,7 +35,7 @@ public static class AdminEndpoints
         return endpoints;
     }
 
-    private static async Task<IResult> Dashboard(DateTime? from, DateTime? to, Guid? merchantId, ApplicationDbContext db, CancellationToken ct)
+    private static async Task<IResult> Dashboard(DateTime? from, DateTime? to, Guid? merchantId, ApplicationDbContext db, IWebHostEnvironment env, CancellationToken ct)
     {
         var end = Normalize(to, DateTime.UtcNow); var start = Normalize(from, end.Date); if (start > end) return Results.BadRequest(new { error = "from must not be after to" });
         var purchases = db.PurchaseTransactions.AsNoTracking().Where(x => x.TransactionDateUtc >= start && x.TransactionDateUtc <= end && (!merchantId.HasValue || x.MerchantId == merchantId));
@@ -48,6 +49,11 @@ public static class AdminEndpoints
             openFraudAlerts = await db.FraudAlerts.CountAsync(x => x.Status == FraudAlertStatus.Open && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
             openDisputes = await db.Disputes.CountAsync(x => x.Status == DisputeStatus.Open && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
             failedPayouts = await db.CreatorPayouts.CountAsync(x => x.Status == CreatorPayoutStatus.Failed, ct),
+            pendingPayouts = await db.CreatorPayouts.CountAsync(x => x.Status == CreatorPayoutStatus.Scheduled || x.Status == CreatorPayoutStatus.Processing || x.Status == CreatorPayoutStatus.Submitted, ct),
+            failedCheckouts = await db.CheckoutSessions.CountAsync(x => x.Status == CheckoutSessionStatus.Rejected || x.Status == CheckoutSessionStatus.Expired || x.Status == CheckoutSessionStatus.Cancelled, ct),
+            failedNotifications = await db.NotificationOutboxMessages.CountAsync(x => x.Status == NotificationOutboxStatus.Failed || x.Status == NotificationOutboxStatus.DeadLettered, ct),
+            suspiciousActivity = await db.FraudAlerts.CountAsync(x => x.Status == FraudAlertStatus.Open, ct),
+            openSupportRequests = await db.SupportRequests.CountAsync(x => x.Status == "Open", ct),
             notificationDeadLetters = await db.NotificationDeadLetters.CountAsync(x => x.Status != NotificationDeadLetterStatus.Resolved, ct),
             walletsBelowThreshold = await db.MerchantWallets.CountAsync(x => x.Status == MerchantWalletStatus.LowBalance && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
             rejectedOfflineSyncItems = await db.OfflineSyncItemResults.CountAsync(x => x.ResultStatus == "Rejected", ct),
@@ -57,6 +63,8 @@ public static class AdminEndpoints
             creatorEarningsPending = await db.CreatorEarnings.Where(x => x.Status == CreatorEarningStatus.Pending).SumAsync(x => (decimal?)x.Amount, ct) ?? 0,
             creatorPayoutsScheduled = await db.CreatorPayouts.CountAsync(x => x.Status == CreatorPayoutStatus.Scheduled, ct),
             systemHealth = "Available",
+            serviceHealth = "API and database available",
+            deploymentStatus = $"{env.EnvironmentName} {typeof(Program).Assembly.GetName().Version}",
             workerStatus = await db.BackgroundJobExecutions.AnyAsync(x => x.Status == BackgroundJobStatus.Running || x.CreatedAtUtc >= DateTime.UtcNow.AddMinutes(-15), ct) ? "Active" : "Unknown",
             outboxBacklog = await db.NotificationOutboxMessages.CountAsync(x => x.Status == NotificationOutboxStatus.Pending || x.Status == NotificationOutboxStatus.Failed, ct)
         };
@@ -121,6 +129,7 @@ public static class AdminEndpoints
     private static async Task<IResult> Search(string q, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
     { if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 3) return Results.BadRequest(new { error = "Enter at least three characters." }); q = q.Trim(); var take = Math.Clamp(pageSize, 1, 25); var results = new List<object>(); results.AddRange(await db.Creators.AsNoTracking().Where(x => x.PublicCreatorId.Contains(q)).Take(take).Select(x => (object)new { category = "Creator", id = x.Id, label = x.PublicCreatorId, detail = x.DisplayName, url = $"/admin/creators?id={x.Id}" }).ToListAsync(ct)); results.AddRange(await db.Merchants.AsNoTracking().Where(x => x.PublicMerchantId.Contains(q)).Take(take).Select(x => (object)new { category = "Merchant", id = x.Id, label = x.PublicMerchantId, detail = x.TradingName, url = $"/admin/merchants?id={x.Id}" }).ToListAsync(ct)); results.AddRange(await db.PurchaseTransactions.AsNoTracking().Where(x => x.PublicTransactionId.Contains(q) || x.CorrelationId == q).Take(take).Select(x => (object)new { category = "Purchase", id = x.Id, label = x.PublicTransactionId, detail = x.Status.ToString(), url = $"/admin/purchases?id={x.Id}" }).ToListAsync(ct)); results.AddRange(await db.CreatorPayouts.AsNoTracking().Where(x => x.PublicPayoutId.Contains(q) || x.CorrelationId == q).Take(take).Select(x => (object)new { category = "Payout", id = x.Id, label = x.PublicPayoutId, detail = x.Status.ToString(), url = $"/admin/payouts?id={x.Id}" }).ToListAsync(ct)); return Results.Ok(new { items = results.Skip(Math.Max(0, page - 1) * take).Take(take), page, pageSize = take, total = results.Count }); }
     private static async Task<IResult> SystemStatus(ApplicationDbContext db, IWebHostEnvironment env, CancellationToken ct) => Results.Ok(new { health = "Available", database = "Connected", worker = await db.BackgroundJobExecutions.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.JobName, status = x.Status.ToString(), x.CreatedAtUtc }).FirstOrDefaultAsync(ct), outboxBacklog = await db.NotificationOutboxMessages.CountAsync(x => x.Status == NotificationOutboxStatus.Pending || x.Status == NotificationOutboxStatus.Failed, ct), failedJobs = await db.BackgroundJobExecutions.CountAsync(x => x.Status == BackgroundJobStatus.Failed, ct), migrationStatus = "Use EF migration validation", version = typeof(Program).Assembly.GetName().Version?.ToString(), environment = env.EnvironmentName, providerReadiness = "Configured providers only", otlpReadiness = "Configuration dependent" });
+    private static async Task<IResult> Support(string? q, string? status, int page, int pageSize, ApplicationDbContext db, CancellationToken ct) { var query = db.SupportRequests.AsNoTracking(); if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => x.PublicReference.Contains(q)); if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status == status); return Results.Ok(await Page(query.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.PublicReference, x.UserType, x.Subject, x.PreferredLanguage, x.Status, x.CreatedAtUtc }), page, pageSize, ct)); }
     private static async Task<IResult> Alerts(string? status, int page, int pageSize, ApplicationDbContext db, CancellationToken ct) { var q = db.OperationalAlerts.AsNoTracking(); if (!string.IsNullOrWhiteSpace(status)) q = q.Where(x => x.Status == status); return Results.Ok(await Page(q.OrderByDescending(x => x.DetectedAtUtc).Select(x => new { x.Id, x.AlertType, x.Severity, x.Status, x.Title, x.SafeDescription, x.RelatedEntityType, x.RelatedEntityId, x.DetectedAtUtc, x.AcknowledgedAtUtc, x.ResolvedAtUtc, x.CorrelationId }), page, pageSize, ct)); }
 
     private static async Task<IResult> UnlockAccount(Guid id, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound(); account.FailedLoginCount = 0; account.LockoutEndUtc = null; await AddAudit(db, user.UserAccountId!.Value, "AdminAccountUnlocked", id, request.Reason, h.TraceIdentifier, ct); return Results.NoContent(); }

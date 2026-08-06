@@ -57,6 +57,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOptions.SectionName));
 builder.Services.Configure<HealthOptions>(builder.Configuration.GetSection(HealthOptions.SectionName));
 builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection(RateLimitOptions.SectionName));
+builder.Services.Configure<ErrorMonitoringOptions>(builder.Configuration.GetSection(ErrorMonitoringOptions.SectionName));
+builder.Services.AddSingleton<IErrorMonitoringHook, LoggingErrorMonitoringHook>();
 builder.Services.AddCors(o => o.AddPolicy("Web", p => { if (cors.AllowedOrigins.Length > 0) p.WithOrigins(cors.AllowedOrigins).AllowAnyHeader().AllowAnyMethod(); }));
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>(); builder.Services.AddApplication(); builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -106,7 +108,7 @@ var app = builder.Build();
 app.Logger.LogInformation("CreatorPay API starting in {Environment}; version {Version}", app.Environment.EnvironmentName, typeof(Program).Assembly.GetName().Version?.ToString());
 app.UseForwardedHeaders(); if (!app.Environment.IsDevelopment()) app.UseHsts();
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
-app.UseExceptionHandler(); app.UseResponseCompression(); app.UseMiddleware<RequestContextMiddleware>();
+app.UseExceptionHandler(); app.UseMiddleware<ErrorMonitoringMiddleware>(); app.UseResponseCompression(); app.UseMiddleware<RequestContextMiddleware>();
 app.Use(async (context, next) => { context.Response.Headers.XContentTypeOptions = "nosniff"; context.Response.Headers.XFrameOptions = "DENY"; context.Response.Headers["Referrer-Policy"] = "no-referrer"; context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"; context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"; context.Response.Headers["Cross-Origin-Resource-Policy"] = "same-site"; context.Response.Headers["Cache-Control"] = "no-store"; await next(); });
 app.UseHttpsRedirection(); app.UseCors("Web"); app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = x => x.Tags.Contains("live"), ResponseWriter = WriteHealth });

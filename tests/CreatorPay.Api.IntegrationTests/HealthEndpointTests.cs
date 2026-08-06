@@ -46,6 +46,15 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task LivenessIsPublicAndReadinessIncludesDatabaseProbe()
+    {
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/health/live")).StatusCode);
+        using var readiness = await _client.GetAsync("/health/ready");
+        Assert.Contains(readiness.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.ServiceUnavailable });
+        Assert.Contains("CreatorPay API", await readiness.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task CurrentUserRequiresAuthentication()
     {
         using HttpResponseMessage response = await _client.GetAsync("/api/v1/auth/me");

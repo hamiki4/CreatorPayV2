@@ -6,4 +6,5 @@ FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
 WORKDIR /app
 COPY --from=build /app .
 USER $APP_UID
+HEALTHCHECK --interval=15s --timeout=3s --retries=4 CMD test -n "$(find /tmp/creatorpay-worker-ready -mmin -1 -print -quit)" || exit 1
 ENTRYPOINT ["dotnet", "CreatorPay.Worker.dll"]
