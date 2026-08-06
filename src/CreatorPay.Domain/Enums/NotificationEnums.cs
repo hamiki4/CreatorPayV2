@@ -20,5 +20,5 @@ public enum NotificationType
     RepeatUseApprovalRequested, RepeatUseApproved, RepeatUseDenied, CustomerVerificationCode,
     CustomerConfirmationSucceeded, PayoutScheduled, PayoutSubmitted, PayoutPaid, PayoutFailed,
     CheckoutApprovalRequired, CustomerCashbackEarned, CustomerCashbackThresholdReached, CustomerPayoutRequested, CustomerPayoutPaid,
-    PasswordResetRequested, SecurityAlert, SystemOperationalAlert
+    PasswordResetRequested, SecurityAlert, SystemOperationalAlert, SupportRequestReceived
 }

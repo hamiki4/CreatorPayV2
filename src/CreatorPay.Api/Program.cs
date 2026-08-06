@@ -22,6 +22,7 @@ using CreatorPay.Api.Campaigns;
 using CreatorPay.Api.Checkout;
 using CreatorPay.Api.Discovery;
 using CreatorPay.Api.Testing;
+using CreatorPay.Api.Support;
 using CreatorPay.Application;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Operations;
@@ -98,6 +99,7 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("auth-sensitive", h => RateLimitPartition.GetFixedWindowLimiter($"{h.Connection.RemoteIpAddress}:{h.Request.Path}", _ => new() { PermitLimit = rateLimits.AuthPermitLimit, Window = TimeSpan.FromSeconds(rateLimits.WindowSeconds), QueueLimit = 0 }));
     o.AddPolicy("financial-sensitive", h => RateLimitPartition.GetFixedWindowLimiter($"{h.User.FindFirst("merchant_id")?.Value ?? h.Connection.RemoteIpAddress?.ToString()}:{h.Request.Path}", _ => new() { PermitLimit = rateLimits.FinancialPermitLimit, Window = TimeSpan.FromSeconds(rateLimits.WindowSeconds), QueueLimit = 0 }));
     o.AddPolicy("admin-report", h => RateLimitPartition.GetFixedWindowLimiter($"{h.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value}:{h.Request.Path}", _ => new() { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    o.AddPolicy("public-support", h => RateLimitPartition.GetFixedWindowLimiter($"{h.Connection.RemoteIpAddress}:{h.Request.Path}", _ => new() { PermitLimit = 5, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
 });
 
 var app = builder.Build();
@@ -116,6 +118,7 @@ app.MapReportingEndpoints();
 app.MapCampaignEndpoints();
 app.MapCheckoutEndpoints(); app.MapHub<CheckoutHub>("/hubs/checkout");
 app.MapDiscoveryEndpoints();
+app.MapSupportEndpoints();
 app.MapE2eSeedEndpoints(app.Environment);
 app.Run();
 

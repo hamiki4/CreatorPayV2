@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
-    "test": "node --test tests/auth-localization.test.mjs tests/shopper-discovery.test.mjs",
+    "test": "node --test tests/auth-localization.test.mjs tests/shopper-discovery.test.mjs tests/public-help.test.mjs",
     "test:e2e": "node scripts/run-e2e.mjs",
     "preview": "vite preview"
   },
