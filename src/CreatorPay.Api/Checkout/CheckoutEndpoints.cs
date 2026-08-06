@@ -24,6 +24,7 @@ public static class CheckoutEndpoints
         c.MapGet("/cashback-payouts",(ICurrentUserService u,ICheckoutService s,CancellationToken ct)=>Run(()=>s.GetPayoutsAsync(u.CustomerId,ct)));
         var cashier=e.MapGroup("/api/v1/cashier/checkouts").RequireAuthorization("CashierOnly");
         cashier.MapPost("/present",async(PresentCheckoutRequest r,HttpRequest h,ICurrentUserService u,ICheckoutService s,IHubContext<CheckoutHub> hub,CancellationToken ct)=>{var x=await s.PresentAsync(u.MerchantId!.Value,u.CashierId!.Value,Key(h),r,ct);await hub.Clients.Group($"customer:{x.CustomerId}").SendAsync("CheckoutApprovalRequired",x,ct);return Results.Ok(x);});
+        cashier.MapPost("/offer", (SubmitOfferCheckoutRequest r,HttpRequest h,ICurrentUserService u,ICheckoutService s,CancellationToken ct)=>Run(()=>s.SubmitOfferAsync(u.MerchantId!.Value,u.CashierId!.Value,u.UserAccountId!.Value,Key(h),r,ct)));
         cashier.MapPost("/repeat-use-approvals", CreateRepeatUseApproval);
         var repeat=e.MapGroup("/api/v1/merchant/repeat-use-approvals").RequireAuthorization("AuthenticatedUser");
         repeat.MapPost("/{id:guid}/approve",(Guid id,DecideRepeatUseApprovalRequest r,HttpContext h,ICurrentUserService u,ApplicationDbContext db,CancellationToken ct)=>DecideRepeatUseApproval(id,true,r,h,u,db,ct));

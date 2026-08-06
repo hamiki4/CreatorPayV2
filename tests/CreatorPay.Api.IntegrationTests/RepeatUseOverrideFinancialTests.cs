@@ -53,6 +53,51 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Reusable_offer_qr_checkout_validates_phone_and_posts_exactly_once()
+    {
+        using var client = factory!.CreateClient();
+        var seedResponse = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seedResponse.StatusCode);
+        var seed = await seedResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var cashier = Token(UserRole.Cashier, "20000000-0000-0000-0000-000000000006", merchantId: "20000000-0000-0000-0000-000000000001", cashierId: "20000000-0000-0000-0000-000000000005");
+        var location = seed.GetProperty("locationId").GetGuid();
+        var payload = seed.GetProperty("offerQrPayload").GetString()!;
+        var approvedCreator = Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001");
+        var unapprovedCreator = Token(UserRole.Creator, "30000000-0000-0000-0000-000000000099", creatorId: "30000000-0000-0000-0000-000000000001", status: AccountStatus.PendingApproval);
+        Assert.Equal(HttpStatusCode.OK, (await Get(client, "/api/v1/creator/campaigns/60000000-0000-0000-0000-000000000001/qr-image", approvedCreator)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Get(client, "/api/v1/creator/campaigns/60000000-0000-0000-0000-000000000001/qr-image", unapprovedCreator)).StatusCode);
+
+        var unknown = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = payload, merchantLocationId = location, shopperPhoneNumber = "0911 999 999", purchaseAmount = 100m }, "unknown-shopper");
+        Assert.Equal(HttpStatusCode.OK, unknown.StatusCode);
+        Assert.Equal("shopper_not_registered", (await unknown.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal((0, 0, 0, 0, 0, 0, 0), await Snapshot());
+
+        var first = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = payload, merchantLocationId = location, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "direct-once");
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var result = await first.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("completed", result.GetProperty("code").GetString());
+        Assert.Equal("09*****001", result.GetProperty("maskedPhoneNumber").GetString());
+        var afterFirst = await Snapshot();
+        Assert.Equal((1, 1, 1, 1, 1, 1, 1), afterFirst);
+
+        var duplicate = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = payload, merchantLocationId = location, shopperPhoneNumber = "+251911000001", purchaseAmount = 100m }, "direct-once");
+        Assert.Equal(HttpStatusCode.OK, duplicate.StatusCode);
+        Assert.Equal(afterFirst, await Snapshot());
+        await using (var db = Db()) Assert.True(await db.Notifications.CountAsync() >= 2);
+
+        var expired = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = seed.GetProperty("expiredOfferQrPayload").GetString(), merchantLocationId = location, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "expired-offer");
+        Assert.Equal(HttpStatusCode.Conflict, expired.StatusCode);
+        var invalid = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = payload + "tampered", merchantLocationId = location, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "invalid-offer");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        await using (var db = Db()) { var wallet = await db.MerchantWallets.SingleAsync(); wallet.Debit(wallet.AvailableBalance, 0, DateTime.UtcNow); await db.SaveChangesAsync(); }
+        var insufficient = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = payload, merchantLocationId = location, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "insufficient-wallet");
+        Assert.Equal("insufficient_wallet", (await insufficient.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("code").GetString());
+        await using (var db = Db()) { var qr = await db.CampaignQrCodes.SingleAsync(x => x.PublicQrId == seed.GetProperty("offerQrId").GetString()); qr.Revoke(DateTime.UtcNow); await db.SaveChangesAsync(); }
+        var disabled = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = payload, merchantLocationId = location, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "disabled-offer");
+        Assert.Equal(HttpStatusCode.Conflict, disabled.StatusCode);
+    }
+
+    [DockerFact]
     public async Task Approved_override_posts_financials_once_and_unapproved_duplicate_posts_nothing()
     {
         using var client = factory!.CreateClient();
@@ -142,12 +187,20 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         return await client.SendAsync(request);
     }
 
-    private static string Token(UserRole role, string userId, string? customerId = null, string? merchantId = null, string? cashierId = null)
+    private static Task<HttpResponseMessage> Get(HttpClient client, string path, string token)
     {
-        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Role, role.ToString()), new(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()), new("test_token", "true") };
+        var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client.SendAsync(request);
+    }
+
+    private static string Token(UserRole role, string userId, string? customerId = null, string? merchantId = null, string? cashierId = null, string? creatorId = null, AccountStatus status = AccountStatus.Active)
+    {
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Role, role.ToString()), new(AuthenticationClaimTypes.AccountStatus, status.ToString()), new("test_token", "true") };
         if (customerId is not null) claims.Add(new("customer_id", customerId));
         if (merchantId is not null) claims.Add(new("merchant_id", merchantId));
         if (cashierId is not null) claims.Add(new("cashier_id", cashierId));
+        if (creatorId is not null) claims.Add(new("creator_id", creatorId));
         var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)), SecurityAlgorithms.HmacSha256);
         return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken("CreatorPay", "CreatorPay.Web", claims, expires: DateTime.UtcNow.AddMinutes(10), signingCredentials: credentials));
     }
