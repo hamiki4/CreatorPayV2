@@ -9,4 +9,9 @@ Cashiers verify their assigned locations, submit only `creatorpay:checkout:` tok
 Existing role workspaces provide merchant locations/staff/campaigns/featured creator/store QR/trial/wallet/deposits/reporting, creator partnerships/campaigns/QR/earnings/payouts/notifications, and admin approvals/deposits/payouts/risk/reversals/reporting/audit operations. Protected customer information is not returned in creator attribution.
 
 Low-bandwidth rules: text-first cards, no mandatory images/GPS, bounded lists, cached non-financial shell, visible loading/empty/retry states, and no offline financial queue. Existing English/Amharic localization remains the supported translation boundary.
+# Business Type and Offer reuse
+
+Business Owner registration presents these public Business Types: Restaurant / Café, Grocery / Mini-market, Clothing / Boutique, Beauty / Salon, Furniture, Electronics, Hotel / Travel, Professional Services, and Other. English and Amharic labels represent the same stored values. Existing legacy Business Type text is retained until the owner edits the profile; it is not destructively rewritten.
+
+When approving an Offer, the owner sees “Shopper reuse rule,” “How often can the same Shopper use this Offer?”, the business-type suggestion, and a short explanation. The suggestion can be overridden before saving. The saved Offer rule—not the current Business Type—is enforced at checkout.
 

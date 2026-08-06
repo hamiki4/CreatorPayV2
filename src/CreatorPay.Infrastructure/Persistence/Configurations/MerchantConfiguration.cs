@@ -8,7 +8,7 @@ public sealed class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
 {
     public void Configure(EntityTypeBuilder<Merchant> builder)
     {
-        builder.ToTable("merchants"); builder.ConfigureEntity();
+        builder.ToTable("merchants", table => table.HasCheckConstraint("CK_merchants_BusinessType_Valid", "\"BusinessType\" IN ('Restaurant / Café','Grocery / Mini-market','Clothing / Boutique','Beauty / Salon','Furniture','Electronics','Hotel / Travel','Professional Services','Other')")); builder.ConfigureEntity();
         builder.Property(x => x.PublicMerchantId).HasMaxLength(20).IsRequired();
         builder.Property(x => x.LegalBusinessName).HasMaxLength(250).IsRequired();
         builder.Property(x => x.TradingName).HasMaxLength(250).IsRequired();

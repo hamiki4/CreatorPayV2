@@ -4,6 +4,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using CreatorPay.Application.Authentication;
+using CreatorPay.Domain.Enums;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Logging;
@@ -17,5 +19,5 @@ public sealed class OfflineSyncEndpointTests : IClassFixture<WebApplicationFacto
     [Fact] public async Task OfflineSyncRequiresAuthentication() { using var c = factory.CreateClient(); using var r = await c.PostAsJsonAsync("/api/v1/cashier/offline-sync", new { batchId = Guid.NewGuid(), appVersion = "test", schemaVersion = 1, operations = Array.Empty<object>() }); Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode); }
     [Fact] public async Task WrongRoleCannotSynchronize() { using var c = factory.CreateClient(); c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token("MerchantAdmin")); using var r = await c.PostAsJsonAsync("/api/v1/cashier/offline-sync", new { batchId = Guid.NewGuid(), appVersion = "test", schemaVersion = 1, operations = Array.Empty<object>() }); Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode); }
     [Fact] public async Task CashierReceivesClearUnsupportedResultInsteadOfPostingPurchase() { using var c = factory.CreateClient(); c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token("Cashier")); using var r = await c.PostAsJsonAsync("/api/v1/cashier/offline-sync", new { qrPayload = "creatorpay:campaign:legacy:token", purchaseAmount = 100m }); Assert.Equal(HttpStatusCode.Gone, r.StatusCode); }
-    static string Token(string role) { var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Key)), SecurityAlgorithms.HmacSha256); return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken("CreatorPay", "CreatorPay.Web", [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()), new Claim(ClaimTypes.Role, role)], expires: DateTime.UtcNow.AddMinutes(5), signingCredentials: credentials)); }
+    static string Token(string role) { var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Key)), SecurityAlgorithms.HmacSha256); return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken("CreatorPay", "CreatorPay.Web", [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()), new Claim(ClaimTypes.Role, role), new Claim(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()), new Claim("test_token", "true")], expires: DateTime.UtcNow.AddMinutes(5), signingCredentials: credentials)); }
 }

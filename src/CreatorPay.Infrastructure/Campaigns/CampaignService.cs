@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Campaigns;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
@@ -31,8 +32,10 @@ public sealed class CampaignService(ApplicationDbContext db, IUtcClock clock, IO
         var version = await db.CommissionRuleVersions.Include(x => x.Rule).SingleOrDefaultAsync(x => x.Id == request.CommissionRuleVersionId && x.IsActive && x.Rule.IsActive, ct) ?? throw new InvalidOperationException("An active commission rule version is required.");
         if (version.MerchantCommissionRatePercent != 10m || version.CreatorSharePercent != 40m || version.CustomerCashbackSharePercent != 30m || version.PlatformSharePercent != 30m) throw new InvalidOperationException("Campaigns require the versioned 10% four-party commission rule.");
         if (request.MerchantAllowedStartAtUtc?.Kind is not (null or DateTimeKind.Utc)) throw new ArgumentException("Earliest start must be UTC.");
+        var businessType = await db.Merchants.Where(x => x.Id == merchantId).Select(x => x.BusinessType).SingleAsync(ct);
+        var reuseRule = request.ReuseRule ?? BusinessTypes.SuggestedReuseRule(businessType) ?? throw new ArgumentException("Shopper reuse rule must be selected for this business type.");
         var now = clock.UtcNow; var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)); var hash = Hash(raw);
-        campaign.Approve(request.DurationDays == 0 ? options.DefaultDurationDays : request.DurationDays, request.MerchantAllowedStartAtUtc, version.Id, actor, RandomCode(), request.Conditions, now);
+        campaign.Approve(request.DurationDays == 0 ? options.DefaultDurationDays : request.DurationDays, request.MerchantAllowedStartAtUtc, version.Id, actor, RandomCode(), request.Conditions, now, reuseRule);
         campaign.QrCode = new CampaignQrCode { Id = Guid.NewGuid(), CampaignId = campaign.Id, PublicQrId = $"CQR-{Guid.NewGuid():N}"[..16].ToUpperInvariant(), TokenHash = hash, IssuedAtUtc = now, CreatedAtUtc = now };
         db.Add(new CampaignCommissionAssignment { Id = Guid.NewGuid(), CampaignId = campaign.Id, MerchantCreatorPartnershipId = campaign.MerchantCreatorPartnershipId, CommissionRuleId = version.CommissionRuleId, EffectiveFromUtc = now, IsActive = true, CreatedAtUtc = now });
         if (request.EligibleLocationIds is { Length: > 0 })
@@ -41,7 +44,7 @@ public sealed class CampaignService(ApplicationDbContext db, IUtcClock clock, IO
             if (valid != request.EligibleLocationIds.Distinct().Count()) throw new ArgumentException("One or more locations are not eligible for this partnership.");
         }
         Audit("CampaignApproved", actor, merchantId, campaign.Id, now); Audit("CampaignQrIssued", actor, merchantId, campaign.QrCode.Id, now); await db.SaveChangesAsync(ct);
-        return new(Map(campaign), $"creatorpay:campaign:{campaign.QrCode.PublicQrId}:{raw}");
+        return new(Map(campaign), $"https://creatorpay.example/o/{Uri.EscapeDataString(campaign.CampaignCode)}");
     }
 
     public async Task<CampaignDto> StartAsync(Guid creatorId, Guid actor, Guid id, CancellationToken ct)
@@ -80,5 +83,5 @@ public sealed class CampaignService(ApplicationDbContext db, IUtcClock clock, IO
     private void Audit(string type, Guid? actor, Guid merchant, Guid subject, DateTime now) => db.OperationalAuditEvents.Add(new() { Id = Guid.NewGuid(), EventType = type, ActorUserId = actor, MerchantId = merchant, SubjectId = subject, CorrelationId = Guid.NewGuid().ToString("N"), CreatedAtUtc = now });
     private static string Hash(string raw) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
     private static string RandomCode() => Convert.ToHexString(RandomNumberGenerator.GetBytes(5));
-    private static CampaignDto Map(CreatorMerchantCampaign x) => new(x.Id, x.PublicCampaignId, x.CreatorId, x.MerchantId, x.MerchantCreatorPartnershipId, x.Status.ToString(), x.DurationDays, x.MerchantAllowedStartAtUtc, x.StartsAtUtc, x.ExpiresAtUtc, x.QrCode?.PublicQrId, x.QrCode?.Status.ToString(), string.IsNullOrEmpty(x.CampaignCode) ? null : x.CampaignCode, x.RenewedFromCampaignId);
+    private static CampaignDto Map(CreatorMerchantCampaign x) => new(x.Id, x.PublicCampaignId, x.CreatorId, x.MerchantId, x.MerchantCreatorPartnershipId, x.Status.ToString(), x.DurationDays, x.MerchantAllowedStartAtUtc, x.StartsAtUtc, x.ExpiresAtUtc, x.QrCode?.PublicQrId, x.QrCode?.Status.ToString(), string.IsNullOrEmpty(x.CampaignCode) ? null : x.CampaignCode, x.RenewedFromCampaignId, x.ReuseRule);
 }

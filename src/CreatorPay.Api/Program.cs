@@ -1,5 +1,7 @@
 using System.Text;
 using System.Net;
+using System.Security.Claims;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using CreatorPay.Api.Authentication;
 using CreatorPay.Api.Admin;
@@ -19,6 +21,7 @@ using CreatorPay.Api.Reporting;
 using CreatorPay.Api.Campaigns;
 using CreatorPay.Api.Checkout;
 using CreatorPay.Api.Discovery;
+using CreatorPay.Api.Testing;
 using CreatorPay.Application;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Operations;
@@ -34,6 +37,7 @@ var builder = WebApplication.CreateBuilder(args);
 ProductionConfiguration.Validate(builder.Configuration, builder.Environment);
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()!;
 var rateLimits = builder.Configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>() ?? new();
+if (builder.Environment.IsEnvironment("E2E")) rateLimits.AuthPermitLimit = Math.Max(rateLimits.AuthPermitLimit, 1000);
 var cors = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
 var reverseProxy = builder.Configuration.GetSection(ReverseProxyOptions.SectionName).Get<ReverseProxyOptions>() ?? new();
 
@@ -54,9 +58,39 @@ builder.Services.Configure<HealthOptions>(builder.Configuration.GetSection(Healt
 builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection(RateLimitOptions.SectionName));
 builder.Services.AddCors(o => o.AddPolicy("Web", p => { if (cors.AllowedOrigins.Length > 0) p.WithOrigins(cors.AllowedOrigins).AllowAnyHeader().AllowAnyMethod(); }));
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>(); builder.Services.AddApplication(); builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddHealthChecks().AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]).AddCheck<DatabaseHealthCheck>("postgresql", tags: ["ready", "database"]);
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o => o.TokenValidationParameters = new TokenValidationParameters { ValidateIssuer = true, ValidIssuer = jwt.Issuer, ValidateAudience = true, ValidAudience = jwt.Audience, ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)), ValidateLifetime = true, ClockSkew = TimeSpan.FromSeconds(30) });
-builder.Services.AddAuthorization(o => { o.AddPolicy("AuthenticatedUser", p => p.RequireAuthenticatedUser()); foreach (var role in Enum.GetValues<UserRole>()) o.AddPolicy($"{role}Only", p => p.RequireRole(role.ToString())); o.AddPolicy("MerchantOperations", p => p.RequireRole(nameof(UserRole.MerchantAdmin), nameof(UserRole.Supervisor), nameof(UserRole.Cashier))); });
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
+{
+    o.TokenValidationParameters = new TokenValidationParameters { ValidateIssuer = true, ValidIssuer = jwt.Issuer, ValidateAudience = true, ValidAudience = jwt.Audience, ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)), ValidateLifetime = true, ClockSkew = TimeSpan.FromSeconds(30) };
+    o.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            if (context.Principal?.FindFirst(AuthenticationClaimTypes.AccountStatus) is null || context.Principal.HasClaim("test_token", "true")) return;
+            if (!Guid.TryParse(context.Principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)) { context.Fail("Invalid access token."); return; }
+            var store = context.HttpContext.RequestServices.GetRequiredService<IAuthenticationStore>();
+            var user = await store.FindUserAsync(userId, context.HttpContext.RequestAborted); var now = DateTime.UtcNow;
+            if (user is null || !AuthenticationService.CanSignIn(user) || user.LockoutEndUtc > now) { context.Fail("Account is not eligible."); return; }
+            if (context.Principal.Identity is ClaimsIdentity identity)
+            {
+                foreach (var type in new[] { AuthenticationClaimTypes.AccountStatus, AuthenticationClaimTypes.EmailVerified, AuthenticationClaimTypes.PhoneVerified }) foreach (var claim in identity.FindAll(type).ToArray()) identity.RemoveClaim(claim);
+                identity.AddClaim(new(AuthenticationClaimTypes.AccountStatus, user.Status.ToString()));
+                identity.AddClaim(new(AuthenticationClaimTypes.EmailVerified, user.IsEmailVerified.ToString().ToLowerInvariant()));
+                identity.AddClaim(new(AuthenticationClaimTypes.PhoneVerified, user.IsPhoneVerified.ToString().ToLowerInvariant()));
+            }
+        }
+    };
+});
+builder.Services.AddAuthorization(o =>
+{
+    static bool Status(ClaimsPrincipal user, params AccountStatus[] statuses) => statuses.Any(status => user.HasClaim(AuthenticationClaimTypes.AccountStatus, status.ToString()));
+    o.AddPolicy("AuthenticatedUser", p => p.RequireAuthenticatedUser());
+    foreach (var role in Enum.GetValues<UserRole>()) o.AddPolicy($"{role}Only", p => p.RequireAssertion(c => c.User.IsInRole(role.ToString()) && Status(c.User, AccountStatus.Active)));
+    o.AddPolicy("CreatorOnboarding", p => p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.Creator)) && Status(c.User, AccountStatus.PendingVerification, AccountStatus.PendingApproval, AccountStatus.Active)));
+    o.AddPolicy("MerchantOnboarding", p => p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.MerchantAdmin)) && Status(c.User, AccountStatus.PendingVerification, AccountStatus.PendingApproval, AccountStatus.Active)));
+    o.AddPolicy("MerchantOperations", p => { p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.MerchantAdmin)) || c.User.IsInRole(nameof(UserRole.Supervisor)) || c.User.IsInRole(nameof(UserRole.Cashier))); p.RequireClaim(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()); });
+});
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -82,6 +116,7 @@ app.MapReportingEndpoints();
 app.MapCampaignEndpoints();
 app.MapCheckoutEndpoints(); app.MapHub<CheckoutHub>("/hubs/checkout");
 app.MapDiscoveryEndpoints();
+app.MapE2eSeedEndpoints(app.Environment);
 app.Run();
 
 static Task WriteHealth(HttpContext context, HealthReport report) { context.Response.ContentType = "application/json"; return context.Response.WriteAsJsonAsync(new { status = report.Status.ToString(), service = "CreatorPay API", correlationId = context.TraceIdentifier }); }

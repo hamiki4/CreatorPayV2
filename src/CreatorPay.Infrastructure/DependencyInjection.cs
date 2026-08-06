@@ -19,6 +19,7 @@ using CreatorPay.Infrastructure.Wallet;
 using CreatorPay.Application.Earnings;
 using CreatorPay.Infrastructure.Earnings;
 using CreatorPay.Application.CustomerVerification;
+using CreatorPay.Infrastructure.CustomerVerification;
 using CreatorPay.Application.Notifications;
 using CreatorPay.Infrastructure.Notifications;
 using CreatorPay.Application.Operations;
@@ -63,6 +64,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.Configure<CreatorPayoutOptions>(configuration.GetSection(CreatorPayoutOptions.SectionName)); services.AddSingleton<IPayoutProvider, ManualPayoutProvider>(); services.AddScoped<ICreatorEarningsService, CreatorEarningsService>();
         services.Configure<CustomerVerificationOptions>(configuration.GetSection(CustomerVerificationOptions.SectionName));
+        services.AddSingleton<IPhoneNumberNormalizer, EthiopianPhoneNumberNormalizer>();
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
         services.Configure<WorkerOptions>(configuration.GetSection(WorkerOptions.SectionName));
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));

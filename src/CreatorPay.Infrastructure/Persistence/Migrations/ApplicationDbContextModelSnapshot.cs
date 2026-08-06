@@ -88,7 +88,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("AlertType", "Version")
                         .IsUnique();
 
-                    b.ToTable("AlertThresholdPolicies");
+                    b.ToTable("AlertThresholdPolicies", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.BackgroundJobExecution", b =>
@@ -205,7 +205,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CampaignId", "MerchantCreatorPartnershipId", "EffectiveFromUtc");
 
-                    b.ToTable("CampaignCommissionAssignments");
+                    b.ToTable("CampaignCommissionAssignments", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CampaignQrCode", b =>
@@ -268,7 +268,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
-                    b.ToTable("CampaignQrCodes");
+                    b.ToTable("CampaignQrCodes", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CampaignRenewalRequest", b =>
@@ -314,7 +314,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ExpiredCampaignId", "Status");
 
-                    b.ToTable("CampaignRenewalRequests");
+                    b.ToTable("CampaignRenewalRequests", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.Cashier", b =>
@@ -535,7 +535,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "ExpiresAtUtc");
 
-                    b.ToTable("CheckoutSessions");
+                    b.ToTable("CheckoutSessions", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CommissionAuditEvent", b =>
@@ -582,7 +582,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EventType");
 
-                    b.ToTable("CommissionAuditEvents");
+                    b.ToTable("CommissionAuditEvents", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CommissionCalculationSnapshot", b =>
@@ -670,7 +670,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CommissionRuleVersionId");
 
-                    b.ToTable("CommissionCalculationSnapshots");
+                    b.ToTable("CommissionCalculationSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CommissionPlan", b =>
@@ -708,7 +708,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("IsActive");
 
-                    b.ToTable("CommissionPlans");
+                    b.ToTable("CommissionPlans", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CommissionRule", b =>
@@ -759,7 +759,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("IsActive");
 
-                    b.ToTable("CommissionRules");
+                    b.ToTable("CommissionRules", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CommissionRuleVersion", b =>
@@ -836,7 +836,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CommissionRuleId", "EffectiveFromUtc", "EffectiveToUtc");
 
-                    b.ToTable("CommissionRuleVersions");
+                    b.ToTable("CommissionRuleVersions", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.Creator", b =>
@@ -1081,7 +1081,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatorId", "CurrencyCode")
                         .IsUnique();
 
-                    b.ToTable("CreatorBalanceAccounts");
+                    b.ToTable("CreatorBalanceAccounts", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorBalanceEntry", b =>
@@ -1162,7 +1162,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatorBalanceAccountId", "CreatedAtUtc");
 
-                    b.ToTable("CreatorBalanceEntries");
+                    b.ToTable("CreatorBalanceEntries", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorEarning", b =>
@@ -1244,7 +1244,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatorId", "Status", "AvailableAtUtc");
 
-                    b.ToTable("CreatorEarnings");
+                    b.ToTable("CreatorEarnings", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorMerchantCampaign", b =>
@@ -1315,6 +1315,13 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("RenewedFromCampaignId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ReuseRule")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("OncePerOffer");
+
                     b.Property<uint>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -1358,7 +1365,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MerchantCreatorPartnershipId", "Status");
 
-                    b.ToTable("CreatorMerchantCampaigns");
+                    b.ToTable("CreatorMerchantCampaigns", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorPayout", b =>
@@ -1450,7 +1457,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatorId", "Status");
 
-                    b.ToTable("CreatorPayouts");
+                    b.ToTable("CreatorPayouts", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorQrCode", b =>
@@ -1573,7 +1580,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("TransactionReversalId")
                         .IsUnique();
 
-                    b.ToTable("CreatorRecoveryBalances");
+                    b.ToTable("CreatorRecoveryBalances", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorSocialProfile", b =>
@@ -1727,7 +1734,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("PublicCustomerId")
                         .IsUnique();
 
-                    b.ToTable("Customers");
+                    b.ToTable("Customers", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerCashbackEntry", b =>
@@ -1798,7 +1805,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId", "CreatedAtUtc");
 
-                    b.ToTable("CustomerCashbackEntries");
+                    b.ToTable("CustomerCashbackEntries", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerConfirmation", b =>
@@ -1848,7 +1855,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("RepeatUseApprovalRequestId")
                         .IsUnique();
 
-                    b.ToTable("CustomerConfirmations");
+                    b.ToTable("CustomerConfirmations", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerPayoutRequest", b =>
@@ -1934,7 +1941,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "RequestedAtUtc");
 
-                    b.ToTable("CustomerPayoutRequests");
+                    b.ToTable("CustomerPayoutRequests", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerPhoneReference", b =>
@@ -1983,7 +1990,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("PhoneNumberHash")
                         .IsUnique();
 
-                    b.ToTable("CustomerPhoneReferences");
+                    b.ToTable("CustomerPhoneReferences", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerRecoveryBalance", b =>
@@ -2038,7 +2045,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId", "Status");
 
-                    b.ToTable("CustomerRecoveryBalances");
+                    b.ToTable("CustomerRecoveryBalances", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CustomerWallet", b =>
@@ -2094,7 +2101,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("CustomerId", "CurrencyCode")
                         .IsUnique();
 
-                    b.ToTable("CustomerWallets");
+                    b.ToTable("CustomerWallets", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.Dispute", b =>
@@ -2172,7 +2179,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "OpenedAtUtc");
 
-                    b.ToTable("Disputes");
+                    b.ToTable("Disputes", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.DisputeDecision", b =>
@@ -2214,7 +2221,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DisputeId");
 
-                    b.ToTable("DisputeDecisions");
+                    b.ToTable("DisputeDecisions", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.DisputeEvidence", b =>
@@ -2264,7 +2271,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DisputeId");
 
-                    b.ToTable("DisputeEvidence");
+                    b.ToTable("DisputeEvidence", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.DisputeStatusHistory", b =>
@@ -2309,7 +2316,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DisputeId");
 
-                    b.ToTable("DisputeStatusHistories");
+                    b.ToTable("DisputeStatusHistories", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.FinancialJournal", b =>
@@ -2356,7 +2363,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FinancialJournals");
+                    b.ToTable("FinancialJournals", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.FinancialJournalLine", b =>
@@ -2405,7 +2412,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("FinancialJournalId");
 
-                    b.ToTable("FinancialJournalLines");
+                    b.ToTable("FinancialJournalLines", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.FraudAlert", b =>
@@ -2504,7 +2511,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "Severity", "DetectedAtUtc");
 
-                    b.ToTable("FraudAlerts");
+                    b.ToTable("FraudAlerts", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.FraudEvidence", b =>
@@ -2544,7 +2551,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("FraudAlertId");
 
-                    b.ToTable("FraudEvidence");
+                    b.ToTable("FraudEvidence", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.FraudReviewHistory", b =>
@@ -2593,7 +2600,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("FraudAlertId");
 
-                    b.ToTable("FraudReviewHistories");
+                    b.ToTable("FraudReviewHistories", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.FraudRule", b =>
@@ -2632,7 +2639,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("FraudRules");
+                    b.ToTable("FraudRules", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.FraudRuleVersion", b =>
@@ -2686,7 +2693,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("FraudRuleId", "VersionNumber")
                         .IsUnique();
 
-                    b.ToTable("FraudRuleVersions");
+                    b.ToTable("FraudRuleVersions", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.IdempotencyRecord", b =>
@@ -2738,7 +2745,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("Scope", "Key")
                         .IsUnique();
 
-                    b.ToTable("IdempotencyRecords");
+                    b.ToTable("IdempotencyRecords", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.LoginAudit", b =>
@@ -2950,7 +2957,10 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TradingName");
 
-                    b.ToTable("merchants", (string)null);
+                    b.ToTable("merchants", t =>
+                        {
+                            t.HasCheckConstraint("CK_merchants_BusinessType_Valid", "\"BusinessType\" IN ('Restaurant / Café','Grocery / Mini-market','Clothing / Boutique','Beauty / Salon','Furniture','Electronics','Hotel / Travel','Professional Services','Other')");
+                        });
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantAuditEvent", b =>
@@ -3038,7 +3048,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MerchantId", "EffectiveFromUtc", "EffectiveToUtc");
 
-                    b.ToTable("MerchantCommissionAssignments");
+                    b.ToTable("MerchantCommissionAssignments", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantCreatorPartnership", b =>
@@ -3227,7 +3237,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("MerchantId", "IdempotencyKey")
                         .IsUnique();
 
-                    b.ToTable("MerchantDeposits");
+                    b.ToTable("MerchantDeposits", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantDocument", b =>
@@ -3393,7 +3403,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("MerchantId")
                         .IsUnique();
 
-                    b.ToTable("MerchantPromotionProfiles");
+                    b.ToTable("MerchantPromotionProfiles", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantStoreQr", b =>
@@ -3440,7 +3450,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
-                    b.ToTable("MerchantStoreQrs");
+                    b.ToTable("MerchantStoreQrs", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantTrialCredit", b =>
@@ -3494,7 +3504,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("MerchantId")
                         .IsUnique();
 
-                    b.ToTable("MerchantTrialCredits");
+                    b.ToTable("MerchantTrialCredits", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantVerificationToken", b =>
@@ -3596,7 +3606,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("MerchantId", "CurrencyCode")
                         .IsUnique();
 
-                    b.ToTable("MerchantWallets");
+                    b.ToTable("MerchantWallets", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantWalletEntry", b =>
@@ -3675,7 +3685,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MerchantWalletId", "CreatedAtUtc");
 
-                    b.ToTable("MerchantWalletEntries");
+                    b.ToTable("MerchantWalletEntries", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.MerchantWalletHold", b =>
@@ -3727,7 +3737,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("MerchantWalletHolds");
+                    b.ToTable("MerchantWalletHolds", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.Notification", b =>
@@ -4286,7 +4296,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ReceivedAtUtc");
 
-                    b.ToTable("OfflineSyncBatches");
+                    b.ToTable("OfflineSyncBatches", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.OfflineSyncItemResult", b =>
@@ -4366,7 +4376,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("CashierUserId", "ClientOperationId")
                         .IsUnique();
 
-                    b.ToTable("OfflineSyncItemResults");
+                    b.ToTable("OfflineSyncItemResults", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.OperationalAlert", b =>
@@ -4449,7 +4459,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "Severity", "DetectedAtUtc");
 
-                    b.ToTable("OperationalAlerts");
+                    b.ToTable("OperationalAlerts", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.OperationalAlertHistory", b =>
@@ -4497,7 +4507,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OperationalAlertId", "ChangedAtUtc");
 
-                    b.ToTable("OperationalAlertHistories");
+                    b.ToTable("OperationalAlertHistories", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.OperationalAuditEvent", b =>
@@ -4544,7 +4554,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EventType", "CreatedAtUtc");
 
-                    b.ToTable("OperationalAuditEvents");
+                    b.ToTable("OperationalAuditEvents", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PartnershipCommissionAssignment", b =>
@@ -4589,7 +4599,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MerchantCreatorPartnershipId", "EffectiveFromUtc", "EffectiveToUtc");
 
-                    b.ToTable("PartnershipCommissionAssignments");
+                    b.ToTable("PartnershipCommissionAssignments", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PartnershipLocation", b =>
@@ -4780,7 +4790,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatorPayoutId", "AttemptNumber")
                         .IsUnique();
 
-                    b.ToTable("PayoutAttempts");
+                    b.ToTable("PayoutAttempts", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PayoutBatch", b =>
@@ -4856,7 +4866,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("CurrencyCode", "CutoffAtUtc", "CorrelationId")
                         .IsUnique();
 
-                    b.ToTable("PayoutBatches");
+                    b.ToTable("PayoutBatches", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PayoutItem", b =>
@@ -4899,7 +4909,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatorPayoutId");
 
-                    b.ToTable("PayoutItems");
+                    b.ToTable("PayoutItems", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PlatformCommissionAssignment", b =>
@@ -4946,7 +4956,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CurrencyCode", "EffectiveFromUtc", "EffectiveToUtc");
 
-                    b.ToTable("PlatformCommissionAssignments");
+                    b.ToTable("PlatformCommissionAssignments", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PlatformRevenueEntry", b =>
@@ -4991,7 +5001,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("PurchaseTransactionId")
                         .IsUnique();
 
-                    b.ToTable("PlatformRevenueEntries");
+                    b.ToTable("PlatformRevenueEntries", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PurchaseTransaction", b =>
@@ -5135,7 +5145,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MerchantId", "CreatorId", "CustomerPhoneHash", "MerchantLocalDate");
 
-                    b.ToTable("PurchaseTransactions");
+                    b.ToTable("PurchaseTransactions", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.RefreshToken", b =>
@@ -5258,7 +5268,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RepeatUseApprovalRequestId", "OccurredAtUtc");
 
-                    b.ToTable("RepeatUseApprovalHistories");
+                    b.ToTable("RepeatUseApprovalHistories", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.RepeatUseApprovalRequest", b =>
@@ -5391,7 +5401,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MerchantId", "CreatorId", "CustomerPhoneHash", "MerchantLocalDate");
 
-                    b.ToTable("RepeatUseApprovalRequests");
+                    b.ToTable("RepeatUseApprovalRequests", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.ReportExportAudit", b =>
@@ -5455,7 +5465,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RequestedByUserId", "RequestedAtUtc");
 
-                    b.ToTable("ReportExportAudits");
+                    b.ToTable("ReportExportAudits", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.ReversalItem", b =>
@@ -5500,7 +5510,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TransactionReversalId");
 
-                    b.ToTable("ReversalItems");
+                    b.ToTable("ReversalItems", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.ReversalJournalReference", b =>
@@ -5533,7 +5543,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("TransactionReversalId", "FinancialJournalId")
                         .IsUnique();
 
-                    b.ToTable("ReversalJournalReferences");
+                    b.ToTable("ReversalJournalReferences", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.ReversalStatusHistory", b =>
@@ -5578,7 +5588,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TransactionReversalId");
 
-                    b.ToTable("ReversalStatusHistories");
+                    b.ToTable("ReversalStatusHistories", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.SavedPromotion", b =>
@@ -5613,7 +5623,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("CustomerId", "CampaignId")
                         .IsUnique();
 
-                    b.ToTable("SavedPromotions");
+                    b.ToTable("SavedPromotions", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.SavedReportView", b =>
@@ -5665,7 +5675,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("OwnerUserId", "ReportType", "Name")
                         .IsUnique();
 
-                    b.ToTable("SavedReportViews");
+                    b.ToTable("SavedReportViews", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.StaffInvitation", b =>
@@ -5936,7 +5946,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "RequestedAtUtc");
 
-                    b.ToTable("TransactionReversals");
+                    b.ToTable("TransactionReversals", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.TransactionStatusHistory", b =>
@@ -5985,7 +5995,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PurchaseTransactionId");
 
-                    b.ToTable("TransactionStatusHistories");
+                    b.ToTable("TransactionStatusHistories", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.UserAccount", b =>

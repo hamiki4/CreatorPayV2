@@ -10,10 +10,11 @@ public static class MerchantEndpoints
     {
         var merchants = endpoints.MapGroup("/api/v1/merchants").WithTags("Merchants");
         merchants.MapPost("/register", async (RegisterMerchantRequest r, IMerchantService s, CancellationToken ct) => ToHttp(await s.RegisterAsync(r, ct), 201)).RequireRateLimiting("auth-sensitive");
+        merchants.MapGet("/business-types", () => Results.Ok(BusinessTypes.Options));
         merchants.MapPost("/verify-email", async (VerifyMerchantRequest r, IMerchantService s, CancellationToken ct) => ToHttp(await s.VerifyEmailAsync(r.Token, ct))).RequireRateLimiting("auth-sensitive");
         merchants.MapPost("/verify-phone", async (VerifyMerchantRequest r, IMerchantService s, CancellationToken ct) => ToHttp(await s.VerifyPhoneAsync(r.Token, ct))).RequireRateLimiting("auth-sensitive");
-        merchants.MapGet("/me", async (ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.GetMeAsync(u.UserAccountId!.Value, ct))).RequireAuthorization("MerchantAdminOnly");
-        merchants.MapPut("/me", async (UpdateMerchantProfileRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.UpdateMeAsync(u.UserAccountId!.Value, r, ct))).RequireAuthorization("MerchantAdminOnly");
+        merchants.MapGet("/me", async (ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.GetMeAsync(u.UserAccountId!.Value, ct))).RequireAuthorization("MerchantOnboarding");
+        merchants.MapPut("/me", async (UpdateMerchantProfileRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.UpdateMeAsync(u.UserAccountId!.Value, r, ct))).RequireAuthorization("MerchantOnboarding");
         var admin = endpoints.MapGroup("/api/v1/admin/merchants").WithTags("Merchant approval").RequireAuthorization("PlatformAdminOnly");
         admin.MapGet("/pending", async (IMerchantService s, CancellationToken ct) => Results.Ok(await s.GetPendingAsync(ct)));
         admin.MapGet("/{merchantId:guid}", async (Guid merchantId, IMerchantService s, CancellationToken ct) => ToHttp(await s.GetAsync(merchantId, ct)));

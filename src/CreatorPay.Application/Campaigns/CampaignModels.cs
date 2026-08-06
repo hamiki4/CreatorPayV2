@@ -1,3 +1,6 @@
+using CreatorPay.Domain.Enums;
+using System.Text.Json.Serialization;
+
 namespace CreatorPay.Application.Campaigns;
 
 public sealed class CampaignOptions
@@ -10,10 +13,10 @@ public sealed class CampaignOptions
 }
 
 public sealed record RequestCampaignRequest(Guid MerchantCreatorPartnershipId, Guid? RenewedFromCampaignId = null, string? Note = null);
-public sealed record ApproveCampaignRequest(int DurationDays, Guid CommissionRuleVersionId, DateTime? MerchantAllowedStartAtUtc, string? Conditions, Guid[]? EligibleLocationIds);
+public sealed record ApproveCampaignRequest(int DurationDays, Guid CommissionRuleVersionId, DateTime? MerchantAllowedStartAtUtc, string? Conditions, Guid[]? EligibleLocationIds, [property: JsonConverter(typeof(JsonStringEnumConverter))] OfferReuseRule? ReuseRule = null);
 public sealed record RejectCampaignRequest(string Reason);
 public sealed record RenewalRequest(string? Note);
-public sealed record CampaignDto(Guid Id, string PublicCampaignId, Guid CreatorId, Guid MerchantId, Guid PartnershipId, string Status, int DurationDays, DateTime? AllowedStartAtUtc, DateTime? StartsAtUtc, DateTime? ExpiresAtUtc, string? PublicQrId, string? QrStatus, string? CampaignCode, Guid? RenewedFromCampaignId);
+public sealed record CampaignDto(Guid Id, string PublicCampaignId, Guid CreatorId, Guid MerchantId, Guid PartnershipId, string Status, int DurationDays, DateTime? AllowedStartAtUtc, DateTime? StartsAtUtc, DateTime? ExpiresAtUtc, string? PublicQrId, string? QrStatus, string? CampaignCode, Guid? RenewedFromCampaignId, [property: JsonConverter(typeof(JsonStringEnumConverter))] OfferReuseRule ReuseRule);
 public sealed record CampaignApprovalDto(CampaignDto Campaign, string QrPayload);
 
 public interface ICampaignService
@@ -30,4 +33,3 @@ public interface ICampaignService
     Task<CampaignDto> RequestRenewalAsync(Guid creatorId, Guid id, RenewalRequest request, CancellationToken ct);
     Task<int> ProcessLifecycleAsync(CancellationToken ct);
 }
-

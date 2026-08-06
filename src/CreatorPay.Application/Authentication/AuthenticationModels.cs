@@ -11,6 +11,12 @@ public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(string ResetToken, string NewPassword, string Confirmation);
 public sealed record CurrentUser(Guid UserAccountId, string Email, UserRole Role, AccountStatus Status, Guid? CreatorId, Guid? MerchantId, Guid? SupervisorId, Guid? CashierId, bool IsEmailVerified, bool IsPhoneVerified);
 public sealed record TokenPair(string AccessToken, DateTime AccessTokenExpiresAtUtc, string RefreshToken, DateTime RefreshTokenExpiresAtUtc, CurrentUser User);
+public static class AuthenticationClaimTypes
+{
+    public const string AccountStatus = "account_status";
+    public const string EmailVerified = "email_verified";
+    public const string PhoneVerified = "phone_verified";
+}
 public sealed record OperationResult(bool Succeeded, string? Error = null)
 {
     public static OperationResult Success() => new(true);

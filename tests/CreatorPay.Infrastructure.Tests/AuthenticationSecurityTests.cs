@@ -24,9 +24,9 @@ public sealed class AuthenticationSecurityTests
     [Fact]
     public void Jwt_contains_required_and_scoping_claims_only()
     {
-        var user = new UserAccount { Id = Guid.NewGuid(), Email = "a@example.com", Role = UserRole.MerchantAdmin, MerchantId = Guid.NewGuid() };
+        var user = new UserAccount { Id = Guid.NewGuid(), Email = "a@example.com", Role = UserRole.MerchantAdmin, Status = AccountStatus.PendingApproval, MerchantId = Guid.NewGuid(), IsEmailVerified = true };
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(Service().CreateAccessToken(user).Token);
-        Assert.Equal(user.Id.ToString(), jwt.Subject); Assert.Contains(jwt.Claims, x => x.Type == "merchant_id" && x.Value == user.MerchantId.ToString()); Assert.DoesNotContain(jwt.Claims, x => x.Type.Contains("password", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(user.Id.ToString(), jwt.Subject); Assert.Contains(jwt.Claims, x => x.Type == "merchant_id" && x.Value == user.MerchantId.ToString()); Assert.Contains(jwt.Claims, x => x.Type == AuthenticationClaimTypes.AccountStatus && x.Value == AccountStatus.PendingApproval.ToString()); Assert.Contains(jwt.Claims, x => x.Type == AuthenticationClaimTypes.EmailVerified && x.Value == "true"); Assert.DoesNotContain(jwt.Claims, x => x.Type.Contains("password", StringComparison.OrdinalIgnoreCase));
     }
     private static TokenService Service() => new(Options.Create(new JwtOptions { Issuer = "tests", Audience = "tests", SigningKey = "a-test-signing-key-that-is-at-least-32-characters" }), new FakeClock());
     private sealed class FakeClock : IUtcClock { public DateTime UtcNow => new(2026, 8, 3, 0, 0, 0, DateTimeKind.Utc); }

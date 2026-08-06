@@ -1,1 +1,28 @@
-const CACHE='creatorpay-shell-v17-1',SHELL=['/','/offline.html','/manifest.webmanifest','/icon.svg'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL))));self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET'||u.pathname.startsWith('/api/')||e.request.headers.has('Authorization'))return;e.respondWith(fetch(e.request).then(r=>{if(r.ok&&u.origin===location.origin){const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy))}return r}).catch(()=>caches.match(e.request).then(r=>r??(e.request.mode==='navigate'?caches.match('/offline.html'):Response.error()))) });self.addEventListener('sync',e=>{if(e.tag==='creatorpay-offline-sync')e.waitUntil(self.clients.matchAll({type:'window'}).then(cs=>cs.forEach(c=>c.postMessage({type:'SYNC_REQUESTED'}))))});
+const CACHE='creatorpay-shell-v18'
+const SHELL=['/','/offline.html','/manifest.webmanifest','/icon.svg']
+
+self.addEventListener('install',event=>{
+  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()))
+})
+
+self.addEventListener('activate',event=>{
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()))
+})
+
+self.addEventListener('fetch',event=>{
+  const url=new URL(event.request.url)
+  if(event.request.method!=='GET'||url.pathname.startsWith('/api/')||event.request.headers.has('Authorization'))return
+  event.respondWith(
+    fetch(event.request).then(response=>{
+      if(response.ok&&url.origin===self.location.origin){
+        const copy=response.clone()
+        void caches.open(CACHE).then(cache=>cache.put(event.request,copy))
+      }
+      return response
+    }).catch(()=>caches.match(event.request).then(response=>response??(event.request.mode==='navigate'?caches.match('/offline.html'):Response.error())))
+  )
+})
+
+self.addEventListener('sync',event=>{
+  if(event.tag==='creatorpay-offline-sync')event.waitUntil(self.clients.matchAll({type:'window'}).then(clients=>clients.forEach(client=>client.postMessage({type:'SYNC_REQUESTED'}))))
+})

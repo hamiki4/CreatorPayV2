@@ -1,3 +1,4 @@
+using System.Linq;
 using CreatorPay.Domain.Enums;
 
 namespace CreatorPay.Application.Merchants;
@@ -13,6 +14,35 @@ public sealed record MerchantProfileResponse(Guid MerchantId, string PublicMerch
 public sealed record PendingMerchantResponse(Guid MerchantId, string PublicMerchantId, string TradingName, string Email, DateTime RegisteredAtUtc);
 public record MerchantResult(bool Succeeded, string? Error = null) { public static MerchantResult Success() => new(true); public static MerchantResult Failure(string error) => new(false, error); }
 public sealed record MerchantResult<T>(T? Value, string? Error = null) { public bool Succeeded => Error is null; public static MerchantResult<T> Success(T value) => new(value); public static MerchantResult<T> Failure(string error) => new(default, error); }
+
+public sealed record BusinessTypeOption(string Value, string EnglishLabel, string AmharicLabel);
+
+public static class BusinessTypes
+{
+    public static readonly BusinessTypeOption[] Options =
+    {
+        new("Restaurant / Café", "Restaurant / Café", "ምግብ ቤት / ካፌ"),
+        new("Grocery / Mini-market", "Grocery / Mini-market", "ግሮሰሪ / ሚኒ ማርኬት"),
+        new("Clothing / Boutique", "Clothing / Boutique", "ልብስ / ቡቲክ"),
+        new("Beauty / Salon", "Beauty / Salon", "ውበት / ሳሎን"),
+        new("Furniture", "Furniture", "የቤት ዕቃ"),
+        new("Electronics", "Electronics", "ኤሌክትሮኒክስ"),
+        new("Hotel / Travel", "Hotel / Travel", "ሆቴል / ጉዞ"),
+        new("Professional Services", "Professional Services", "ሙያዊ አገልግሎቶች"),
+        new("Other", "Other", "ሌላ")
+    };
+
+    public static readonly string[] Values = Options.Select(x => x.Value).ToArray();
+    public static bool IsSupported(string value) => Values.Contains(value, StringComparer.Ordinal);
+    public static OfferReuseRule? SuggestedReuseRule(string value) => value switch
+    {
+        "Restaurant / Café" or "Grocery / Mini-market" => OfferReuseRule.OncePerDay,
+        "Beauty / Salon" => OfferReuseRule.OncePerWeek,
+        "Hotel / Travel" => OfferReuseRule.OncePerMonth,
+        "Clothing / Boutique" or "Furniture" or "Electronics" or "Professional Services" => OfferReuseRule.OncePerOffer,
+        _ => null
+    };
+}
 
 public interface IMerchantService
 {

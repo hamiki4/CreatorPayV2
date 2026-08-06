@@ -21,6 +21,7 @@ public sealed class CreatorMerchantCampaign : Entity
     public DateTime? ExpiresAtUtc { get; private set; }
     public Guid? ApprovedByMerchantUserId { get; private set; }
     public string? Conditions { get; private set; }
+    public OfferReuseRule ReuseRule { get; private set; } = OfferReuseRule.OncePerOffer;
     public DateTime? SuspendedAtUtc { get; private set; }
     public DateTime? CancelledAtUtc { get; private set; }
     public DateTime? ExpirationSevenDayReminderAtUtc { get; set; }
@@ -29,12 +30,12 @@ public sealed class CreatorMerchantCampaign : Entity
     public MerchantCreatorPartnership Partnership { get; set; } = null!;
     public CampaignQrCode? QrCode { get; set; }
 
-    public void Approve(int durationDays, DateTime? allowedStart, Guid ruleVersionId, Guid actor, string campaignCode, string? conditions, DateTime now)
+    public void Approve(int durationDays, DateTime? allowedStart, Guid ruleVersionId, Guid actor, string campaignCode, string? conditions, DateTime now, OfferReuseRule reuseRule = OfferReuseRule.OncePerOffer)
     {
         if (Status != CampaignStatus.PendingApproval) throw new InvalidOperationException("Only a pending campaign can be approved.");
         if (durationDays is < 1 or > 365) throw new ArgumentOutOfRangeException(nameof(durationDays));
         DurationDays = durationDays; MerchantAllowedStartAtUtc = allowedStart; CommissionRuleVersionId = ruleVersionId;
-        ApprovedByMerchantUserId = actor; ApprovedAtUtc = now; CampaignCode = campaignCode; Conditions = conditions;
+        ApprovedByMerchantUserId = actor; ApprovedAtUtc = now; CampaignCode = campaignCode; Conditions = conditions; ReuseRule = reuseRule;
         Status = CampaignStatus.ApprovedAwaitingStart; UpdatedAtUtc = now;
     }
 
@@ -76,4 +77,3 @@ public sealed class CampaignRenewalRequest : Entity
     public string? CreatorNote { get; set; }
     public Guid? NewCampaignId { get; set; }
 }
-

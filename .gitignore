@@ -8,6 +8,8 @@ TestResults/
 ## JavaScript
 node_modules/
 dist/
+src/CreatorPay.Web/test-results/
+src/CreatorPay.Web/playwright-report/
 *.local
 
 ## IDE and OS

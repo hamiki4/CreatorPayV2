@@ -13,7 +13,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     {
         var email = Normalize(request.Email); var now = clock.UtcNow; var user = await store.FindUserByEmailAsync(email, ct);
         if (user is null) { Audit(null, email, false, "InvalidCredentials", context, now); await store.SaveAsync(ct); return Result<TokenPair>.Failure(InvalidCredentials); }
-        var eligible = user.Status == AccountStatus.Active && (user.LockoutEndUtc is null || user.LockoutEndUtc <= now);
+        var eligible = CanSignIn(user) && (user.LockoutEndUtc is null || user.LockoutEndUtc <= now);
         var verification = passwords.Verify(user, user.PasswordHash, request.Password);
         if (!eligible || verification == PasswordVerification.Failed)
         {
@@ -34,7 +34,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         if (existing is null) return Result<TokenPair>.Failure("Invalid refresh token.");
         if (!existing.IsActive(now)) { await store.RevokeFamilyAsync(existing.TokenFamily, now, "Token reuse detected", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure("Invalid refresh token."); }
         var user = await store.FindUserAsync(existing.UserAccountId, innerCt);
-        if (user is null || user.Status != AccountStatus.Active) { await store.RevokeFamilyAsync(existing.TokenFamily, now, "Account ineligible", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure("Invalid refresh token."); }
+        if (user is null || !CanSignIn(user) || user.LockoutEndUtc > now) { await store.RevokeFamilyAsync(existing.TokenFamily, now, "Account ineligible", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure("Invalid refresh token."); }
         existing.UsedAtUtc = now; existing.RevokedAtUtc = now; existing.RevokedReason = "Rotated"; existing.RevokedByIp = context.IpAddress;
         var pair = IssuePair(user, existing.TokenFamily, context, now); existing.ReplacedByTokenHash = tokens.HashToken(pair.RefreshToken);
         await store.SaveAsync(innerCt); return Result<TokenPair>.Success(pair);
@@ -79,5 +79,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     }
     private void Audit(Guid? id, string email, bool success, string? reason, RequestContext c, DateTime now) => store.AddAudit(new LoginAudit { Id = Guid.NewGuid(), UserAccountId = id, NormalizedEmail = email, WasSuccessful = success, FailureReason = reason, IpAddress = c.IpAddress, UserAgent = c.UserAgent, CorrelationId = c.CorrelationId, AttemptedAtUtc = now, CreatedAtUtc = now });
     private static CurrentUser ToCurrent(UserAccount u) => new(u.Id, u.Email, u.Role, u.Status, u.CreatorId, u.MerchantId, u.SupervisorId, u.CashierId, u.IsEmailVerified, u.IsPhoneVerified);
+    public static bool CanSignIn(UserAccount user) => user.Status == AccountStatus.Active ||
+        user.Status is AccountStatus.PendingVerification or AccountStatus.PendingApproval && user.Role is UserRole.Customer or UserRole.Creator or UserRole.MerchantAdmin;
     private static string Normalize(string email) => email.Trim().ToUpperInvariant();
 }
