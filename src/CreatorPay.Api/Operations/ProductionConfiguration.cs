@@ -1,6 +1,7 @@
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.CustomerVerification;
 using CreatorPay.Application.Operations;
+using Npgsql;
 
 namespace CreatorPay.Api.Operations;
 
@@ -16,9 +17,24 @@ public static class ProductionConfiguration
         if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("CreatorPayDatabase"))) errors.Add("ConnectionStrings:CreatorPayDatabase");
         if (!environment.IsDevelopment() && !environment.IsEnvironment("Test"))
         {
-            static bool Placeholder(string value) => value.Contains("replace-with", StringComparison.OrdinalIgnoreCase) || value.Contains("changeme", StringComparison.OrdinalIgnoreCase);
+            static bool Placeholder(string value)
+            {
+                var normalized = value.Replace("_", "-", StringComparison.Ordinal).Replace(" ", "-", StringComparison.Ordinal);
+                return normalized.Contains("replace-with", StringComparison.OrdinalIgnoreCase)
+                    || normalized.Contains("replace-in", StringComparison.OrdinalIgnoreCase)
+                    || normalized.Contains("placeholder", StringComparison.OrdinalIgnoreCase)
+                    || normalized.Contains("change-me", StringComparison.OrdinalIgnoreCase)
+                    || normalized.Contains("changeme", StringComparison.OrdinalIgnoreCase);
+            }
             if (Placeholder(jwt.SigningKey)) errors.Add("Authentication:Jwt:SigningKey must not be a placeholder");
-            if (Placeholder(configuration.GetConnectionString("CreatorPayDatabase")!)) errors.Add("ConnectionStrings:CreatorPayDatabase must come from a secret source");
+            var databaseConnection = configuration.GetConnectionString("CreatorPayDatabase")!;
+            if (Placeholder(databaseConnection)) errors.Add("ConnectionStrings:CreatorPayDatabase must come from a secret source");
+            try
+            {
+                var database = new NpgsqlConnectionStringBuilder(databaseConnection);
+                if (string.IsNullOrEmpty(database.Password) || database.Password.Length < 24) errors.Add("ConnectionStrings:CreatorPayDatabase password (minimum 24 characters)");
+            }
+            catch (ArgumentException) { errors.Add("ConnectionStrings:CreatorPayDatabase must be a valid PostgreSQL connection string"); }
             var phone = configuration.GetSection(CustomerVerificationOptions.SectionName).Get<CustomerVerificationOptions>() ?? new();
             if (phone.HmacSecret.Length < 32) errors.Add("CustomerVerification:HmacSecret (minimum 32 characters)");
             if (phone.EncryptionKey.Length < 32) errors.Add("CustomerVerification:EncryptionKey (minimum 32 characters)");

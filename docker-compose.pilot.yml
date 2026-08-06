@@ -1,5 +1,8 @@
 services:
+  postgres:
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
   api:
+    ports: ["127.0.0.1:${API_PORT:-8080}:8080"]
     environment:
       ASPNETCORE_ENVIRONMENT: Pilot
       Support__Email: ${Support__Email:?Set pilot support email}
@@ -22,3 +25,5 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+  web:
+    ports: ["127.0.0.1:${WEB_PORT:-8081}:8080"]

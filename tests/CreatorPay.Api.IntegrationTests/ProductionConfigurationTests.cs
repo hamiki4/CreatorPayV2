@@ -27,10 +27,33 @@ public sealed class ProductionConfigurationTests
         Assert.Contains("Pilot origins must use HTTPS", error.Message);
     }
 
+    [Theory]
+    [InlineData("replace-in-secret-provider-minimum-32-characters")]
+    [InlineData("PLACEHOLDER-secret-value-that-is-long-enough")]
+    [InlineData("change_me_to_a_random_secret_value_now")]
+    public void PilotRejectsCommonPlaceholderSecretStyles(string placeholder)
+    {
+        var values = ValidPilotValues();
+        values["Authentication:Jwt:SigningKey"] = placeholder;
+        values["CustomerVerification:HmacSecret"] = placeholder;
+        values["ConnectionStrings:CreatorPayDatabase"] = $"Host=db;Password={placeholder}";
+        var error = Assert.Throws<InvalidOperationException>(() => ProductionConfiguration.Validate(new ConfigurationBuilder().AddInMemoryCollection(values).Build(), new EnvironmentStub { EnvironmentName = "Pilot" }));
+        Assert.Contains("placeholder", error.Message);
+    }
+
     [Fact]
     public void PilotAcceptsSafeExplicitConfiguration()
     {
         ProductionConfiguration.Validate(new ConfigurationBuilder().AddInMemoryCollection(ValidPilotValues()).Build(), new EnvironmentStub { EnvironmentName = "Pilot" });
+    }
+
+    [Fact]
+    public void PilotRejectsWeakDatabasePassword()
+    {
+        var values = ValidPilotValues();
+        values["ConnectionStrings:CreatorPayDatabase"] = "Host=db;Password=short";
+        var error = Assert.Throws<InvalidOperationException>(() => ProductionConfiguration.Validate(new ConfigurationBuilder().AddInMemoryCollection(values).Build(), new EnvironmentStub { EnvironmentName = "Pilot" }));
+        Assert.Contains("minimum 24", error.Message);
     }
 
     private static Dictionary<string, string?> ValidPilotValues() => new()

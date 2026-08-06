@@ -1,8 +1,12 @@
 name: Container build
 on:
+  workflow_dispatch:
   pull_request:
   push: { branches: [main] }
 permissions: { contents: read }
+concurrency:
+  group: containers-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   containers:
     runs-on: ubuntu-latest
