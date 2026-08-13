@@ -4,10 +4,10 @@ using System.Text.Json.Serialization;
 namespace CreatorPay.Application.Creators;
 
 public sealed record SocialProfileRequest([property: JsonConverter(typeof(JsonStringEnumConverter))] SocialPlatform Platform, string Handle, string? ProfileUrl, long FollowerCount, bool IsPrimary);
-public sealed record RegisterCreatorRequest(string FirstName, string LastName, string DisplayName, string PhoneNumber, string Email, string Password,
+public sealed record RegisterCreatorRequest(string FirstName, string LastName, string DisplayName, string PhoneNumber, string? Email, string Password,
     string PreferredLanguage = "en", string City = "", string? Zone = null, string Biography = "", string ContentCategories = "", bool TermsAccepted = false,
     IReadOnlyList<SocialProfileRequest>? SocialProfiles = null, string? GovernmentIdReference = null, string? TaxIdentificationNumber = null,
-    string? PreferredPayoutChannel = null, string? PreferredPayoutAccountIdentifier = null);
+    string? PreferredPayoutChannel = null, string? PreferredPayoutAccountIdentifier = null, DateOnly? BirthDate = null, string? Confirmation = null);
 public sealed record VerifyCreatorRequest(string Token);
 public sealed record UpdateCreatorProfileRequest(string FirstName, string LastName, string DisplayName, string PhoneNumber, string Email, ProfileImageMetadata? ProfileImage,
     string PreferredLanguage = "en", string City = "", string? Zone = null, string Biography = "", string ContentCategories = "", IReadOnlyList<SocialProfileRequest>? SocialProfiles = null,
@@ -15,8 +15,8 @@ public sealed record UpdateCreatorProfileRequest(string FirstName, string LastNa
 public sealed record ProfileImageMetadata(string FileName, string ContentType, long SizeBytes);
 public sealed record CreatorDecisionRequest(Guid CreatorId, string? Reason);
 public sealed record SocialProfileResponse(Guid Id, SocialPlatform Platform, string Handle, string? ProfileUrl, long FollowerCount, bool IsPrimary, SocialProfileVerificationStatus VerificationStatus, DateTime CreatedAtUtc, DateTime? UpdatedAtUtc);
-public sealed record CreatorRegistrationResponse(Guid CreatorId, string PublicCreatorId, string Message);
-public sealed record CreatorProfileResponse(Guid CreatorId, string PublicCreatorId, string FirstName, string LastName, string DisplayName, string PhoneNumber, string Email, bool IsEmailVerified, bool IsPhoneVerified, AccountStatus AccountStatus, CreatorStatus CreatorStatus, ProfileImageMetadata? ProfileImage, string NextStep, string PreferredLanguage, string City, string? Zone, string Biography, string ContentCategories, IReadOnlyList<SocialProfileResponse> SocialProfiles, string? PreferredPayoutChannel, string? PreferredPayoutAccountIdentifier);
+public sealed record CreatorRegistrationResponse(Guid CreatorId, string PublicCreatorId, string Message, bool PhoneVerificationRequired);
+public sealed record CreatorProfileResponse(Guid CreatorId, string PublicCreatorId, string CreatorCode, string FirstName, string LastName, string DisplayName, string PhoneNumber, string Email, bool IsEmailVerified, bool IsPhoneVerified, AccountStatus AccountStatus, CreatorStatus CreatorStatus, ProfileImageMetadata? ProfileImage, string NextStep, string PreferredLanguage, string City, string? Zone, string Biography, string ContentCategories, IReadOnlyList<SocialProfileResponse> SocialProfiles, string? PreferredPayoutChannel, string? PreferredPayoutAccountIdentifier);
 public sealed record PendingCreatorResponse(Guid CreatorId, string PublicCreatorId, string DisplayName, string Email, DateTime RegisteredAtUtc);
 
 public interface ICreatorService

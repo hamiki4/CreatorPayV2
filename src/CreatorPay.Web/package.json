@@ -6,16 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
-    "test": "node --test tests/auth-localization.test.mjs tests/shopper-discovery.test.mjs tests/public-help.test.mjs tests/operations-dashboard.test.mjs tests/pilot-operations.test.mjs tests/pilot-experience.test.mjs",
+    "test": "node --test tests/auth-localization.test.mjs tests/pin-security.test.mjs tests/shopper-discovery.test.mjs tests/public-help.test.mjs tests/operations-dashboard.test.mjs tests/pilot-operations.test.mjs tests/pilot-experience.test.mjs",
     "test:e2e": "node scripts/run-e2e.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "firebase": "^12.16.0",
+    "jsqr": "^1.4.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.2",
+    "@playwright/test": "^1.62.1",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^4.3.4",

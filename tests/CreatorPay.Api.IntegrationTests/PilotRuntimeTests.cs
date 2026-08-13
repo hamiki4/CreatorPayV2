@@ -46,8 +46,8 @@ public sealed class PilotRuntimeTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/cashier/checkouts/offer") { Content = JsonContent.Create(new { qrPayload = "creatorpay:offer:test:test", merchantLocationId = Guid.NewGuid(), shopperPhoneNumber = "0911000001", purchaseAmount = 51m }) };
         request.Headers.Add("Idempotency-Key", "pilot-limit-test");
         using var response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.Conflict, $"{response.StatusCode}: {body}");
         Assert.True(body.Contains("Pilot maximum purchase amount exceeded", StringComparison.Ordinal), body);
     }
 
@@ -58,6 +58,7 @@ public sealed class PilotRuntimeTests
             ["ConnectionStrings:CreatorPayDatabase"] = "Host=127.0.0.1;Port=1;Database=unused;Username=unused;Password=" + new string('d', 32),
             ["Authentication:Jwt:Issuer"] = "CreatorPay", ["Authentication:Jwt:Audience"] = "CreatorPay.Web", ["Authentication:Jwt:SigningKey"] = SigningKey,
             ["CustomerVerification:HmacSecret"] = new string('h', 32), ["CustomerVerification:EncryptionKey"] = new string('e', 32),
+            ["SmsOtp:SmsProvider"] = "PilotTest", ["SmsOtp:HashSecret"] = new string('o', 32), ["SmsOtp:TestCode"] = "654321",
             ["Cors:AllowedOrigins:0"] = "https://pilot.example", ["Support:Email"] = "pilot@example.invalid", ["Storage:Provider"] = "MetadataOnly"
         };
         foreach (var pair in overrides) values[pair.Key] = pair.Value;

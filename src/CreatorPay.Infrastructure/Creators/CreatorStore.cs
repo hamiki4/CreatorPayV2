@@ -3,6 +3,7 @@ using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace CreatorPay.Infrastructure.Creators;
 
@@ -10,6 +11,23 @@ public sealed class CreatorStore(ApplicationDbContext db) : ICreatorStore
 {
     public Task<bool> EmailExistsAsync(string value, Guid? exclude, CancellationToken ct) => db.UserAccounts.AnyAsync(x => x.NormalizedEmail == value && (!exclude.HasValue || x.Id != exclude), ct);
     public async Task<bool> PhoneExistsAsync(string value, Guid? exclude, CancellationToken ct) => await db.Creators.AnyAsync(x => x.NormalizedPhoneNumber == value && (!exclude.HasValue || x.Id != exclude), ct) || await db.Merchants.AnyAsync(x => x.NormalizedPhoneNumber == value, ct) || await db.Customers.AnyAsync(x => x.NormalizedPhoneNumber == value, ct);
+    public async Task<string> AllocateCreatorCodeAsync(CancellationToken ct)
+    {
+        // Registrations already run in a transaction. The PostgreSQL advisory lock serializes
+        // allocation, while the unique index remains the final database-level safeguard.
+        if (db.Database.IsNpgsql())
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(871204001)", ct);
+        var used = await db.Creators.AsNoTracking().Select(x => x.CreatorCode).ToListAsync(ct);
+        if (used.Count >= 9000) throw new InvalidOperationException("No Creator IDs are available.");
+        var occupied = used.ToHashSet(StringComparer.Ordinal);
+        var start = RandomNumberGenerator.GetInt32(1000, 10000);
+        for (var offset = 0; offset < 9000; offset++)
+        {
+            var candidate = (1000 + ((start - 1000 + offset) % 9000)).ToString("D4");
+            if (!occupied.Contains(candidate)) return candidate;
+        }
+        throw new InvalidOperationException("No Creator IDs are available.");
+    }
     public Task<UserAccount?> FindUserAsync(Guid id, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<UserAccount?> FindUserByCreatorAsync(Guid creatorId, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.CreatorId == creatorId, ct);
     public Task<Creator?> FindCreatorAsync(Guid id, CancellationToken ct) => db.Creators.Include(x => x.SocialProfiles).SingleOrDefaultAsync(x => x.Id == id, ct);

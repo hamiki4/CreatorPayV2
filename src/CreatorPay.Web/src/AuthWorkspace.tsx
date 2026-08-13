@@ -1,44 +1,590 @@
-import {FormEvent,useState} from 'react'
-import {brand,Locale} from './brand'
-import {workspaceRoute} from './authSession'
-const base=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'')
-type Mode='login'|'customer'|'creator'|'merchant';type Tokens={accessToken:string;refreshToken:string;user:{role:string}}
-export const businessTypes=[
- {value:'Restaurant / Café',en:'Restaurant / Café',am:'ምግብ ቤት / ካፌ'},
- {value:'Grocery / Mini-market',en:'Grocery / Mini-market',am:'ግሮሰሪ / ሚኒ ማርኬት'},
- {value:'Clothing / Boutique',en:'Clothing / Boutique',am:'ልብስ / ቡቲክ'},
- {value:'Beauty / Salon',en:'Beauty / Salon',am:'ውበት / ሳሎን'},
- {value:'Furniture',en:'Furniture',am:'የቤት ዕቃ'},
- {value:'Electronics',en:'Electronics',am:'ኤሌክትሮኒክስ'},
- {value:'Hotel / Travel',en:'Hotel / Travel',am:'ሆቴል / ጉዞ'},
- {value:'Professional Services',en:'Professional Services',am:'ሙያዊ አገልግሎቶች'},
- {value:'Other',en:'Other',am:'ሌላ'}
-] as const
-const en={welcome:'Welcome to Weymela',signIn:'Sign In',customer:'Shopper Registration',creator:'Content Creator Registration',merchant:'Business Owner Registration',display:'Display Name',phone:'Phone',email:'Email',password:'Password',confirm:'Confirm Password',mismatch:'Passwords do not match.',createCustomer:'Create shopper account',createCreator:'Create content creator account',createMerchant:'Create business owner account',language:'Language',show:'Show',hide:'Hide',wait:'Please wait…',failed:'Registration failed. Please try again.',invalid:'Invalid email or password.',customerSuccess:'Shopper account created. Sign in to continue verification.',creatorSuccess:'Content Creator registration received. Verify email and phone; your profile will then be PendingReview.',merchantSuccess:'Business Owner registration received. Verify email and phone, then follow PendingReview status.',first:'Legal First Name',last:"Father's Name",publicName:'Public Display Name',city:'Primary City',social:'Primary Social Platform',url:'Social Profile URL',followers:'Estimated Follower Count',terms:'I accept the pilot terms and privacy notice',notice:'Public registration is available for Shoppers, Content Creators, and Business Owners. Platform Admin accounts are provisioned privately.',support:'Support',legalBusinessName:'Legal Business Name',tradingName:'Trading Name',businessType:'Business Type',primaryContactName:'Primary Contact Name',businessAddress:'Business Address'}
-const am:typeof en={welcome:'ወደ ወይሜላ እንኳን ደህና መጡ',signIn:'ይግቡ',customer:'የገበያተኛ ምዝገባ',creator:'የይዘት ፈጣሪ ምዝገባ',merchant:'የንግድ ባለቤት ምዝገባ',display:'የሚታይ ስም',phone:'ስልክ',email:'ኢሜይል',password:'የይለፍ ቃል',confirm:'የይለፍ ቃል ያረጋግጡ',mismatch:'የይለፍ ቃሎቹ አይዛመዱም።',createCustomer:'የገበያተኛ መለያ ይፍጠሩ',createCreator:'የይዘት ፈጣሪ መለያ ይፍጠሩ',createMerchant:'የንግድ ባለቤት መለያ ይፍጠሩ',language:'ቋንቋ',show:'አሳይ',hide:'ደብቅ',wait:'እባክዎ ይጠብቁ…',failed:'ምዝገባው አልተሳካም። እባክዎ እንደገና ይሞክሩ።',invalid:'ኢሜይሉ ወይም የይለፍ ቃሉ ትክክል አይደለም።',customerSuccess:'የገበያተኛ መለያው ተፈጥሯል። ማረጋገጥን ለመቀጠል ይግቡ።',creatorSuccess:'የይዘት ፈጣሪ ምዝገባዎ ደርሷል። ኢሜይልና ስልክዎን ያረጋግጡ።',merchantSuccess:'የንግድ ባለቤት ምዝገባዎ ደርሷል። ኢሜይልና ስልክዎን ያረጋግጡ።',first:'ሕጋዊ ስም',last:'የአባት ስም',publicName:'የሕዝብ ማሳያ ስም',city:'ዋና ከተማ',social:'ዋና ማህበራዊ መድረክ',url:'የማህበራዊ መገለጫ አገናኝ',followers:'የተገመተ ተከታይ ብዛት',terms:'የሙከራ ውሎችንና የግላዊነት ማስታወቂያውን እቀበላለሁ',notice:'የሕዝብ ምዝገባ ለገበያተኞች፣ የይዘት ፈጣሪዎችና የንግድ ባለቤቶች ይገኛል። የፕላትፎርም አስተዳዳሪ መለያዎች በግል ይዘጋጃሉ።',support:'ድጋፍ',legalBusinessName:'ሕጋዊ የንግድ ስም',tradingName:'የንግድ መጠሪያ',businessType:'የንግድ ዓይነት',primaryContactName:'የዋና አድራሻ ሰው ስም',businessAddress:'የንግድ አድራሻ'}
-export const authText=(locale:Locale)=>locale==='am'?am:en
-const passwordText={en:{requirements:'Password requirements:',length:'At least 8 characters',upper:'One uppercase letter',lower:'One lowercase letter',number:'One number',special:'One special character',match:'Passwords match',mismatch:'Passwords do not match'},am:{requirements:'የይለፍ ቃል መስፈርቶች፦',length:'ቢያንስ 8 ቁምፊዎች',upper:'አንድ የእንግሊዝኛ አቢይ ፊደል',lower:'አንድ የእንግሊዝኛ ትንሽ ፊደል',number:'አንድ ቁጥር',special:'አንድ ልዩ ምልክት',match:'የይለፍ ቃሎቹ ይዛመዳሉ',mismatch:'የይለፍ ቃሎቹ አይዛመዱም'}}
-export const publicPasswordRules=[(value:string)=>value.length>=8,(value:string)=>/[A-Z]/.test(value),(value:string)=>/[a-z]/.test(value),(value:string)=>/\d/.test(value),(value:string)=>/[^A-Za-z0-9]/.test(value)]
-export const ethiopianPhoneMessage='Enter a valid Ethiopian mobile number, for example 0911234567, 0712345678, or +251911234567.'
-export const amharicPhoneMessage='ትክክለኛ የኢትዮጵያ ሞባይል ቁጥር ያስገቡ፣ ለምሳሌ 0911234567፣ 0712345678 ወይም +251911234567።'
-export function normalizeEthiopianPhone(value:string){const compact=value.replace(/[\s-]/g,'');if(/^0[79]\d{8}$/.test(compact))return `+251${compact.slice(1)}`;if(/^\+251[79]\d{8}$/.test(compact))return compact;return null}
-const amharicErrors:Record<string,string>={'Email is already registered.':'ይህ ኢሜይል አስቀድሞ ተመዝግቧል።','Phone number is already registered.':'ይህ ስልክ ቁጥር አስቀድሞ ተመዝግቧል።','Email is invalid.':'የኢሜይል ቅርጸት ትክክል አይደለም።',[ethiopianPhoneMessage]:amharicPhoneMessage,'Terms acceptance is required.':'ውሎቹን መቀበል ያስፈልጋል።'}
-const freshLogin=()=>({email:'',password:''}),freshCustomer=()=>({displayName:'',email:'',phoneNumber:'',password:'',confirmation:''}),freshCreator=(locale:Locale)=>({firstName:'',lastName:'',displayName:'',phoneNumber:'',email:'',password:'',confirmation:'',preferredLanguage:locale,city:'Addis Ababa',platform:'TikTok',profileUrl:'',followerCount:0,termsAccepted:false}),freshMerchant=(locale:Locale)=>({legalBusinessName:'',tradingName:'',businessType:'',primaryContactName:'',phoneNumber:'',email:'',password:'',confirmation:'',businessAddress:'',city:'Addis Ababa',region:'Not provided',country:'Ethiopia',timeZone:'Africa/Addis_Ababa',taxRegistrationNumber:null,businessRegistrationNumber:null,preferredLanguage:locale,termsAccepted:false})
-export function AuthWorkspace(){
- const[locale,setLocale]=useState<Locale>((localStorage.getItem('weymela_locale') as Locale)||'en'),[mode,setModeState]=useState<Mode>('login'),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[show,setShow]=useState(false);const t=authText(locale)
- const[login,setLogin]=useState(freshLogin),[customer,setCustomer]=useState(freshCustomer),[creator,setCreator]=useState(()=>freshCreator(locale)),[merchant,setMerchant]=useState(()=>freshMerchant(locale))
- function setMode(next:Mode){setLogin(freshLogin());setCustomer(freshCustomer());setCreator(freshCreator(locale));setMerchant(freshMerchant(locale));setMessage('');setShow(false);setModeState(next)}
- async function post(path:string,body:unknown){setBusy(true);setMessage('');try{const r=await fetch(`${base}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),v=await r.json().catch(()=>({}));if(!r.ok){const safeDetail=typeof v.detail==='string'&&v.detail.length<=500?v.detail:null;if(r.status<500){const detail=locale==='am'&&safeDetail?(amharicErrors[safeDetail]??safeDetail):safeDetail;setMessage(detail??t.failed)}else{const correlation=r.headers.get('x-correlation-id')||(typeof v.correlationId==='string'?v.correlationId:null);setMessage(`${t.failed}${correlation?` (${t.support}: ${correlation})`:''}`)}return false}return true}catch{setMessage(t.failed);return false}finally{setBusy(false)}}
- function validPhone(value:string){const normalized=normalizeEthiopianPhone(value);if(normalized)return normalized;setMessage(locale==='am'?amharicPhoneMessage:ethiopianPhoneMessage);return null}
- function matches(password:string,confirmation:string){if(!publicPasswordRules.every(rule=>rule(password))){setMessage(passwordText[locale].requirements);return false}if(password===confirmation)return true;setMessage(t.mismatch);return false}
- async function signIn(e:FormEvent){e.preventDefault();setBusy(true);try{const r=await fetch(`${base}/api/v1/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(login)}),v=await r.json().catch(()=>({}));if(!r.ok){setMessage(v.detail??t.invalid);return}const x=v as Tokens;localStorage.setItem('creatorpay_access_token',x.accessToken);localStorage.setItem('creatorpay_refresh_token',x.refreshToken);location.assign(workspaceRoute(x.user.role))}finally{setBusy(false)}}
- const field=(state:Record<string,unknown>,set:(x:any)=>void,key:string,label:string,type='text')=><label>{label}<input type={type} required value={String(state[key]??'')} onChange={e=>set({...state,[key]:type==='number'?Number(e.target.value):e.target.value})}/></label>
- const passwordFields=(state:{password:string;confirmation:string},set:(x:any)=>void)=>{const copy=passwordText[locale],results=publicPasswordRules.map(rule=>rule(state.password)),labels=[copy.length,copy.upper,copy.lower,copy.number,copy.special],hasConfirmation=state.confirmation.length>0,matchesPassword=state.password===state.confirmation;return <><label>{t.password}<input type={show?'text':'password'} required minLength={8} maxLength={128} value={state.password} onChange={e=>set({...state,password:e.target.value})}/></label><div className="password-requirements" role="status" aria-live="polite"><strong>{copy.requirements}</strong><ul>{labels.map((label,index)=><li key={label}><span aria-hidden="true">{results[index]?'✓':'○'}</span> {label}<span className="sr-only"> — {results[index]?'met':'not met'}</span></li>)}</ul></div><label>{t.confirm}<input type={show?'text':'password'} required minLength={8} maxLength={128} value={state.confirmation} onChange={e=>set({...state,confirmation:e.target.value})}/></label>{hasConfirmation&&<p role="status" aria-live="polite">{matchesPassword?`✓ ${copy.match}`:`○ ${copy.mismatch}`}</p>}<button type="button" className="quiet" onClick={()=>setShow(!show)}>{show?t.hide:t.show}</button></>}
- const tabs:[Mode,string][]=[['login',t.signIn],['customer',t.customer],['creator',t.creator],['merchant',t.merchant]]
- return <main className="auth"><section className="auth-card" aria-busy={busy}><div className="auth-top"><p className="eyebrow">{brand.logoText}</p><label>{locale==='am'?'ቋንቋ / Language':'Language / ቋንቋ'}<select aria-label="Language / ቋንቋ" value={locale} onChange={e=>{const v=e.target.value as Locale;setLocale(v);localStorage.setItem('weymela_locale',v)}}><option value="en">English</option><option value="am">አማርኛ</option></select></label></div><h1>{t.welcome}</h1><p>{brand.tagline}</p><div className="segmented" role="tablist">{tabs.map(([id,label])=><button type="button" role="tab" aria-selected={mode===id} className={mode===id?'active':'quiet'} onClick={()=>setMode(id)} key={id}>{label}</button>)}</div>
- {mode==='login'?<form className="form" onSubmit={signIn}>{field(login,setLogin,'email',t.email,'email')}<label>{t.password}<span className="password-field"><input type={show?'text':'password'} required value={login.password} onChange={e=>setLogin({...login,password:e.target.value})}/><button type="button" className="quiet" onClick={()=>setShow(!show)}>{show?t.hide:t.show}</button></span></label><button disabled={busy}>{busy?t.wait:t.signIn}</button></form>
- :mode==='customer'?<form className="form" onSubmit={async e=>{e.preventDefault();const phone=validPhone(customer.phoneNumber);if(phone&&matches(customer.password,customer.confirmation)&&await post('/api/v1/customers/register',{displayName:customer.displayName,email:customer.email,phoneNumber:phone,password:customer.password,confirmation:customer.confirmation}))setMessage(t.customerSuccess)}}>{field(customer,setCustomer,'displayName',t.display)}{field(customer,setCustomer,'phoneNumber',t.phone,'tel')}{field(customer,setCustomer,'email',t.email,'email')}{passwordFields(customer,setCustomer)}<button disabled={busy}>{t.createCustomer}</button></form>
- :mode==='creator'?<form className="form" onSubmit={async e=>{e.preventDefault();const phone=validPhone(creator.phoneNumber);if(!phone||!matches(creator.password,creator.confirmation))return;const{confirmation,platform,profileUrl,followerCount,...profile}=creator;if(await post('/api/v1/creators/register',{...profile,phoneNumber:phone,biography:'',contentCategories:'',socialProfiles:[{platform,handle:'',profileUrl,followerCount,isPrimary:true}]}))setMessage(t.creatorSuccess)}}>{field(creator,setCreator,'firstName',t.first)}{field(creator,setCreator,'lastName',t.last)}{field(creator,setCreator,'displayName',t.publicName)}{field(creator,setCreator,'phoneNumber',t.phone,'tel')}{field(creator,setCreator,'email',t.email,'email')}{passwordFields(creator,setCreator)}{field(creator,setCreator,'city',t.city)}<label>{t.social}<select value={creator.platform} onChange={e=>setCreator({...creator,platform:e.target.value})}>{['TikTok','Instagram','Facebook','Telegram','YouTube','Other'].map(x=><option key={x}>{x}</option>)}</select></label>{field(creator,setCreator,'profileUrl',t.url,'url')}{field(creator,setCreator,'followerCount',t.followers,'number')}<label className="check full"><input type="checkbox" required checked={creator.termsAccepted} onChange={e=>setCreator({...creator,termsAccepted:e.target.checked})}/>{t.terms}</label><button disabled={busy}>{t.createCreator}</button></form>
- :<form className="form" onSubmit={async e=>{e.preventDefault();const phone=validPhone(merchant.phoneNumber);if(!phone||!matches(merchant.password,merchant.confirmation))return;const{confirmation,...request}=merchant;if(await post('/api/v1/merchants/register',{...request,phoneNumber:phone,documents:[]}))setMessage(t.merchantSuccess)}}>{field(merchant,setMerchant,'legalBusinessName',t.legalBusinessName)}{field(merchant,setMerchant,'tradingName',t.tradingName)}<label>{t.businessType}<select required value={merchant.businessType} onChange={e=>setMerchant({...merchant,businessType:e.target.value})}><option value="" disabled>{locale==='am'?'የንግድ ዓይነት ይምረጡ':'Select a business type'}</option>{businessTypes.map(x=><option key={x.value} value={x.value}>{x[locale]}</option>)}</select></label>{field(merchant,setMerchant,'primaryContactName',t.primaryContactName)}{field(merchant,setMerchant,'phoneNumber',t.phone,'tel')}{field(merchant,setMerchant,'email',t.email,'email')}{field(merchant,setMerchant,'businessAddress',t.businessAddress)}{field(merchant,setMerchant,'city',t.city)}{passwordFields(merchant,setMerchant)}<label className="check full"><input type="checkbox" required checked={merchant.termsAccepted} onChange={e=>setMerchant({...merchant,termsAccepted:e.target.checked})}/>{t.terms}</label><button disabled={busy}>{t.createMerchant}</button></form>}
- {message&&<aside role="status">{message}</aside>}<small>{t.notice} {t.support}: {brand.supportEmail}</small><nav className="auth-links" aria-label="Public information"><a href="/help">Help Center</a><a href="/contact">Contact Support</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></nav></section></main>
+import { FormEvent, useRef, useState } from "react";
+import { brand } from "./brand";
+import { workspaceRoute } from "./authSession";
+import {takeCreatorQrPath} from './creatorQrDeepLink'
+import { ForgotPin, pinUnlock } from './PinExperience'
+
+const base = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+type Mode = "login" | "pin" | "signup" | "customer" | "creator" | "merchant";
+type Tokens = {
+  accessToken: string;
+  refreshToken: string;
+  user: { role: string; phoneNumber?: string };
+};
+export const businessTypes = [
+  { value: "Restaurant / Café", en: "Restaurant / Café" },
+  { value: "Grocery / Mini-market", en: "Grocery / Mini-market" },
+  { value: "Clothing / Boutique", en: "Clothing / Boutique" },
+  { value: "Beauty / Salon", en: "Beauty / Salon" },
+  { value: "Furniture", en: "Furniture" },
+  { value: "Electronics", en: "Electronics" },
+  { value: "Hotel / Travel", en: "Hotel / Travel" },
+  { value: "Professional Services", en: "Professional Services" },
+  { value: "Other", en: "Other" },
+] as const;
+const text = {
+  welcome: "Welcome to Weymela",
+  signIn: "Sign In",
+  customer: "Shopper Registration",
+  creator: "Content Creator Registration",
+  business: "Business Owner Registration",
+  phone: "Phone",
+  email: "Email",
+  password: "Password",
+  confirm: "Confirm Password",
+  failed: "Registration failed. Please try again.",
+  invalid: "Invalid phone number or password.",
+};
+export const authText = () => text;
+export const publicPasswordRules = [
+  (v: string) => v.length >= 8,
+  (v: string) => /[A-Z]/.test(v),
+  (v: string) => /[a-z]/.test(v),
+  (v: string) => /\d/.test(v),
+  (v: string) => /[^A-Za-z0-9]/.test(v),
+];
+export const ethiopianPhoneMessage =
+  "Enter a valid Ethiopian mobile number, for example 0911234567, 0712345678, or +251911234567.";
+export function normalizeEthiopianPhone(value: string) {
+  const compact = value.replace(/[\s-]/g, "");
+  if (/^0[79]\d{8}$/.test(compact)) return `+251${compact.slice(1)}`;
+  if (/^\+251[79]\d{8}$/.test(compact)) return compact;
+  if (/^251[79]\d{8}$/.test(compact)) return `+${compact}`;
+  return null;
+}
+const loginBlank = () => ({ email: "", password: "" }),
+  shopperBlank = () => ({
+    displayName: "",
+    email: "",
+    phoneNumber: "",
+    password: "",
+    confirmation: "",
+    birthDay:"",birthMonth:"",birthYear:"",
+  }),
+  creatorBlank = () => ({
+    firstName: "",
+    lastName: "",
+    displayName: "",
+    phoneNumber: "",
+    email: "",
+    password: "",
+    confirmation: "",
+    preferredLanguage: "en",
+    city: "Addis Ababa",
+    platform: "TikTok",
+    profileUrl: "",
+    followerCount: 0,
+    termsAccepted: false,
+    birthDay:"",birthMonth:"",birthYear:"",
+  }),
+  businessBlank = () => ({
+    legalBusinessName: "",
+    tradingName: "",
+    businessType: "",
+    primaryContactName: "",
+    phoneNumber: "",
+    email: "",
+    password: "",
+    confirmation: "",
+    businessAddress: "",
+    city: "Addis Ababa",
+    region: "Not provided",
+    country: "Ethiopia",
+    timeZone: "Africa/Addis_Ababa",
+    taxRegistrationNumber: null,
+    businessRegistrationNumber: null,
+    preferredLanguage: "en",
+    termsAccepted: false,
+    birthDay:"",birthMonth:"",birthYear:"",
+  });
+const dob=(x:{birthDay:string;birthMonth:string;birthYear:string})=>{const d=Number(x.birthDay),m=Number(x.birthMonth),y=Number(x.birthYear),v=new Date(Date.UTC(y,m-1,d));return y>=1900&&y<=new Date().getUTCFullYear()&&v.getUTCFullYear()===y&&v.getUTCMonth()===m-1&&v.getUTCDate()===d?`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`:null};
+
+export function AuthWorkspace() {
+  const trustedPhone=localStorage.getItem("weymela_trusted_phone")??"";
+  const [mode, setMode] = useState<Mode>(trustedPhone?"pin":"login"),
+    [login, setLogin] = useState(loginBlank),
+    [shopper, setShopper] = useState(shopperBlank),
+    [creator, setCreator] = useState(creatorBlank),
+    [business, setBusiness] = useState(businessBlank),
+    [message, setMessage] = useState(""),
+    [busy, setBusy] = useState(false),
+    [forgot, setForgot] = useState(false),
+    [resetStage, setResetStage] = useState<"request"|"waiting"|"approved">("request"),
+    [resetReference,setResetReference]=useState(""),
+    [reset, setReset] = useState({
+      phoneNumber: "",
+      birthDay:"",birthMonth:"",birthYear:"",
+      newPassword: "",
+      confirmation: "",
+    }), [pinValue,setPinValue]=useState(""), [forgotPin,setForgotPin]=useState(false);
+  const shopperSubmitting = useRef(false);
+  function changeMode(next: Mode) {
+    if (next === mode) return;
+    setLogin(loginBlank());
+    setShopper(shopperBlank());
+    setCreator(creatorBlank());
+    setBusiness(businessBlank());
+    setMessage("");
+    setForgot(false);
+    setResetStage("request");setResetReference("");
+    setReset({ phoneNumber: "", birthDay:"",birthMonth:"",birthYear:"", newPassword: "", confirmation: "" });
+    setPinValue(""); setForgotPin(false);
+    shopperSubmitting.current = false;
+    setMode(next);
+  }
+  async function post(path: string, body: unknown) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const r = await fetch(`${base}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        v = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMessage(r.status >= 500 ? text.failed : (v.detail ?? text.failed));
+        return false;
+      }
+      return v as { message?: string; reference?:string; status?:string };
+    } catch (error) {
+      console.error(error);
+      setMessage(text.failed);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  function phone(value: string) {
+    const normalized = normalizeEthiopianPhone(value);
+    if (!normalized) setMessage(ethiopianPhoneMessage);
+    return normalized;
+  }
+  function validPassword(x: { password: string; confirmation: string }) {
+    if (!publicPasswordRules.every((rule) => rule(x.password))) {
+      setMessage(
+        "Use at least 8 characters with uppercase, lowercase, a number, and a special character.",
+      );
+      return false;
+    }
+    if (x.password !== x.confirmation) {
+      setMessage("Passwords do not match.");
+      return false;
+    }
+    return true;
+  }
+  async function signIn(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMessage("");
+    try {
+      const r = await fetch(`${base}/api/v1/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(login),
+        }),
+        v = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMessage(
+          r.status >= 500
+            ? "Sign in is temporarily unavailable."
+            : (v.detail ?? text.invalid),
+        );
+        return;
+      }
+      const x = v as Tokens;
+      localStorage.setItem("creatorpay_access_token", x.accessToken);
+      localStorage.setItem("creatorpay_refresh_token", x.refreshToken);
+      if(x.user.role!=="PlatformAdmin"&&x.user.phoneNumber)localStorage.setItem("weymela_trusted_phone",x.user.phoneNumber);
+      const continuation=takeCreatorQrPath()
+      location.assign(continuation??workspaceRoute(x.user.role));
+    } catch (error) {
+      console.error(error);
+      setMessage("Sign in is temporarily unavailable.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function unlockPin(e:FormEvent){e.preventDefault();setBusy(true);setMessage("");try{const x=await pinUnlock(trustedPhone,pinValue);localStorage.setItem("creatorpay_access_token",x.accessToken);localStorage.setItem("creatorpay_refresh_token",x.refreshToken);location.assign(workspaceRoute(x.user.role))}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}
+  if(mode==="pin") return <main className="auth pin-auth"><section className="panel pin-panel"><p className="pin-brand">WEYMELA</p>{forgotPin?<ForgotPin phoneNumber={trustedPhone} onBack={()=>setForgotPin(false)}/>:<form onSubmit={unlockPin}><h1>Enter your 5-digit PIN</h1><label className="pin-entry"><span className="sr-only">5-digit PIN</span><input inputMode="numeric" autoComplete="current-password" pattern="[0-9]{5}" maxLength={5} required autoFocus value={pinValue} onChange={e=>setPinValue(e.target.value.replace(/\D/g,"").slice(0,5))}/><span className="pin-cells" aria-hidden="true">{Array.from({length:5},(_,i)=><i key={i}>{pinValue[i]?"•":""}</i>)}</span></label><button disabled={busy}>Sign In</button><button type="button" className="quiet" onClick={()=>setForgotPin(true)}>Forgot PIN</button><button type="button" className="quiet" onClick={()=>changeMode("signup")}>Sign Up to Weymela</button>{message&&<p role="alert">{message}</p>}</form>}</section></main>;
+  const field = (
+    state: Record<string, unknown>,
+    set: (x: any) => void,
+    key: string,
+    label: string,
+    type = "text",
+  ) => (
+    <label>
+      {label}
+      <input
+        type={type}
+        required={key !== "email" || mode === "login"}
+        autoComplete={
+          mode === "login" && key === "email"
+            ? "tel"
+            : key === "email"
+              ? "email"
+              : key === "phoneNumber"
+              ? "tel"
+              : key === "firstName" || key === "lastName" || key === "displayName" || key === "primaryContactName"
+                ? "name"
+                : key === "newPassword" || key === "confirmation"
+                  ? "new-password"
+                  : key === "password"
+                    ? mode === "login" ? "current-password" : "new-password"
+                    : undefined
+        }
+        value={String(state[key] ?? "")}
+        onChange={(e) =>
+          set({
+            ...state,
+            [key]: type === "number" ? Number(e.target.value) : e.target.value,
+          })
+        }
+      />
+    </label>
+  );
+  const passwords = (
+    state: { password: string; confirmation: string },
+    set: (x: any) => void,
+  ) => (
+    <>
+      <label>
+        {text.password}
+        <input
+          type="password"
+          required
+          minLength={8}
+          value={state.password}
+          onChange={(e) => set({ ...state, password: e.target.value })}
+        />
+      </label>
+      <label>
+        {text.confirm}
+        <input
+          type="password"
+          required
+          minLength={8}
+          value={state.confirmation}
+          onChange={(e) => set({ ...state, confirmation: e.target.value })}
+        />
+      </label>
+      <small className="full">
+        At least 8 characters with uppercase, lowercase, a number, and a special
+        character.
+      </small>
+    </>
+  );
+  const birthFields=(state:any,set:(x:any)=>void)=><fieldset className="birth-date"><legend>Birth Date</legend>{[["birthDay","Day",31],["birthMonth","Month",12],["birthYear","Year",new Date().getUTCFullYear()]].map(([key,label,max])=><label key={String(key)}>{label}<input type="number" inputMode="numeric" min={key==="birthYear"?1900:1} max={max} required value={state[key as string]} onChange={e=>set({...state,[key as string]:e.target.value})}/></label>)}</fieldset>;
+  return (
+    <main className="auth">
+      <section className="auth-card" aria-busy={busy}>
+        <p className="eyebrow">{brand.logoText}</p>
+        <h1>{mode==="signup"?"Sign Up to Weymela":mode==="login"?"Sign In":"Create your account"}</h1>
+        {mode==="login"&&<p className="auth-intro">Welcome back. Keep shopping, promoting, and earning with Weymela.</p>}
+        {mode==="signup"&&<p className="auth-intro">Welcome to Weymela — where shoppers save, creators earn, and businesses grow.</p>}
+        {mode === "signup" ? <><div className="signup-choices"><button onClick={()=>changeMode("customer")}>{text.customer}</button><button onClick={()=>changeMode("creator")}>{text.creator}</button><button onClick={()=>changeMode("merchant")}>{text.business}</button></div><button type="button" className="quiet auth-back" onClick={()=>changeMode("login")}>Back to Sign In</button></> : mode === "login" ? (
+          forgot ? (
+            <form
+              className="form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if(resetStage==="request"){
+                  const birthDate=dob(reset);if(!birthDate){setMessage("Enter a valid birth date using Day, Month, and Year.");return}
+                  const result=await post("/api/v1/auth/password-reset-requests",{phoneNumber:reset.phoneNumber,birthDate});
+                  if(result){setResetReference(result.reference??"");setResetStage("waiting");setMessage("Your password reset request is waiting for support approval.")}
+                  return;
+                }
+                if(resetStage==="waiting"){
+                  setBusy(true);const r=await fetch(`${base}/api/v1/auth/password-reset-requests/${encodeURIComponent(resetReference)}`);const v=await r.json().catch(()=>({}));setBusy(false);if(v.status==="Approved"){setResetStage("approved");setMessage("Your request was approved. Create a new password.")}else setMessage(v.message??"Your password reset request is waiting for support approval.");return
+                }
+                if(!validPassword({password:reset.newPassword,confirmation:reset.confirmation}))return;
+                if(await post("/api/v1/auth/reset-password",{resetToken:resetReference,newPassword:reset.newPassword,confirmation:reset.confirmation})){setMessage("Password reset. You can sign in now.");setResetStage("request")}
+              }}
+            >
+              <h2>Forgot Password</h2>
+              <p className="full">Request help resetting your password.</p>
+              {resetStage==="request"&&<>{field(reset, setReset, "phoneNumber", "Phone Number", "tel")}{birthFields(reset,setReset)}</>}
+              {resetStage==="approved" && (
+                <>
+                  {field(
+                    reset,
+                    setReset,
+                    "newPassword",
+                    "New Password",
+                    "password",
+                  )}
+                  {field(
+                    reset,
+                    setReset,
+                    "confirmation",
+                    "Confirm Password",
+                    "password",
+                  )}
+                </>
+              )}
+              <button disabled={busy}>
+                {resetStage==="request"?"Request Password Reset":resetStage==="waiting"?"Check Approval Status":"Reset Password"}
+              </button>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setForgot(false);
+                  setResetStage("request");setResetReference("");
+                  setReset({ phoneNumber: "", birthDay:"",birthMonth:"",birthYear:"", newPassword: "", confirmation: "" });
+                  setMessage("");
+                }}
+              >
+                Back to Sign In
+              </button>
+              <p className="full support-copy">Need help? Contact <a href="mailto:admin@weymela.com">Weymela Support</a> at admin@weymela.com</p>
+            </form>
+          ) : (
+            <form className="form" onSubmit={signIn}>
+              {field(login, setLogin, "email", "Phone Number")}
+              {field(login, setLogin, "password", text.password, "password")}
+              <button disabled={busy}>{text.signIn}</button>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setForgot(true);
+                  setResetStage("request");setResetReference("");
+                  setReset({ phoneNumber: "", birthDay:"",birthMonth:"",birthYear:"", newPassword: "", confirmation: "" });
+                  setMessage("");
+                }}
+              >
+                Forgot Password
+              </button>
+              <button type="button" className="quiet" onClick={()=>changeMode("signup")}>Sign Up to Weymela</button>
+            </form>
+          )
+        ) : mode === "customer" ? (
+          <form
+            className="form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (shopperSubmitting.current) return;
+              const data = new FormData(e.currentTarget),
+                credentials = {
+                  ...shopper,
+                  password: String(data.get("shopperPassword") ?? ""),
+                  confirmation: String(data.get("shopperConfirmation") ?? ""),
+                },
+                p = phone(shopper.phoneNumber);
+              if (!p || !validPassword(credentials)) return;
+              const birthDate=dob(credentials);if(!birthDate){setMessage("Enter a valid birth date using Day, Month, and Year.");return}
+              shopperSubmitting.current = true;
+              try {
+                const result = await post("/api/v1/customers/register", {
+                    ...credentials,
+                    phoneNumber: p,
+                    birthDate,
+                  });
+                if (result) {
+                  setMessage(result.message ?? "Shopper account created. Sign in with your phone and password.");
+                }
+              } finally {
+                shopperSubmitting.current = false;
+              }
+            }}
+          >
+            {field(shopper, setShopper, "displayName", "Display Name")}
+            {field(shopper, setShopper, "phoneNumber", text.phone, "tel")}
+            {field(shopper, setShopper, "email", text.email, "email")}
+            {birthFields(shopper,setShopper)}
+            <label>
+              {text.password}
+              <input
+                id="shopper-password"
+                name="shopperPassword"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={shopper.password}
+                onChange={(e) =>
+                  setShopper({ ...shopper, password: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              {text.confirm}
+              <input
+                id="shopper-confirm-password"
+                name="shopperConfirmation"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={shopper.confirmation}
+                onChange={(e) =>
+                  setShopper({ ...shopper, confirmation: e.target.value })
+                }
+              />
+            </label>
+            <small className="full">
+              At least 8 characters with uppercase, lowercase, a number, and a
+              special character.
+            </small>
+            <button disabled={busy}>Create shopper account</button>
+          </form>
+        ) : mode === "creator" ? (
+          <form
+            className="form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const p = phone(creator.phoneNumber);
+              if (!p || !validPassword(creator)) return;
+              const birthDate=dob(creator);if(!birthDate){setMessage("Enter a valid birth date using Day, Month, and Year.");return}
+              const {
+                confirmation,
+                platform,
+                profileUrl,
+                followerCount,
+                ...request
+              } = creator;
+              const result = await post("/api/v1/creators/register", {
+                  ...request,
+                  phoneNumber: p,
+                  confirmation,
+                  birthDate,
+                  biography: "Pilot creator",
+                  contentCategories: "General",
+                  socialProfiles: profileUrl
+                    ? [
+                        {
+                          platform,
+                          handle: creator.displayName,
+                          profileUrl,
+                          followerCount,
+                          isPrimary: true,
+                        },
+                      ]
+                    : [],
+                });
+              if (result) {
+                setMessage(result.message ?? "Content Creator registration received. Your account is pending Platform review.");
+              }
+            }}
+          >
+            {field(creator, setCreator, "firstName", "Legal First Name")}
+            {field(creator, setCreator, "lastName", "Father's Name")}
+            {field(creator, setCreator, "displayName", "Public Display Name")}
+            {field(creator, setCreator, "phoneNumber", text.phone, "tel")}
+            {field(creator, setCreator, "email", text.email, "email")}
+            {birthFields(creator,setCreator)}
+            {field(creator, setCreator, "city", "Primary City")}
+            {field(creator, setCreator, "platform", "Primary Social Platform")}
+            {field(
+              creator,
+              setCreator,
+              "profileUrl",
+              "Social Profile URL",
+              "url",
+            )}
+            {field(
+              creator,
+              setCreator,
+              "followerCount",
+              "Estimated Follower Count",
+              "number",
+            )}
+            {passwords(creator, setCreator)}
+            <label className="check full">
+              <input
+                type="checkbox"
+                required
+                checked={creator.termsAccepted}
+                onChange={(e) =>
+                  setCreator({ ...creator, termsAccepted: e.target.checked })
+                }
+              />
+              I accept the pilot terms and privacy notice
+            </label>
+            <button disabled={busy}>Create content creator account</button>
+          </form>
+        ) : (
+          <form
+            className="form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const p = phone(business.phoneNumber);
+              if (!p || !validPassword(business)) return;
+              const { confirmation, ...request } = business;
+              const birthDate=dob(business);if(!birthDate){setMessage("Enter a valid birth date using Day, Month, and Year.");return}
+              const result = await post("/api/v1/merchants/register", {
+                  ...request,
+                  phoneNumber: p,
+                  documents: [],
+                  confirmation,
+                  birthDate,
+                });
+              if (result) {
+                setMessage(result.message ?? "Business Owner registration received. Your account is pending Platform review.");
+              }
+            }}
+          >
+            {field(
+              business,
+              setBusiness,
+              "legalBusinessName",
+              "Legal Business Name",
+            )}
+            {field(business, setBusiness, "tradingName", "Trading Name")}
+            <label>
+              Business Type
+              <select
+                required
+                value={business.businessType}
+                onChange={(e) =>
+                  setBusiness({ ...business, businessType: e.target.value })
+                }
+              >
+                <option value="" disabled>
+                  Select a business type
+                </option>
+                {businessTypes.map((x) => (
+                  <option value={x.value} key={x.value}>
+                    {x.en}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {field(
+              business,
+              setBusiness,
+              "primaryContactName",
+              "Primary Contact Name",
+            )}
+            {field(business, setBusiness, "phoneNumber", text.phone, "tel")}
+            {field(business, setBusiness, "email", text.email, "email")}
+            {birthFields(business,setBusiness)}
+            {field(
+              business,
+              setBusiness,
+              "businessAddress",
+              "Business Address",
+            )}
+            {field(business, setBusiness, "city", "Primary City")}
+            {passwords(business, setBusiness)}
+            <label className="check full">
+              <input
+                type="checkbox"
+                required
+                checked={business.termsAccepted}
+                onChange={(e) =>
+                  setBusiness({ ...business, termsAccepted: e.target.checked })
+                }
+              />
+              I accept the pilot terms and privacy notice
+            </label>
+            <button disabled={busy}>Create business owner account</button>
+          </form>
+        )}
+        {message && <aside role="status">{message}</aside>}
+      </section>
+    </main>
+  );
 }

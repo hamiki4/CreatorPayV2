@@ -2,16 +2,16 @@ import {useEffect,useState} from 'react'
 
 const apiBase=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'')
 const token=()=>localStorage.getItem('creatorpay_access_token')??''
-const invalidResponse='The notification service returned an invalid response. Please try again.'
+const invalidResponse='This section is temporarily unavailable.'
 
 async function notificationApi<T>(path:string,init?:RequestInit):Promise<T>{
   const response=await fetch(`${apiBase}${path}`,{...init,headers:{'Content-Type':'application/json',Authorization:`Bearer ${token()}`,...init?.headers}})
-  if(response.status===204){if(!response.ok)throw new Error(`Notification request failed (${response.status}).`);return undefined as T}
+  if(response.status===204){if(!response.ok)throw new Error('This section is temporarily unavailable.');return undefined as T}
   const contentType=response.headers.get('content-type')?.toLowerCase()??''
-  if(!contentType.includes('json'))throw new Error(invalidResponse)
+  if(!contentType.includes('json')){console.error(`Invalid notification response (${response.status}, ${contentType})`);throw new Error(invalidResponse)}
   let body:unknown
   try{body=await response.json()}catch{throw new Error(invalidResponse)}
-  if(!response.ok){const detail=typeof body==='object'&&body!==null&&'detail'in body&&typeof body.detail==='string'?body.detail:null;throw new Error(detail??`Notification request failed (${response.status}).`)}
+  if(!response.ok){const detail=typeof body==='object'&&body!==null&&'detail'in body&&typeof body.detail==='string'?body.detail:null;console.error('Notification request failed',response.status,detail);throw new Error(response.status>=500?invalidResponse:detail??'We could not complete that request.')}
   return body as T
 }
 
@@ -22,7 +22,7 @@ export function NotificationCenter(){
   const load=()=>{setError('');notificationApi<{items:Notice[]}>('/api/v1/notifications?page=1&pageSize=50').then(x=>setItems(x.items)).catch(e=>setError(e.message));notificationApi<{count:number}>('/api/v1/notifications/unread-count').then(x=>setCount(x.count)).catch(e=>setError(e.message))}
   useEffect(load,[])
   async function action(path:string){try{await notificationApi(path,{method:'POST'});load()}catch(e){setError((e as Error).message)}}
-  return <section><div className="title"><h2>Notifications <span className="badge">{count} unread</span></h2><button className="quiet" onClick={()=>void action('/api/v1/notifications/read-all')}>Mark all read</button></div>{error&&<p className="error" role="alert">{error}</p>}{!items?<p>Loading…</p>:items.length===0?<p className="empty">No notifications yet.</p>:<div className="cards">{items.map(x=><article key={x.notificationId} className={x.readAtUtc?'':'unread'}><strong>{x.title}</strong><p>{x.body}</p><small>{new Date(x.createdAtUtc).toLocaleString()}</small>{!x.readAtUtc&&<button onClick={()=>void action(`/api/v1/notifications/${x.notificationId}/read`)}>Mark read</button>}</article>)}</div>}</section>
+  return <section className="creator-section notifications"><div className="title"><h2>Notifications <span className="badge">{count}{' '}unread</span></h2>{count>0&&<button className="quiet" onClick={()=>void action('/api/v1/notifications/read-all')}>Mark all read</button>}</div>{error&&<p className="friendly-error" role="alert">{error}</p>}{!items?<p>Loading…</p>:items.length===0?<p className="compact-empty">No notifications yet.</p>:<div className="cards">{items.map(x=><article key={x.notificationId} className={x.readAtUtc?'':'unread'}><strong>{x.title}</strong><p>{x.body}</p><small>{new Date(x.createdAtUtc).toLocaleString()}</small>{!x.readAtUtc&&<button onClick={()=>void action(`/api/v1/notifications/${x.notificationId}/read`)}>Mark read</button>}</article>)}</div>}</section>
 }
 
 type Outbox={id:string;status:string;attemptCount:number;availableAtUtc:string;lastError?:string}

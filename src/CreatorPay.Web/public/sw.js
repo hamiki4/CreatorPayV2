@@ -1,5 +1,5 @@
-const CACHE='creatorpay-shell-v18'
-const SHELL=['/','/offline.html','/manifest.webmanifest','/icon.svg']
+const CACHE='creatorpay-shell-v19'
+const SHELL=['/','/offline.html','/manifest.webmanifest','/favicon.ico','/icons/weymela-192x192.png','/icons/weymela-512x512.png']
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()))

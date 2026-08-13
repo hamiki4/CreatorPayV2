@@ -25,6 +25,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<LoginAudit> LoginAudits => Set<LoginAudit>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<PinResetAuthorization> PinResetAuthorizations => Set<PinResetAuthorization>();
+    public DbSet<PhoneOtpChallenge> PhoneOtpChallenges => Set<PhoneOtpChallenge>();
     public DbSet<CreatorVerificationToken> CreatorVerificationTokens => Set<CreatorVerificationToken>();
     public DbSet<CreatorAuditEvent> CreatorAuditEvents => Set<CreatorAuditEvent>();
     public DbSet<MerchantDocument> MerchantDocuments => Set<MerchantDocument>();
@@ -40,6 +42,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<CampaignCommissionAssignment> CampaignCommissionAssignments => Set<CampaignCommissionAssignment>();
     public DbSet<CommissionCalculationSnapshot> CommissionCalculationSnapshots => Set<CommissionCalculationSnapshot>();
     public DbSet<CommissionAuditEvent> CommissionAuditEvents => Set<CommissionAuditEvent>();
+    public DbSet<PlatformFinancialSetting> PlatformFinancialSettings => Set<PlatformFinancialSetting>();
+    public DbSet<PayoutScheduleVersion> PayoutScheduleVersions => Set<PayoutScheduleVersion>();
     public DbSet<MerchantWallet> MerchantWallets => Set<MerchantWallet>();
     public DbSet<MerchantWalletEntry> MerchantWalletEntries => Set<MerchantWalletEntry>();
     public DbSet<MerchantDeposit> MerchantDeposits => Set<MerchantDeposit>();

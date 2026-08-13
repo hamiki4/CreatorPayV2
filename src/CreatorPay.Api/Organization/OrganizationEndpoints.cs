@@ -17,8 +17,10 @@ public static class OrganizationEndpoints
         merchant.MapPatch("/locations/{locationId:guid}/status", async (Guid locationId, StatusRequest r, ICurrentUserService u, IOrganizationService s, CancellationToken ct) => ToHttp(await s.SetLocationStatusAsync(Merchant(u), Actor(u), locationId, r.IsActive, ct)));
         MapStaff(merchant, "supervisors", UserRole.Supervisor);
         MapStaff(merchant, "cashiers", UserRole.Cashier);
+        merchant.MapPost("/cashiers", async (CreateCashierRequest r, ICurrentUserService u, IOrganizationService s, CancellationToken ct) => ToHttp(await s.CreateCashierAsync(Merchant(u), Actor(u), r, ct)));
         merchant.MapPost("/staff-invitations/{invitationId:guid}/revoke", async (Guid invitationId, ICurrentUserService u, IOrganizationService s, CancellationToken ct) => ToHttp(await s.RevokeInvitationAsync(Merchant(u), Actor(u), invitationId, ct)));
         endpoints.MapPost("/api/v1/staff-invitations/accept", async (AcceptStaffInvitationRequest r, IOrganizationService s, CancellationToken ct) => ToHttp(await s.AcceptInvitationAsync(r, ct))).WithTags("Staff invitations").RequireRateLimiting("auth-sensitive");
+        endpoints.MapGet("/api/v1/staff-invitations/preview", async (string token, IOrganizationService s, CancellationToken ct) => ToHttp(await s.GetInvitationAsync(token, ct))).WithTags("Staff invitations").RequireRateLimiting("auth-sensitive");
         var supervisor = endpoints.MapGroup("/api/v1/supervisor").WithTags("Supervisor").RequireAuthorization("SupervisorOnly");
         supervisor.MapGet("/me", async (ICurrentUserService u, IOrganizationService s, CancellationToken ct) => ToHttp(await s.GetCurrentStaffAsync(Merchant(u), UserRole.Supervisor, u.SupervisorId!.Value, ct)));
         supervisor.MapGet("/locations", async (ICurrentUserService u, IOrganizationService s, CancellationToken ct) => { var result = await s.GetCurrentStaffAsync(Merchant(u), UserRole.Supervisor, u.SupervisorId!.Value, ct); return result.Succeeded ? Results.Ok(result.Value!.Locations) : ToHttp(result); });

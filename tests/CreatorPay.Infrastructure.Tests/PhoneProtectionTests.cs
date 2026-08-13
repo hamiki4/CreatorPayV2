@@ -6,8 +6,8 @@ namespace CreatorPay.Infrastructure.Tests;
 public sealed class PhoneProtectionTests
 {
     readonly EthiopianPhoneNumberNormalizer normalizer = new();
-    [Theory][InlineData("0912345678", "+251912345678")][InlineData("0712345678", "+251712345678")][InlineData("+251912345678", "+251912345678")][InlineData("+251712345678", "+251712345678")] public void Ethiopian_formats_normalize(string input, string expected) => Assert.Equal(expected, normalizer.Normalize(input));
-    [Theory][InlineData("")][InlineData("0812345678")][InlineData("251912345678")][InlineData("+2519123")][InlineData("+12025550123")][InlineData("091234567A")] public void Invalid_numbers_are_rejected(string input) => Assert.Throws<ArgumentException>(() => normalizer.Normalize(input));
+    [Theory][InlineData("0912345678", "+251912345678")][InlineData("0712345678", "+251712345678")][InlineData("+251912345678", "+251912345678")][InlineData("251912345678", "+251912345678")][InlineData("+251712345678", "+251712345678")] public void Ethiopian_formats_normalize(string input, string expected) => Assert.Equal(expected, normalizer.Normalize(input));
+    [Theory][InlineData("")][InlineData("0812345678")][InlineData("+2519123")][InlineData("+12025550123")][InlineData("091234567A")] public void Invalid_numbers_are_rejected(string input) => Assert.Throws<ArgumentException>(() => normalizer.Normalize(input));
     [Fact] public void Mask_never_contains_full_number() => Assert.Equal("+251 9** *** 678", normalizer.Mask(normalizer.Normalize("0912345678")));
     [Fact] public void Safaricom_mask_identifies_the_prefix_without_exposing_the_number() => Assert.Equal("+251 7** *** 678", normalizer.Mask(normalizer.Normalize("0712345678")));
     [Fact] public void Hmac_is_deterministic_and_secret_keyed() { var s = new PhoneHashService(Options.Create(new CustomerVerificationOptions { HmacSecret = "test-secret-that-is-at-least-32-characters" })); var a = s.Hash("+251912345678"); Assert.Equal(a, s.Hash("+251912345678")); Assert.NotEqual(a, s.Hash("+251912345679")); }

@@ -21,7 +21,17 @@ services:
       Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey:?Set JWT signing key}
       CustomerVerification__HmacSecret: ${CustomerVerification__HmacSecret:?Set HMAC secret}
       CustomerVerification__EncryptionKey: ${CustomerVerification__EncryptionKey:?Set encryption key}
+      DepositProofStorage__RootPath: /app/data/deposit-proofs
       Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:8081}
+      StaffInvitations__WebBaseUrl: ${WEB_ORIGIN:-http://localhost:8081}
+      PublicAppBaseUrl: ${PUBLIC_APP_BASE_URL:-http://localhost:8081}
+      FirebaseAuth__Enabled: ${FirebaseAuth__Enabled:-false}
+      FirebaseAuth__ProjectId: ${FirebaseAuth__ProjectId:-}
+      FirebaseAuth__ServiceAccountPath: ${FirebaseAuth__ServiceAccountPath:-}
+      FirebaseAuth__AuthorizedOrigin: ${FirebaseAuth__AuthorizedOrigin:-https://pilot.weymela.com}
+      FirebaseAuth__CallbackPath: ${FirebaseAuth__CallbackPath:-/auth/firebase-action}
+      FirebaseAuth__PinResetAuthorizationMinutes: ${FirebaseAuth__PinResetAuthorizationMinutes:-10}
+    volumes: [creatorpay-deposit-proofs:/app/data/deposit-proofs]
     ports: ["${API_PORT:-8080}:8080"]
     depends_on: { postgres: { condition: service_healthy } }
     networks: [backend, edge]
@@ -36,11 +46,19 @@ services:
     depends_on: { postgres: { condition: service_healthy } }
     networks: [backend]
   web:
-    build: { context: ., dockerfile: src/CreatorPay.Web/Dockerfile, args: { VITE_API_URL: "${VITE_API_URL:-http://localhost:8080}" } }
+    build:
+      context: .
+      dockerfile: src/CreatorPay.Web/Dockerfile
+      args:
+        VITE_API_URL: "${VITE_API_URL:-http://localhost:8080}"
+        VITE_FIREBASE_API_KEY: "${VITE_FIREBASE_API_KEY:-}"
+        VITE_FIREBASE_AUTH_DOMAIN: "${VITE_FIREBASE_AUTH_DOMAIN:-}"
+        VITE_FIREBASE_PROJECT_ID: "${VITE_FIREBASE_PROJECT_ID:-}"
+        VITE_FIREBASE_APP_ID: "${VITE_FIREBASE_APP_ID:-}"
     restart: unless-stopped
     ports: ["${WEB_PORT:-8081}:8080"]
     depends_on: { api: { condition: service_healthy } }
     networks: [edge]
     healthcheck: { test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz || exit 1"], interval: 15s, timeout: 5s, retries: 5 }
-volumes: { creatorpay-postgres-data: {} }
+volumes: { creatorpay-postgres-data: {}, creatorpay-deposit-proofs: {} }
 networks: { backend: { internal: true }, edge: {} }

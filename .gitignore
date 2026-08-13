@@ -2,6 +2,7 @@
 bin/
 obj/
 TestResults/
+test-results/
 *.user
 *.suo
 
@@ -24,5 +25,20 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.pilot.example
+backups/
+*.dump
+*.backup
+*.bak
+**/*firebase*admin*.json
+**/*service-account*.json
+**/*service_account*.json
+*.pem
+*.key
+*.pfx
+uploads/
+**/deposit-proofs/
+*.log
+*.tmp
+tmp/
 scripts/pilot/seed.sql
 scripts/pilot/results/

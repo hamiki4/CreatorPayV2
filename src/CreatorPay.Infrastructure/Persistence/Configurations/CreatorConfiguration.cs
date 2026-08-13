@@ -10,6 +10,7 @@ public sealed class CreatorConfiguration : IEntityTypeConfiguration<Creator>
     {
         builder.ToTable("creators"); builder.ConfigureEntity();
         builder.Property(x => x.PublicCreatorId).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.CreatorCode).HasMaxLength(4).IsFixedLength().IsRequired();
         builder.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
         builder.Property(x => x.LastName).HasMaxLength(100).IsRequired();
         builder.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
@@ -30,6 +31,8 @@ public sealed class CreatorConfiguration : IEntityTypeConfiguration<Creator>
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.ApprovedAtUtc).HasColumnType("timestamp with time zone");
         builder.HasIndex(x => x.PublicCreatorId).IsUnique();
+        builder.HasIndex(x => x.CreatorCode).IsUnique();
+        builder.ToTable(t => t.HasCheckConstraint("CK_creators_CreatorCode_FourDigits", "\"CreatorCode\" ~ '^[1-9][0-9]{3}$'"));
         builder.HasIndex(x => x.NormalizedPhoneNumber).IsUnique().HasFilter("\"NormalizedPhoneNumber\" <> ''");
         builder.HasIndex(x => x.Status);
         builder.HasIndex(x => x.Email);

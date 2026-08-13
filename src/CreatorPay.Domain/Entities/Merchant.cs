@@ -12,7 +12,7 @@ public sealed class Merchant : Entity
     public string PrimaryContactName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
     public string NormalizedPhoneNumber { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public string? TaxRegistrationNumber { get; set; }
     public string? BusinessRegistrationNumber { get; set; }
     public string PreferredLanguage { get; set; } = "en";

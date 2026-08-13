@@ -16,7 +16,7 @@ public sealed class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
         builder.Property(x => x.PrimaryContactName).HasMaxLength(200).IsRequired();
         builder.Property(x => x.PhoneNumber).HasMaxLength(32).IsRequired();
         builder.Property(x => x.NormalizedPhoneNumber).HasMaxLength(32).IsRequired();
-        builder.Property(x => x.Email).HasMaxLength(320).IsRequired();
+        builder.Property(x => x.Email).HasMaxLength(320);
         builder.Property(x => x.TaxRegistrationNumber).HasMaxLength(100);
         builder.Property(x => x.BusinessRegistrationNumber).HasMaxLength(100);
         builder.Property(x => x.PreferredLanguage).HasMaxLength(10).IsRequired();
@@ -35,7 +35,7 @@ public sealed class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
         builder.HasIndex(x => x.PublicMerchantId).IsUnique();
         builder.HasIndex(x => x.Status);
         builder.HasIndex(x => x.NormalizedPhoneNumber);
-        builder.HasIndex(x => x.Email).IsUnique();
+        builder.HasIndex(x => x.Email).IsUnique().HasFilter("\"Email\" IS NOT NULL AND \"Email\" <> ''");
         builder.HasIndex(x => x.TradingName);
         builder.HasOne<UserAccount>().WithMany().HasForeignKey(x => x.ApprovedByUserId).OnDelete(DeleteBehavior.NoAction);
     }

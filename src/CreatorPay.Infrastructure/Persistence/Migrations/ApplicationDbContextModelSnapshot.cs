@@ -872,6 +872,12 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("CreatorCode")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("character(4)")
+                        .IsFixedLength();
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -962,6 +968,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ApprovedByUserId");
 
+                    b.HasIndex("CreatorCode")
+                        .IsUnique();
+
                     b.HasIndex("Email");
 
                     b.HasIndex("NormalizedPhoneNumber")
@@ -973,7 +982,10 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("creators", (string)null);
+                    b.ToTable("creators", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_creators_CreatorCode_FourDigits", "\"CreatorCode\" ~ '^[1-9][0-9]{3}$'");
+                        });
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.CreatorAuditEvent", b =>
@@ -2854,7 +2866,6 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(200)");
 
                     b.Property<string>("Email")
-                        .IsRequired()
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
@@ -2946,7 +2957,8 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("ApprovedByUserId");
 
                     b.HasIndex("Email")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Email\" IS NOT NULL AND \"Email\" <> ''");
 
                     b.HasIndex("NormalizedPhoneNumber");
 
@@ -4912,6 +4924,178 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.ToTable("PayoutItems");
                 });
 
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PayoutScheduleVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChangedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("CreatorCutoffDay")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeSpan>("CreatorCutoffTime")
+                        .HasColumnType("interval");
+
+                    b.Property<int>("CreatorPayoutDay")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTime>("EffectiveFromUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ShopperCutoffDay")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeSpan>("ShopperCutoffTime")
+                        .HasColumnType("interval");
+
+                    b.Property<int>("ShopperPayoutDay")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrencyCode", "EffectiveFromUtc")
+                        .IsUnique();
+
+                    b.HasIndex("CurrencyCode", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("payout_schedule_versions", (string)null);
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PhoneOtpChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("LastSentAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("RequestedByIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId", "Purpose", "CreatedAtUtc");
+
+                    b.ToTable("phone_otp_challenges", (string)null);
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PinResetAuthorization", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FirebaseUid")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("RequestedByIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UsedByIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserAccountId", "ExpiresAtUtc");
+
+                    b.ToTable("pin_reset_authorizations", (string)null);
+                });
+
             modelBuilder.Entity("CreatorPay.Domain.Entities.PlatformCommissionAssignment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4957,6 +5141,68 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("CurrencyCode", "EffectiveFromUtc", "EffectiveToUtc");
 
                     b.ToTable("PlatformCommissionAssignments");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PlatformFinancialSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ChangedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("CreatorCutoffDay")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeSpan>("CreatorCutoffTime")
+                        .HasColumnType("interval");
+
+                    b.Property<int>("CreatorPayoutDay")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<decimal>("MinimumBusinessWalletBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("PayoutScheduleEffectiveFromUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ShopperCutoffDay")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeSpan>("ShopperCutoffTime")
+                        .HasColumnType("interval");
+
+                    b.Property<int>("ShopperPayoutDay")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrencyCode")
+                        .IsUnique();
+
+                    b.ToTable("platform_financial_settings", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PlatformRevenueEntry", b =>
@@ -6075,6 +6321,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("date");
+
                     b.Property<Guid?>("CashierId")
                         .HasColumnType("uuid");
 
@@ -6099,10 +6348,17 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<int>("FailedLoginCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("FirebaseUid")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<bool>("IsEmailVerified")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsPhoneVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRecoveryEmailVerified")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("LastFailedLoginAtUtc")
@@ -6122,10 +6378,48 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
+                    b.Property<string>("NormalizedPhoneNumber")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("NormalizedRecoveryEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime?>("PinChangedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PinEnrolledAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PinFailedAttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PinHash")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("PinLockedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PinRetryNotBeforeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PinVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RecoveryEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -6161,12 +6455,25 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"CustomerId\" IS NOT NULL");
 
+                    b.HasIndex("FirebaseUid")
+                        .IsUnique()
+                        .HasFilter("\"FirebaseUid\" IS NOT NULL");
+
                     b.HasIndex("MerchantId")
                         .IsUnique()
                         .HasFilter("\"MerchantId\" IS NOT NULL AND \"Role\" = 'MerchantAdmin'");
 
                     b.HasIndex("NormalizedEmail")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"NormalizedEmail\" <> ''");
+
+                    b.HasIndex("NormalizedPhoneNumber")
+                        .IsUnique()
+                        .HasFilter("\"NormalizedPhoneNumber\" IS NOT NULL");
+
+                    b.HasIndex("NormalizedRecoveryEmail")
+                        .IsUnique()
+                        .HasFilter("\"NormalizedRecoveryEmail\" IS NOT NULL");
 
                     b.HasIndex("SupervisorId")
                         .IsUnique()
@@ -6778,6 +7085,24 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Navigation("Earning");
 
                     b.Navigation("Payout");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PhoneOtpChallenge", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PinResetAuthorization", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.PlatformCommissionAssignment", b =>

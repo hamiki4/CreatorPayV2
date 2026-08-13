@@ -39,6 +39,12 @@ public static class ProductionConfiguration
             if (phone.HmacSecret.Length < 32) errors.Add("CustomerVerification:HmacSecret (minimum 32 characters)");
             if (phone.EncryptionKey.Length < 32) errors.Add("CustomerVerification:EncryptionKey (minimum 32 characters)");
             if (Placeholder(phone.HmacSecret) || Placeholder(phone.EncryptionKey)) errors.Add("CustomerVerification secrets must not be placeholders");
+            var sms = configuration.GetSection(SmsOtpOptions.SectionName).Get<SmsOtpOptions>() ?? new();
+            if (sms.HashSecret.Length < 32 || Placeholder(sms.HashSecret)) errors.Add("SmsOtp:HashSecret must be a non-placeholder secret of at least 32 characters");
+            if (sms.OtpExpiryMinutes is < 1 or > 15 || sms.ResendCooldownSeconds < 30 || sms.MaxAttempts is < 1 or > 10) errors.Add("SmsOtp security limits are invalid");
+            if (environment.IsProduction() && sms.SmsProvider == "PilotTest") errors.Add("SmsOtp:PilotTest is forbidden in Production");
+            if (sms.PilotRegistrationAutoVerifyEnabled && !environment.IsEnvironment("Pilot") && !environment.IsEnvironment("E2E") && !environment.IsEnvironment("Test")) errors.Add("SmsOtp:PilotRegistrationAutoVerifyEnabled is forbidden outside Pilot/Test environments");
+            if (sms.PilotRegistrationAutoVerifyEnabled && sms.SmsProvider != "PilotTest") errors.Add("SmsOtp:PilotRegistrationAutoVerifyEnabled requires PilotTest");
             var flags = configuration.GetSection(FeatureFlagOptions.SectionName).Get<FeatureFlagOptions>() ?? new();
             if (flags.DevelopmentOtpReveal || flags.DevelopmentInvitationTokenReveal) errors.Add("development reveal feature flags must be false");
             var cors = configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
@@ -56,6 +62,9 @@ public static class ProductionConfiguration
             var proxy = configuration.GetSection(ReverseProxyOptions.SectionName).Get<ReverseProxyOptions>() ?? new();
             if (proxy.KnownProxies.Any(value => !System.Net.IPAddress.TryParse(value, out _)))
                 errors.Add("ReverseProxy:KnownProxies (IP addresses only)");
+            var publicAppBaseUrl=configuration["PublicAppBaseUrl"];
+            if(!Uri.TryCreate(publicAppBaseUrl,UriKind.Absolute,out var publicAppUri)||(!environment.IsEnvironment("E2E")&&publicAppUri.Scheme!=Uri.UriSchemeHttps)||(environment.IsEnvironment("E2E")&&publicAppUri.Scheme is not ("http" or "https"))||publicAppUri.UserInfo.Length>0||publicAppUri.Query.Length>0||publicAppUri.Fragment.Length>0)
+                errors.Add("PublicAppBaseUrl must be an HTTPS URL without credentials, query, or fragment");
         }
         if (environment.IsEnvironment("Pilot"))
         {
@@ -77,6 +86,8 @@ public static class ProductionConfiguration
             if (string.IsNullOrWhiteSpace(storage.Provider)) errors.Add("Storage:Provider");
             var pilotCors = configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
             if (pilotCors.AllowedOrigins.Any(origin => !Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)) errors.Add("Cors:AllowedOrigins (Pilot origins must use HTTPS)");
+            var sms = configuration.GetSection(SmsOtpOptions.SectionName).Get<SmsOtpOptions>() ?? new();
+            if (sms.SmsProvider != "PilotTest" || sms.TestCode.Length != 6 || !sms.TestCode.All(char.IsAsciiDigit)) errors.Add("Pilot SmsOtp requires PilotTest with a six-digit environment-provided TestCode");
         }
         if (errors.Count > 0) throw new InvalidOperationException($"Invalid production configuration: {string.Join(", ", errors)}.");
     }

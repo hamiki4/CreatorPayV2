@@ -22,6 +22,12 @@ public static class EthiopianMobileNumber
             return true;
         }
 
+        if (compact.Length == 12 && compact.StartsWith("251", StringComparison.Ordinal) && compact[3] is '7' or '9' && compact[3..].All(IsAsciiDigit))
+        {
+            normalized = "+" + compact;
+            return true;
+        }
+
         return false;
     }
 

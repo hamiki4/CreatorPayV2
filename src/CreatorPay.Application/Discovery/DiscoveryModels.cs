@@ -11,6 +11,11 @@ public sealed record PublicOfferDto(string OfferCode, string Title, string Busin
 public sealed record PublicCreatorCardDto(string PublicCreatorId, string DisplayName, string? ProfileImageUrl, int ActiveOfferCount);
 public sealed record PublicCreatorProfileDto(string PublicCreatorId, string DisplayName, string? ProfileImageUrl, IReadOnlyList<PublicSocialLinkDto> SocialLinks, IReadOnlyList<PublicOfferDto> ActiveOffers);
 public sealed record PublicCreatorSearchDto(IReadOnlyList<PublicCreatorCardDto> Items, int Page, int PageSize, int TotalCount);
+public sealed record ShopperBusinessDto(Guid BusinessId, string PublicBusinessId, string BusinessName, string? Category, string City, bool RewardsAvailable);
+public sealed record ShopperAdvertisingCreatorDto(Guid CreatorId, string PublicCreatorId, string DisplayName, string? SocialPlatform, long? FollowerCount, int DaysLeft, Guid CampaignId);
+public sealed record ShopperBusinessDetailDto(Guid BusinessId, string PublicBusinessId, string BusinessName, string? Category, string City, bool RewardsAvailable, IReadOnlyList<ShopperAdvertisingCreatorDto> Creators);
+public sealed record ShopperAdvertisingRowDto(Guid RelationshipId, Guid BusinessId, string PublicBusinessId, string BusinessName, string City, Guid CreatorId, string PublicCreatorId, string CreatorCode, string CreatorName, string Status, int DaysLeft, bool RewardsAvailable);
+public sealed record ShopperCreatorQrDto(Guid RelationshipId, string BusinessName, string CreatorName, string Payload);
 
 public interface IDiscoveryService
 {
@@ -26,4 +31,8 @@ public interface IDiscoveryService
     Task<PublicCreatorProfileDto> GetCreatorAsync(string publicCreatorId, CancellationToken ct);
     Task<PublicOfferDto> GetOfferAsync(string offerCode, CancellationToken ct);
     Task<PublicOfferDto> ResolveOfferQrAsync(string publicQrId, CancellationToken ct);
+    Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, CancellationToken ct);
+    Task<ShopperBusinessDetailDto> GetShopperBusinessAsync(Guid merchantId, CancellationToken ct);
+    Task<IReadOnlyList<ShopperAdvertisingRowDto>> SearchShopperAdvertisingAsync(string? query, CancellationToken ct);
+    Task<ShopperCreatorQrDto> GetShopperCreatorQrAsync(Guid relationshipId, CancellationToken ct);
 }

@@ -87,7 +87,13 @@ public sealed class CampaignService(ApplicationDbContext db, IUtcClock clock, IO
         foreach (var x in rows) { if (x.ExpireIfDue(now)) { Audit("CampaignExpired", null, x.MerchantId, x.Id, now); count++; } else if (x.ActivateIfDue(now)) { Audit("CampaignActivated", null, x.MerchantId, x.Id, now); count++; } }
         await db.SaveChangesAsync(ct); return count;
     }
-    private async Task<bool> IsFundingEligible(Guid merchantId, CancellationToken ct) => await db.Merchants.AnyAsync(x => x.Id == merchantId && x.Status == MerchantStatus.Active, ct) && (await db.MerchantWallets.AnyAsync(x => x.MerchantId == merchantId && x.CurrencyCode == options.CurrencyCode && x.AvailableBalance >= options.MinimumActivationBalance, ct) || !await db.MerchantTrialCredits.AnyAsync(x => x.MerchantId == merchantId && x.Status != TrialCreditStatus.Active, ct)) && await db.MerchantLocations.AnyAsync(x => x.MerchantId == merchantId && x.IsActive, ct);
+    private async Task<bool> IsFundingEligible(Guid merchantId, CancellationToken ct)
+    {
+        var minimum = await db.PlatformFinancialSettings.Where(x => x.CurrencyCode == options.CurrencyCode).Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? options.MinimumActivationBalance;
+        return await db.Merchants.AnyAsync(x => x.Id == merchantId && x.Status == MerchantStatus.Active, ct)
+            && await db.MerchantWallets.AnyAsync(x => x.MerchantId == merchantId && x.CurrencyCode == options.CurrencyCode && x.AvailableBalance >= minimum, ct)
+            && await db.MerchantLocations.AnyAsync(x => x.MerchantId == merchantId && x.IsActive, ct);
+    }
     private Task<bool> HasOpenCampaign(Guid partnershipId, Guid? excluding, CancellationToken ct) => db.CreatorMerchantCampaigns.AnyAsync(x => x.MerchantCreatorPartnershipId == partnershipId && x.Id != excluding && (x.Status == CampaignStatus.ApprovedAwaitingStart || x.Status == CampaignStatus.Scheduled || x.Status == CampaignStatus.Active), ct);
     private async Task<CreatorMerchantCampaign> FindMerchant(Guid id, Guid merchantId, CancellationToken ct, bool qr = false) { IQueryable<CreatorMerchantCampaign> q = db.CreatorMerchantCampaigns; if (qr) q = q.Include(x => x.QrCode); return await q.SingleOrDefaultAsync(x => x.Id == id && x.MerchantId == merchantId, ct) ?? throw new KeyNotFoundException("Campaign not found."); }
     private void Audit(string type, Guid? actor, Guid merchant, Guid subject, DateTime now) => db.OperationalAuditEvents.Add(new() { Id = Guid.NewGuid(), EventType = type, ActorUserId = actor, MerchantId = merchant, SubjectId = subject, CorrelationId = Guid.NewGuid().ToString("N"), CreatedAtUtc = now });

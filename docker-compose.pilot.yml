@@ -2,9 +2,14 @@ services:
   postgres:
     ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
   api:
-    ports: ["127.0.0.1:${API_PORT:-8080}:8080"]
+    ports: !override
+     - "127.0.0.1:${API_PORT:-8080}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Pilot
+      PublicAppBaseUrl: ${PUBLIC_APP_BASE_URL:-https://pilot.weymela.com}
+      SmsOtp__HashSecret: ${SmsOtp__HashSecret:?Set a distinct OTP hash secret of at least 32 characters}
+      SmsOtp__TestCode: ${SmsOtp__TestCode:?Set the controlled six-digit pilot OTP}
+      SmsOtp__PilotRegistrationAutoVerifyEnabled: ${SmsOtp__PilotRegistrationAutoVerifyEnabled:-false}
       Support__Email: ${Support__Email:?Set pilot support email}
       Storage__Provider: ${Storage__Provider:-MetadataOnly}
       Storage__ConnectionString: ${Storage__ConnectionString:-}
@@ -17,6 +22,14 @@ services:
       FeatureFlags__SupportNotifications: ${FeatureFlags__SupportNotifications:-false}
       FeatureFlags__ProductionMonitoring: ${FeatureFlags__ProductionMonitoring:-false}
       FeatureFlags__MaintenanceMode: ${FeatureFlags__MaintenanceMode:-false}
+      FirebaseAuth__Enabled: "true"
+      FirebaseAuth__ProjectId: weymela-pilot
+      FirebaseAuth__ServiceAccountPath: /run/secrets/weymela-firebase-admin.json
+      FirebaseAuth__AuthorizedOrigin: https://pilot.weymela.com
+      FirebaseAuth__CallbackPath: /auth/firebase-action
+      FirebaseAuth__PinResetAuthorizationMinutes: "10"
+    volumes:
+      - ${FIREBASE_ADMIN_HOST_PATH:-/etc/creatorpay/secrets/weymela-firebase-admin.json}:/run/secrets/weymela-firebase-admin.json:ro
   worker:
     environment:
       DOTNET_ENVIRONMENT: Pilot
@@ -26,4 +39,5 @@ services:
       timeout: 5s
       retries: 5
   web:
-    ports: ["127.0.0.1:${WEB_PORT:-8081}:8080"]
+    ports: !override
+     - "127.0.0.1:${WEB_PORT:-8081}:8080"

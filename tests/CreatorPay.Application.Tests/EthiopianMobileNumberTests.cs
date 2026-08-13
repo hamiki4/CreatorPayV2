@@ -9,6 +9,7 @@ public sealed class EthiopianMobileNumberTests
     [InlineData("0712345678", "+251712345678")]
     [InlineData("+251911234567", "+251911234567")]
     [InlineData("+251711234567", "+251711234567")]
+    [InlineData("251911234567", "+251911234567")]
     [InlineData("091-123-4567", "+251911234567")]
     [InlineData("+251 911 234 567", "+251911234567")]
     public void Supported_formats_normalize_to_E164(string input, string expected)
@@ -20,7 +21,6 @@ public sealed class EthiopianMobileNumberTests
     [InlineData("0812345678")]
     [InlineData("0512345678")]
     [InlineData("1234567890")]
-    [InlineData("251911234567")]
     [InlineData("+251811234567")]
     [InlineData("+25191123456")]
     [InlineData("+2519112345678")]

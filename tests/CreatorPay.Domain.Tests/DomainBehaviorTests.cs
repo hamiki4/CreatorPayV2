@@ -75,8 +75,9 @@ public sealed class DomainBehaviorTests
         var partnership = PendingPartnership();
         partnership.Approve(Now, Guid.NewGuid(), Now.AddDays(1), Now.AddDays(10));
         Assert.Equal(PartnershipStatus.Approved, partnership.Status);
-        Assert.Equal(Now.AddDays(1), partnership.StartDateUtc);
-        Assert.Equal(Now.AddDays(10), partnership.EndDateUtc);
+        Assert.Equal(Now, partnership.ApprovedAtUtc);
+        Assert.Equal(Now, partnership.StartDateUtc);
+        Assert.Equal(Now.AddDays(MerchantCreatorPartnership.ActivePeriodDays), partnership.EndDateUtc);
     }
 
     [Fact]
@@ -107,10 +108,11 @@ public sealed class DomainBehaviorTests
     }
 
     [Fact]
-    public void Partnership_IsNotEligibleBeforeStartDate()
+    public void Partnership_PendingRequest_HasNoActivePeriod()
     {
         var partnership = PendingPartnership();
-        partnership.Approve(Now, Guid.NewGuid(), Now.AddDays(1), null);
+        Assert.Null(partnership.StartDateUtc);
+        Assert.Null(partnership.EndDateUtc);
         Assert.False(partnership.IsTransactionEligibleAt(Now));
     }
 
@@ -118,16 +120,26 @@ public sealed class DomainBehaviorTests
     public void Partnership_IsEligibleDuringActivePeriod()
     {
         var partnership = PendingPartnership();
-        partnership.Approve(Now, Guid.NewGuid(), Now, Now.AddDays(2));
-        Assert.True(partnership.IsTransactionEligibleAt(Now.AddDays(1)));
+        partnership.Approve(Now, Guid.NewGuid());
+        Assert.True(partnership.IsTransactionEligibleAt(Now));
+        Assert.True(partnership.IsTransactionEligibleAt(Now.AddDays(29)));
     }
 
     [Fact]
     public void Partnership_IsNotEligibleAtOrAfterEndDate()
     {
         var partnership = PendingPartnership();
-        partnership.Approve(Now, Guid.NewGuid(), null, Now.AddDays(1));
-        Assert.False(partnership.IsTransactionEligibleAt(Now.AddDays(1)));
+        partnership.Approve(Now, Guid.NewGuid());
+        Assert.False(partnership.IsTransactionEligibleAt(Now.AddDays(MerchantCreatorPartnership.ActivePeriodDays)));
+        Assert.False(partnership.IsTransactionEligibleAt(Now.AddDays(MerchantCreatorPartnership.ActivePeriodDays).AddTicks(1)));
+    }
+
+    [Fact]
+    public void Partnership_ActivePeriod_CannotBeManuallyExtended()
+    {
+        var partnership = ApprovedPartnership();
+        Assert.Throws<InvalidOperationException>(() =>
+            partnership.SetDates(Now, Now.AddDays(60), Now.AddDays(1), Guid.NewGuid()));
     }
 
     [Theory]

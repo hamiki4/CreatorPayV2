@@ -4,11 +4,25 @@ using CreatorPay.Application.Qr;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
+using CreatorPay.Infrastructure.Eligibility;
 using Microsoft.EntityFrameworkCore;
 using QRCoder;
 using Microsoft.Extensions.Configuration;
 
 namespace CreatorPay.Infrastructure.Qr;
+
+public sealed class CreatorQrUrlBuilder
+{
+    private readonly string publicAppBaseUrl;
+    public CreatorQrUrlBuilder(IConfiguration configuration)
+    {
+        var configured=configuration["PublicAppBaseUrl"]?.Trim();
+        if(!Uri.TryCreate(configured,UriKind.Absolute,out var uri)||uri.Scheme is not ("https" or "http")||uri.UserInfo.Length>0||uri.Query.Length>0||uri.Fragment.Length>0)
+            throw new InvalidOperationException("PublicAppBaseUrl must be an absolute HTTP(S) URL without credentials, query, or fragment.");
+        publicAppBaseUrl=configured!.TrimEnd('/');
+    }
+    public string Create(string publicQrId,int version,string token)=>$"{publicAppBaseUrl}/c/{Uri.EscapeDataString(publicQrId)}?t={Uri.EscapeDataString(token)}&v={version}";
+}
 
 public sealed class QrTokenService(IConfiguration configuration) : IQrTokenService
 {
@@ -31,7 +45,7 @@ public sealed class QrImageGenerator : IQrImageGenerator
     }
 }
 
-public sealed class CreatorQrService(ApplicationDbContext db, IQrTokenService tokens) : ICreatorQrService
+public sealed class CreatorQrService(ApplicationDbContext db, IQrTokenService tokens,CreatorQrUrlBuilder urls) : ICreatorQrService
 {
     public async Task<CreatorQrDto?> GetCurrentAsync(Guid creatorId, Guid actor, CancellationToken ct)
     {
@@ -81,15 +95,19 @@ public sealed class CreatorQrService(ApplicationDbContext db, IQrTokenService to
         if (qr.Version != 1) return await Fail("InvalidQr", "This QR version is not supported.", merchantId, actor, locationId, now, ct);
         if (!qr.IsActive || qr.RevokedAtUtc.HasValue) return await Fail("RevokedQr", "This QR code is no longer active.", merchantId, actor, locationId, now, ct);
         if (qr.Creator.Status != CreatorStatus.Active) return await Fail("InactiveCreator", "This creator is not currently active.", merchantId, actor, locationId, now, ct);
+        if (!await db.UserAccounts.AnyAsync(x => x.CreatorId == qr.CreatorId && x.Role == UserRole.Creator && x.Status == AccountStatus.Active, ct)) return await Fail("InactiveCreator", "Creator account is not active.", merchantId, actor, locationId, now, ct);
         var merchant = await db.Merchants.AsNoTracking().SingleAsync(x => x.Id == merchantId, ct);
-        if (merchant.Status != MerchantStatus.Active) return await Fail("InactiveMerchant", "This merchant is not currently active.", merchantId, actor, locationId, now, ct);
+        if (merchant.Status != MerchantStatus.Active || !await db.UserAccounts.AnyAsync(x => x.MerchantId == merchantId && x.Role == UserRole.MerchantAdmin && x.Status == AccountStatus.Active, ct)) return await Fail("InactiveMerchant", "Business account is not active.", merchantId, actor, locationId, now, ct);
         var p = await db.MerchantCreatorPartnerships.Include(x => x.Locations).SingleOrDefaultAsync(x => x.MerchantId == merchantId && x.CreatorId == qr.CreatorId, ct);
-        if (p is null) return await Fail("NoApprovedPartnership", "No approved partnership exists.", merchantId, actor, locationId, now, ct);
+        if (p is null) return await Fail("NoApprovedPartnership", "Advertising relationship is no longer active.", merchantId, actor, locationId, now, ct);
         if (p.Status == PartnershipStatus.Suspended) return await Fail("PartnershipSuspended", "The partnership is suspended.", merchantId, actor, locationId, now, ct);
         if (p.Status == PartnershipStatus.Blocked) return await Fail("PartnershipBlocked", "The partnership is blocked.", merchantId, actor, locationId, now, ct);
         if (p.Status != PartnershipStatus.Approved) return await Fail("NoApprovedPartnership", "No approved partnership exists.", merchantId, actor, locationId, now, ct);
-        if (p.StartDateUtc > now) return await Fail("PartnershipNotStarted", "The partnership has not started.", merchantId, actor, locationId, now, ct);
-        if (p.EndDateUtc <= now) return await Fail("PartnershipExpired", "The partnership has expired.", merchantId, actor, locationId, now, ct);
+        if (!p.StartDateUtc.HasValue || !p.EndDateUtc.HasValue)
+            return await Fail("PartnershipExpired", "The advertising relationship is not active.", merchantId, actor, locationId, now, ct);
+        if (p.StartDateUtc.Value > now) return await Fail("PartnershipNotStarted", "The advertising relationship has not started.", merchantId, actor, locationId, now, ct);
+        if (p.EndDateUtc.Value <= now) return await Fail("PartnershipExpired", "The advertising relationship has expired.", merchantId, actor, locationId, now, ct);
+        if (!await RewardEligibilityQueries.HasRequiredFundingAsync(db, merchantId, "ETB", 0m, ct)) return await Fail("BusinessFundingRequired", "Business account requires funding.", merchantId, actor, locationId, now, ct);
         if (p.Locations.Any(x => x.IsActive) && !p.Locations.Any(x => x.IsActive && x.MerchantLocationId == locationId)) return await Fail("LocationNotAllowed", "The partnership is not approved at this location.", merchantId, actor, locationId, now, ct);
         AddMerchantAudit(merchantId, actor, "CreatorQrValidationSucceeded", $"CreatorPublicId={qr.Creator.PublicCreatorId};LocationId={locationId}"); await db.SaveChangesAsync(ct);
         return new(true, "Valid", "Creator QR is valid for this merchant and location.", qr.Creator.PublicCreatorId, qr.Creator.DisplayName, p.Id, merchantId, locationId, now);
@@ -110,7 +128,7 @@ public sealed class CreatorQrService(ApplicationDbContext db, IQrTokenService to
         var now = DateTime.UtcNow; var publicId = Convert.ToHexString(RandomNumberGenerator.GetBytes(12)).ToLowerInvariant(); var raw = tokens.CreateToken(publicId, 1); var qr = new CreatorQrCode { Id = Guid.NewGuid(), CreatorId = creatorId, PublicQrId = publicId, TokenHash = tokens.Hash(raw), Version = 1, IssuedAtUtc = now, CreatedAtUtc = now, CreatedBy = actor.ToString() };
         db.CreatorQrCodes.Add(qr); AddCreatorAudit(creatorId, actor, eventType, $"PublicQrId={qr.PublicQrId}"); await db.SaveChangesAsync(ct); return ToDto(qr, raw);
     }
-    private CreatorQrDto ToDto(CreatorQrCode q, string? raw) { raw ??= tokens.CreateToken(q.PublicQrId, q.Version); return new(q.Id, q.PublicQrId, $"https://creatorpay.example/c/{q.PublicQrId}?t={raw}&v={q.Version}", q.Version, q.IssuedAtUtc, q.RevokedAtUtc, q.RevocationReason, q.IsActive); }
+    private CreatorQrDto ToDto(CreatorQrCode q, string? raw) { raw ??= tokens.CreateToken(q.PublicQrId, q.Version); return new(q.Id, q.PublicQrId, urls.Create(q.PublicQrId,q.Version,raw), q.Version, q.IssuedAtUtc, q.RevokedAtUtc, q.RevocationReason, q.IsActive); }
     private static bool TryParse(string value, out string? id, out string? token) { id = token = null; if (!Uri.TryCreate(value, UriKind.Absolute, out var u)) return false; var parts = u.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries); if (parts.Length != 2 || parts[0] != "c") return false; id = parts[1]; token = System.Web.HttpUtility.ParseQueryString(u.Query)["t"]; return !string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(token); }
     private async Task<MerchantQrValidationResult> Fail(string code, string message, Guid merchant, Guid actor, Guid location, DateTime now, CancellationToken ct) { var eventType = code switch { "TamperedQr" => "CreatorQrTampered", "UnauthorizedMerchantAccess" => "CreatorQrCrossMerchantAttempt", "LocationNotAllowed" or "InactiveLocation" => "CreatorQrInvalidLocationAttempt", _ => "CreatorQrValidationFailed" }; AddMerchantAudit(merchant, actor, eventType, $"Code={code};LocationId={location}"); await db.SaveChangesAsync(ct); return new(false, code, message, null, null, null, merchant, location, now); }
     private void AddCreatorAudit(Guid creator, Guid actor, string type, string? detail) => db.CreatorAuditEvents.Add(new() { Id = Guid.NewGuid(), CreatorId = creator, ActorUserAccountId = actor, EventType = type, Detail = detail, CreatedAtUtc = DateTime.UtcNow, CreatedBy = actor.ToString() });

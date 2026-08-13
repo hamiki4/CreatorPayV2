@@ -18,6 +18,15 @@ public sealed class ApplicationDbContextModelTests
     }
 
     [Fact]
+    public void Payout_schedules_are_effective_dated_and_versioned()
+    {
+        var schedule = _model.FindEntityType(typeof(PayoutScheduleVersion));
+        Assert.NotNull(schedule);
+        Assert.Contains(schedule!.GetIndexes(), x => x.IsUnique && x.Properties.Select(p => p.Name).SequenceEqual(["CurrencyCode", "VersionNumber"]));
+        Assert.Contains(schedule.GetIndexes(), x => x.IsUnique && x.Properties.Select(p => p.Name).SequenceEqual(["CurrencyCode", "EffectiveFromUtc"]));
+    }
+
+    [Fact]
     public void Operational_alerts_have_history_and_active_cooldown_deduplication()
     {
         var alert = _model.FindEntityType(typeof(OperationalAlert))!;
@@ -76,6 +85,7 @@ public sealed class ApplicationDbContextModelTests
     [Theory]
     [InlineData(typeof(UserAccount), "NormalizedEmail")]
     [InlineData(typeof(Creator), "PublicCreatorId")]
+    [InlineData(typeof(Creator), "CreatorCode")]
     [InlineData(typeof(Creator), "NormalizedPhoneNumber")]
     [InlineData(typeof(Merchant), "PublicMerchantId")]
     public void Model_HasRequiredUniqueSingleColumnIndexes(Type entityType, string property)

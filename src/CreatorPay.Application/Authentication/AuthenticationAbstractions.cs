@@ -7,6 +7,7 @@ public enum PasswordVerification { Failed, Success, SuccessRehashNeeded }
 public interface ITokenService { (string Token, DateTime ExpiresAtUtc) CreateAccessToken(UserAccount user); string CreateOpaqueToken(); string HashToken(string token); }
 public interface IUtcClock { DateTime UtcNow { get; } }
 public interface IPasswordResetNotifier { Task NotifyAsync(UserAccount user, string rawToken, CancellationToken cancellationToken); }
+public interface IFirebaseIdentityVerifier { Task<Result<FirebaseIdentityProof>> VerifyIdTokenAsync(string idToken, bool checkRevoked, CancellationToken ct); }
 public interface ICurrentUserService { bool IsAuthenticated { get; } Guid? UserAccountId { get; } string? Role { get; } Guid? MerchantId { get; } Guid? CreatorId { get; } Guid? CustomerId { get; } Guid? SupervisorId { get; } Guid? CashierId { get; } }
 public interface IAuthenticationService
 {
@@ -18,12 +19,20 @@ public interface IAuthenticationService
     Task<OperationResult> ChangePasswordAsync(Guid userId, ChangePasswordRequest request, RequestContext context, CancellationToken ct);
     Task ForgotPasswordAsync(string email, RequestContext context, CancellationToken ct);
     Task<OperationResult> ResetPasswordAsync(ResetPasswordRequest request, RequestContext context, CancellationToken ct);
+    Task<Result<PinStatus>> GetPinStatusAsync(Guid userId, CancellationToken ct);
+    Task<OperationResult> LinkFirebaseAsync(Guid userId, LinkFirebaseRequest request, RequestContext context, CancellationToken ct);
+    Task<OperationResult> EnrollPinAsync(Guid userId, PinRequest request, RequestContext context, CancellationToken ct);
+    Task<Result<TokenPair>> UnlockWithPinAsync(PinUnlockRequest request, RequestContext context, CancellationToken ct);
+    Task<Result<PinRecoveryAuthorization>> AuthorizePinRecoveryAsync(PinRecoveryProofRequest request, RequestContext context, CancellationToken ct);
+    Task<OperationResult> ResetPinAsync(PinResetRequest request, RequestContext context, CancellationToken ct);
 }
 public interface IAuthenticationStore
 {
-    Task<UserAccount?> FindUserByEmailAsync(string normalizedEmail, CancellationToken ct); Task<UserAccount?> FindUserAsync(Guid id, CancellationToken ct);
+    Task<UserAccount?> FindUserByEmailAsync(string normalizedEmail, CancellationToken ct); Task<UserAccount?> FindUserByPhoneAsync(string normalizedPhone, CancellationToken ct); Task<UserAccount?> FindUserAsync(Guid id, CancellationToken ct);
+    Task<UserAccount?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct); Task<UserAccount?> FindUserByRecoveryEmailAsync(string normalizedEmail, CancellationToken ct);
     Task<RefreshToken?> FindRefreshAsync(string hash, CancellationToken ct); Task<PasswordResetToken?> FindResetAsync(string hash, CancellationToken ct);
-    void AddRefresh(RefreshToken token); void AddReset(PasswordResetToken token); void AddAudit(LoginAudit audit);
+    Task<PinResetAuthorization?> FindPinResetAsync(string hash, CancellationToken ct);
+    void AddRefresh(RefreshToken token); void AddReset(PasswordResetToken token); void AddPinReset(PinResetAuthorization token); void AddAudit(LoginAudit audit);
     Task RevokeFamilyAsync(string family, DateTime now, string reason, string? ip, CancellationToken ct); Task RevokeAllAsync(Guid userId, DateTime now, string reason, string? ip, CancellationToken ct);
     Task<int> SaveAsync(CancellationToken ct); Task<T> InTransactionAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken ct);
 }

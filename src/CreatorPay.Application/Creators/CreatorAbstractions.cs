@@ -7,6 +7,7 @@ public interface ICreatorStore
 {
     Task<bool> EmailExistsAsync(string normalizedEmail, Guid? excludingUserId, CancellationToken ct);
     Task<bool> PhoneExistsAsync(string normalizedPhone, Guid? excludingCreatorId, CancellationToken ct);
+    Task<string> AllocateCreatorCodeAsync(CancellationToken ct);
     Task<UserAccount?> FindUserAsync(Guid id, CancellationToken ct);
     Task<UserAccount?> FindUserByCreatorAsync(Guid creatorId, CancellationToken ct);
     Task<Creator?> FindCreatorAsync(Guid id, CancellationToken ct);

@@ -8,32 +8,36 @@ using Microsoft.Extensions.Options;
 namespace CreatorPay.Application.Creators;
 
 public sealed class CreatorService(ICreatorStore store, IPasswordHasher passwords, ITokenService tokens, IUtcClock clock,
-    ICreatorVerificationProvider provider, PasswordPolicyValidator passwordPolicy, IOptions<CreatorVerificationOptions> options) : ICreatorService
+    ICreatorVerificationProvider provider, PasswordPolicyValidator passwordPolicy, IOptions<CreatorVerificationOptions> options, IPhoneOtpService phoneOtp) : ICreatorService
 {
     public Task<CreatorResult<CreatorRegistrationResponse>> RegisterAsync(RegisterCreatorRequest request, CancellationToken ct)
     {
+        _ = phoneOtp; // retained for constructor compatibility while OTP registration is disabled
+        _ = provider; // legacy verification endpoints remain compatible but are not part of onboarding
         var error = ValidateIdentity(request.FirstName, request.LastName, request.DisplayName, request.Email, request.PhoneNumber);
         if (error is not null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(error));
         error = ValidatePilotProfile(request.TermsAccepted, request.City, request.Biography, request.ContentCategories, request.SocialProfiles);
         if (error is not null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(error));
         var passwordErrors = passwordPolicy.Validate(request.Password);
         if (passwordErrors.Count > 0) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(string.Join(" ", passwordErrors)));
+        if (request.BirthDate is null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure("Birth date is required."));
+        if (request.Confirmation is not null && request.Password != request.Confirmation) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure("Password confirmation does not match."));
         return RegisterValidatedAsync(request, ct);
     }
 
     private Task<CreatorResult<CreatorRegistrationResponse>> RegisterValidatedAsync(RegisterCreatorRequest request, CancellationToken ct) => store.InTransactionAsync(async innerCt =>
     {
-        var normalizedEmail = NormalizeEmail(request.Email); var normalizedPhone = NormalizePhone(request.PhoneNumber);
-        if (await store.EmailExistsAsync(normalizedEmail, null, innerCt)) return CreatorResult<CreatorRegistrationResponse>.Failure("Email is already registered.");
+        var registrationEmail = request.Email?.Trim() ?? string.Empty;
+        var normalizedEmail = NormalizeEmail(registrationEmail); var normalizedPhone = NormalizePhone(request.PhoneNumber);
+        if (normalizedEmail.Length > 0 && await store.EmailExistsAsync(normalizedEmail, null, innerCt)) return CreatorResult<CreatorRegistrationResponse>.Failure("Email is already registered.");
         if (await store.PhoneExistsAsync(normalizedPhone, null, innerCt)) return CreatorResult<CreatorRegistrationResponse>.Failure("Phone number is already registered.");
-        var now = clock.UtcNow; var creatorId = Guid.NewGuid(); var userId = Guid.NewGuid();
-        var creator = new Creator { Id = creatorId, PublicCreatorId = $"CR-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), DisplayName = request.DisplayName.Trim(), PhoneNumber = FormatPhone(normalizedPhone), NormalizedPhoneNumber = normalizedPhone, Email = request.Email.Trim(), PreferredLanguage = request.PreferredLanguage.Trim(), City = request.City.Trim(), Zone = request.Zone?.Trim(), Biography = request.Biography.Trim(), ContentCategories = request.ContentCategories.Trim(), GovernmentIdReference = request.GovernmentIdReference?.Trim(), TaxIdentificationNumber = request.TaxIdentificationNumber?.Trim(), PreferredPayoutChannel = request.PreferredPayoutChannel?.Trim(), PreferredPayoutAccountIdentifier = request.PreferredPayoutAccountIdentifier?.Trim(), TermsAcceptedAtUtc = now, Status = CreatorStatus.PendingVerification, CreatedAtUtc = now, CreatedBy = userId.ToString() };
-        var user = new UserAccount { Id = userId, Email = request.Email.Trim(), NormalizedEmail = normalizedEmail, Role = UserRole.Creator, Status = AccountStatus.PendingVerification, CreatorId = creatorId, CreatedAtUtc = now, CreatedBy = userId.ToString() };
+        var now = clock.UtcNow; var creatorId = Guid.NewGuid(); var userId = Guid.NewGuid(); var creatorCode = await store.AllocateCreatorCodeAsync(innerCt);
+        var creator = new Creator { Id = creatorId, PublicCreatorId = $"CR-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), CreatorCode = creatorCode, FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), DisplayName = request.DisplayName.Trim(), PhoneNumber = FormatPhone(normalizedPhone), NormalizedPhoneNumber = normalizedPhone, Email = registrationEmail, PreferredLanguage = request.PreferredLanguage.Trim(), City = request.City.Trim(), Zone = request.Zone?.Trim(), Biography = request.Biography.Trim(), ContentCategories = request.ContentCategories.Trim(), GovernmentIdReference = request.GovernmentIdReference?.Trim(), TaxIdentificationNumber = request.TaxIdentificationNumber?.Trim(), PreferredPayoutChannel = request.PreferredPayoutChannel?.Trim(), PreferredPayoutAccountIdentifier = request.PreferredPayoutAccountIdentifier?.Trim(), TermsAcceptedAtUtc = now, Status = CreatorStatus.PendingApproval, CreatedAtUtc = now, CreatedBy = userId.ToString() };
+        var user = new UserAccount { Id = userId, Email = registrationEmail, NormalizedEmail = normalizedEmail, PhoneNumber = normalizedPhone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Creator, Status = AccountStatus.PendingApproval, CreatorId = creatorId, BirthDate = request.BirthDate, IsEmailVerified = false, IsPhoneVerified = false, CreatedAtUtc = now, CreatedBy = userId.ToString() };
         user.PasswordHash = passwords.Hash(user, request.Password); store.Add(creator); store.Add(user); AddSocialProfiles(creatorId, request.SocialProfiles!, now, userId);
-        var emailToken = Issue(userId, "Email", now); var phoneToken = Issue(userId, "Phone", now); store.Add(emailToken.Item); store.Add(phoneToken.Item);
-        Audit(creatorId, userId, "Registration", null, now); await store.SaveAsync(innerCt);
-        await provider.SendEmailVerificationAsync(user, emailToken.Raw, innerCt); await provider.SendPhoneVerificationAsync(creator, phoneToken.Raw, innerCt);
-        return CreatorResult<CreatorRegistrationResponse>.Success(new(creatorId, creator.PublicCreatorId, "Registration received. Complete email and phone verification before platform review."));
+        Audit(creatorId, userId, "Registration", null, now);
+        await store.SaveAsync(innerCt);
+        return CreatorResult<CreatorRegistrationResponse>.Success(new(creatorId, creator.PublicCreatorId, "Content Creator registration received. Your account is pending Platform review.", false));
     }, ct);
 
     public Task<CreatorResult> VerifyEmailAsync(string token, CancellationToken ct) => VerifyAsync(token, "Email", ct);
@@ -78,11 +82,8 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         pair.Value.Creator.FirstName = request.FirstName.Trim(); pair.Value.Creator.LastName = request.LastName.Trim(); pair.Value.Creator.DisplayName = request.DisplayName.Trim(); pair.Value.Creator.Email = request.Email.Trim(); pair.Value.Creator.PhoneNumber = FormatPhone(normalizedPhone); pair.Value.Creator.NormalizedPhoneNumber = normalizedPhone;
         pair.Value.Creator.PreferredLanguage = request.PreferredLanguage.Trim(); pair.Value.Creator.City = request.City.Trim(); pair.Value.Creator.Zone = request.Zone?.Trim(); pair.Value.Creator.Biography = request.Biography.Trim(); pair.Value.Creator.ContentCategories = request.ContentCategories.Trim(); pair.Value.Creator.PreferredPayoutChannel = request.PreferredPayoutChannel?.Trim(); pair.Value.Creator.PreferredPayoutAccountIdentifier = request.PreferredPayoutAccountIdentifier?.Trim();
         store.RemoveSocialProfiles(pair.Value.Creator.SocialProfiles.ToArray()); AddSocialProfiles(pair.Value.Creator.Id, request.SocialProfiles!, now, userId);
-        pair.Value.User.Email = request.Email.Trim(); pair.Value.User.NormalizedEmail = normalizedEmail; pair.Value.Creator.UpdatedAtUtc = now; pair.Value.Creator.UpdatedBy = userId.ToString(); pair.Value.User.UpdatedAtUtc = now; pair.Value.User.UpdatedBy = userId.ToString();
+        pair.Value.User.Email = request.Email.Trim(); pair.Value.User.NormalizedEmail = normalizedEmail; pair.Value.User.PhoneNumber = normalizedPhone; pair.Value.User.NormalizedPhoneNumber = normalizedPhone; pair.Value.Creator.UpdatedAtUtc = now; pair.Value.Creator.UpdatedBy = userId.ToString(); pair.Value.User.UpdatedAtUtc = now; pair.Value.User.UpdatedBy = userId.ToString();
         if (request.ProfileImage is { } metadata) { pair.Value.Creator.ProfileImageFileName = metadata.FileName.Trim(); pair.Value.Creator.ProfileImageContentType = metadata.ContentType; pair.Value.Creator.ProfileImageSizeBytes = metadata.SizeBytes; }
-        if (emailChanged) { pair.Value.User.IsEmailVerified = false; await store.InvalidateTokensAsync(userId, "Email", now, innerCt); var issued = Issue(userId, "Email", now); store.Add(issued.Item); await provider.SendEmailVerificationAsync(pair.Value.User, issued.Raw, innerCt); }
-        if (phoneChanged) { pair.Value.User.IsPhoneVerified = false; await store.InvalidateTokensAsync(userId, "Phone", now, innerCt); var issued = Issue(userId, "Phone", now); store.Add(issued.Item); await provider.SendPhoneVerificationAsync(pair.Value.Creator, issued.Raw, innerCt); }
-        if (emailChanged || phoneChanged) { pair.Value.User.Status = AccountStatus.PendingVerification; pair.Value.Creator.Status = CreatorStatus.PendingVerification; }
         Audit(pair.Value.Creator.Id, userId, "ProfileUpdate", $"EmailChanged={emailChanged};PhoneChanged={phoneChanged}", now); await store.SaveAsync(innerCt);
         return CreatorResult<CreatorProfileResponse>.Success(ToProfile(pair.Value.User, pair.Value.Creator));
     }, ct);
@@ -101,19 +102,19 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         var creator = await store.FindCreatorAsync(id, innerCt); if (creator is null) return CreatorResult.Failure("Creator not found.");
         if (creator.Status != required) return CreatorResult.Failure($"Creator must be {required} for this action.");
         var user = await FindCreatorUser(creator, innerCt); if (user is null) return CreatorResult.Failure("Creator account not found.");
-        if (eventType == "Approval" && (!user.IsEmailVerified || !user.IsPhoneVerified)) return CreatorResult.Failure("Email and phone must be verified before approval.");
+        // Contact details are not authentication factors; Platform review controls approval.
         var now = clock.UtcNow; transition(creator, now, admin); user.Status = accountStatus; user.UpdatedAtUtc = now; user.UpdatedBy = admin.ToString(); Audit(id, admin, eventType, reason?.Trim(), now); await store.SaveAsync(innerCt); return CreatorResult.Success();
     }, ct);
 
     private Task<UserAccount?> FindCreatorUser(Creator creator, CancellationToken ct) => store.FindUserByCreatorAsync(creator.Id, ct);
     private (CreatorVerificationToken Item, string Raw) Issue(Guid userId, string purpose, DateTime now) { var raw = tokens.CreateOpaqueToken(); return (new CreatorVerificationToken { Id = Guid.NewGuid(), UserAccountId = userId, Purpose = purpose, TokenHash = tokens.HashToken(raw), ExpiresAtUtc = now.AddMinutes(options.Value.TokenLifetimeMinutes), CreatedAtUtc = now }, raw); }
     private void Audit(Guid creatorId, Guid? actor, string type, string? detail, DateTime now) => store.Add(new CreatorAuditEvent { Id = Guid.NewGuid(), CreatorId = creatorId, ActorUserAccountId = actor, EventType = type, Detail = detail, CreatedAtUtc = now, CreatedBy = actor?.ToString() });
-    private static string? ValidateIdentity(string first, string last, string display, string email, string phone) { if (string.IsNullOrWhiteSpace(first) || first.Trim().Length > 100) return "First name is required and must not exceed 100 characters."; if (string.IsNullOrWhiteSpace(last) || last.Trim().Length > 100) return "Last name is required and must not exceed 100 characters."; if (string.IsNullOrWhiteSpace(display) || display.Trim().Length is < 2 or > 200) return "Display name must be between 2 and 200 characters."; if (string.IsNullOrWhiteSpace(email) || !new EmailAddressAttribute().IsValid(email.Trim()) || email.Trim().Length > 320) return "Email is invalid."; if (!EthiopianMobileNumber.TryNormalize(phone, out _)) return EthiopianMobileNumber.ValidationMessage; return null; }
-    internal static string NormalizeEmail(string value) => value.Trim().ToUpperInvariant();
+    private static string? ValidateIdentity(string first, string last, string display, string? email, string phone) { if (string.IsNullOrWhiteSpace(first) || first.Trim().Length > 100) return "First name is required and must not exceed 100 characters."; if (string.IsNullOrWhiteSpace(last) || last.Trim().Length > 100) return "Last name is required and must not exceed 100 characters."; if (string.IsNullOrWhiteSpace(display) || display.Trim().Length is < 2 or > 200) return "Display name must be between 2 and 200 characters."; if (!string.IsNullOrWhiteSpace(email) && (!new EmailAddressAttribute().IsValid(email.Trim()) || email.Trim().Length > 320)) return "Email is invalid."; if (!EthiopianMobileNumber.TryNormalize(phone, out _)) return EthiopianMobileNumber.ValidationMessage; return null; }
+    internal static string NormalizeEmail(string? value) => value?.Trim().ToUpperInvariant() ?? string.Empty;
     internal static string NormalizePhone(string value) => EthiopianMobileNumber.Normalize(value);
     private static string FormatPhone(string normalized) => normalized;
-    private static CreatorProfileResponse ToProfile(UserAccount user, Creator c) => new(c.Id, c.PublicCreatorId, c.FirstName, c.LastName, c.DisplayName, c.PhoneNumber, user.Email, user.IsEmailVerified, user.IsPhoneVerified, user.Status, c.Status, c.ProfileImageFileName is null ? null : new(c.ProfileImageFileName, c.ProfileImageContentType!, c.ProfileImageSizeBytes!.Value), Next(user, c), c.PreferredLanguage, c.City, c.Zone, c.Biography, c.ContentCategories, c.SocialProfiles.Select(x => new SocialProfileResponse(x.Id, x.Platform, x.Handle, x.ProfileUrl, x.FollowerCount, x.IsPrimary, x.VerificationStatus, x.CreatedAtUtc, x.UpdatedAtUtc)).ToArray(), c.PreferredPayoutChannel, c.PreferredPayoutAccountIdentifier);
-    private static string Next(UserAccount u, Creator c) => !u.IsEmailVerified ? "Verify your email address." : !u.IsPhoneVerified ? "Verify your phone number." : c.Status == CreatorStatus.PendingApproval ? "Your profile is awaiting platform approval." : c.Status == CreatorStatus.Active ? "Your creator account is active." : c.Status == CreatorStatus.Rejected ? "Your application was rejected. Contact platform support." : c.Status == CreatorStatus.Suspended ? "Your creator account is suspended. Contact platform support." : "Complete creator onboarding.";
+    private static CreatorProfileResponse ToProfile(UserAccount user, Creator c) => new(c.Id, c.PublicCreatorId, c.CreatorCode, c.FirstName, c.LastName, c.DisplayName, c.PhoneNumber, user.Email, user.IsEmailVerified, user.IsPhoneVerified, user.Status, c.Status, c.ProfileImageFileName is null ? null : new(c.ProfileImageFileName, c.ProfileImageContentType!, c.ProfileImageSizeBytes!.Value), Next(user, c), c.PreferredLanguage, c.City, c.Zone, c.Biography, c.ContentCategories, c.SocialProfiles.Select(x => new SocialProfileResponse(x.Id, x.Platform, x.Handle, x.ProfileUrl, x.FollowerCount, x.IsPrimary, x.VerificationStatus, x.CreatedAtUtc, x.UpdatedAtUtc)).ToArray(), c.PreferredPayoutChannel, c.PreferredPayoutAccountIdentifier);
+    private static string Next(UserAccount u, Creator c) => !u.IsPhoneVerified ? "Verify your phone number." : c.Status == CreatorStatus.PendingApproval ? "Your profile is awaiting platform approval." : c.Status == CreatorStatus.Active ? "Your creator account is active." : c.Status == CreatorStatus.Rejected ? "Your application was rejected. Contact platform support." : c.Status == CreatorStatus.Suspended ? "Your creator account is suspended. Contact platform support." : "Complete creator onboarding.";
     private static string? ValidatePilotProfile(bool terms, string city, string bio, string categories, IReadOnlyList<SocialProfileRequest>? profiles)
     {
         if (!terms) return "Terms acceptance is required."; if (string.IsNullOrWhiteSpace(city) || city.Trim().Length > 120) return "Primary city is required.";

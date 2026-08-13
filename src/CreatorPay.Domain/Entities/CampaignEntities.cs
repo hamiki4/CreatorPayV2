@@ -49,6 +49,11 @@ public sealed class CreatorMerchantCampaign : Entity
     public bool ActivateIfDue(DateTime now) { if (Status != CampaignStatus.Scheduled || StartsAtUtc > now) return false; Status = CampaignStatus.Active; QrCode?.Activate(now, ExpiresAtUtc!.Value); UpdatedAtUtc = now; return true; }
     public bool ExpireIfDue(DateTime now) { if (Status is not (CampaignStatus.Active or CampaignStatus.Scheduled) || ExpiresAtUtc > now) return false; Status = CampaignStatus.Expired; QrCode?.Expire(now); UpdatedAtUtc = now; return true; }
     public void Suspend(DateTime now) { if (Status is not (CampaignStatus.Active or CampaignStatus.Scheduled or CampaignStatus.ApprovedAwaitingStart)) throw new InvalidOperationException("Campaign cannot be suspended."); Status = CampaignStatus.Suspended; SuspendedAtUtc = now; QrCode?.Revoke(now); UpdatedAtUtc = now; }
+    public void Reactivate(DateTime now)
+    {
+        if (Status != CampaignStatus.Suspended) throw new InvalidOperationException("Only a suspended campaign can be reactivated.");
+        PublishedAtUtc = now; StartsAtUtc = now; ExpiresAtUtc = now.AddDays(DurationDays); SuspendedAtUtc = null; Status = CampaignStatus.Active; UpdatedAtUtc = now;
+    }
     public void Cancel(DateTime now) { if (Status is CampaignStatus.Expired or CampaignStatus.Cancelled) throw new InvalidOperationException("Campaign cannot be cancelled."); Status = CampaignStatus.Cancelled; CancelledAtUtc = now; QrCode?.Revoke(now); UpdatedAtUtc = now; }
 }
 

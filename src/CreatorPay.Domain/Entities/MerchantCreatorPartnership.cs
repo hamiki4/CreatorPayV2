@@ -5,6 +5,7 @@ namespace CreatorPay.Domain.Entities;
 
 public sealed class MerchantCreatorPartnership : Entity
 {
+    public const int ActivePeriodDays = 30;
     public Guid MerchantId { get; set; }
     public Guid CreatorId { get; set; }
     public PartnershipStatus Status { get; private set; } = PartnershipStatus.Pending;
@@ -31,15 +32,12 @@ public sealed class MerchantCreatorPartnership : Entity
     public void Approve(DateTime approvedAtUtc, Guid approvedByUserId, DateTime? startDateUtc = null, DateTime? endDateUtc = null)
     {
         EnsureUtc(approvedAtUtc);
-        EnsureOptionalUtc(startDateUtc);
-        EnsureOptionalUtc(endDateUtc);
         if (Status != PartnershipStatus.Pending) throw new InvalidOperationException("Only a pending partnership can be approved.");
-        if (startDateUtc.HasValue && endDateUtc.HasValue && endDateUtc <= startDateUtc) throw new ArgumentException("End date must be after start date.", nameof(endDateUtc));
         Status = PartnershipStatus.Approved;
         ApprovedAtUtc = approvedAtUtc;
         ApprovedByUserId = approvedByUserId;
-        StartDateUtc = startDateUtc;
-        EndDateUtc = endDateUtc;
+        StartDateUtc = approvedAtUtc;
+        EndDateUtc = approvedAtUtc.AddDays(ActivePeriodDays);
     }
 
     public void Reject(DateTime rejectedAtUtc, Guid rejectedByUserId, string reason)
@@ -76,8 +74,17 @@ public sealed class MerchantCreatorPartnership : Entity
     public void Reactivate(DateTime changedAtUtc, Guid changedByUserId)
     {
         EnsureUtc(changedAtUtc);
-        if (Status is not (PartnershipStatus.Suspended or PartnershipStatus.Blocked)) throw new InvalidOperationException("Only a suspended or blocked partnership can be reactivated.");
+        if (Status is not (PartnershipStatus.Suspended or PartnershipStatus.Blocked or PartnershipStatus.Revoked)) throw new InvalidOperationException("Only a suspended, blocked, or deactivated partnership can be reactivated.");
         Status = PartnershipStatus.Approved; SuspendedAtUtc = null; SuspendedByUserId = null; SuspensionReason = null;
+        StartDateUtc = changedAtUtc; EndDateUtc = changedAtUtc.AddDays(ActivePeriodDays);
+        UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
+    }
+
+    public void ActivatePromotion(DateTime changedAtUtc, Guid changedByUserId)
+    {
+        EnsureUtc(changedAtUtc);
+        if (Status != PartnershipStatus.Approved) throw new InvalidOperationException("Only an approved partnership can be activated.");
+        StartDateUtc = changedAtUtc; EndDateUtc = changedAtUtc.AddDays(ActivePeriodDays);
         UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
     }
 
@@ -91,6 +98,7 @@ public sealed class MerchantCreatorPartnership : Entity
     public void SetDates(DateTime? startDateUtc, DateTime? endDateUtc, DateTime changedAtUtc, Guid changedByUserId)
     {
         EnsureOptionalUtc(startDateUtc); EnsureOptionalUtc(endDateUtc); EnsureUtc(changedAtUtc);
+        if (Status == PartnershipStatus.Approved) throw new InvalidOperationException("An active advertising period cannot be manually extended.");
         if (startDateUtc.HasValue && endDateUtc.HasValue && endDateUtc <= startDateUtc) throw new ArgumentException("End date must be after start date.");
         StartDateUtc = startDateUtc; EndDateUtc = endDateUtc; UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
     }
@@ -99,8 +107,10 @@ public sealed class MerchantCreatorPartnership : Entity
     {
         EnsureUtc(utcNow);
         return Status == PartnershipStatus.Approved
-            && (!StartDateUtc.HasValue || StartDateUtc <= utcNow)
-            && (!EndDateUtc.HasValue || EndDateUtc > utcNow);
+            && StartDateUtc.HasValue
+            && EndDateUtc.HasValue
+            && StartDateUtc.Value <= utcNow
+            && EndDateUtc.Value > utcNow;
     }
 
     private static void EnsureUtc(DateTime value)

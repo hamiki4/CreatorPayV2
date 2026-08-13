@@ -6,6 +6,7 @@ namespace CreatorPay.Domain.Entities;
 public sealed class Creator : Entity
 {
     public string PublicCreatorId { get; set; } = string.Empty;
+    public string CreatorCode { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
