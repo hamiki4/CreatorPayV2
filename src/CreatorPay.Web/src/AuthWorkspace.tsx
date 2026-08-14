@@ -342,7 +342,12 @@ export function AuthWorkspace() {
               >
                 Back to Sign In
               </button>
-              <p className="full support-copy">Need help? Contact <a href="mailto:admin@weymela.com">Weymela Support</a> at admin@weymela.com</p>
+              <p className="full support-copy">
+                Need help?{" "}
+                <a href="mailto:support@weymela.com?subject=Weymela%20Support%20Request">
+                  Contact Weymela Support
+                </a>
+              </p>
             </form>
           ) : (
             <form className="form" onSubmit={signIn}>

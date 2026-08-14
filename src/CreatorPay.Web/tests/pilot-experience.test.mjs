@@ -109,7 +109,8 @@ test('Welcome mode changes reset every controlled authentication flow',()=>{
 test('public authentication uses support-approved recovery without verification UX',()=>{
   assert.match(auth,/Welcome back\. Keep shopping, promoting, and earning with Weymela\./)
   assert.match(auth,/Welcome to Weymela — where shoppers save, creators earn, and businesses grow\./)
-  for(const value of ['Request Password Reset','Check Approval Status','admin@weymela.com','password-reset-requests'])assert.ok(auth.includes(value))
+  for(const value of ['Request Password Reset','Check Approval Status','Contact Weymela Support','mailto:support@weymela.com?subject=Weymela%20Support%20Request','password-reset-requests'])assert.ok(auth.includes(value))
+  assert.ok(!auth.includes('admin@weymela.com'))
   assert.doesNotMatch(auth,/Send verification code|Verify your phone|6-digit verification code|code sent to your phone/)
 })
 test('Creator and Business discovery show relationship status without duplicate actions',()=>{
