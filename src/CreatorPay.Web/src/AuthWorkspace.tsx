@@ -1,11 +1,11 @@
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { brand } from "./brand";
 import { workspaceRoute } from "./authSession";
 import {takeCreatorQrPath} from './creatorQrDeepLink'
 import { ForgotPin, pinUnlock } from './PinExperience'
 
 const base = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
-type Mode = "login" | "pin" | "signup" | "customer" | "creator" | "merchant";
+type Mode = "welcome" | "login" | "pin" | "signup" | "customer" | "creator" | "merchant";
 type Tokens = {
   accessToken: string;
   refreshToken: string;
@@ -101,7 +101,8 @@ const dob=(x:{birthDay:string;birthMonth:string;birthYear:string})=>{const d=Num
 
 export function AuthWorkspace() {
   const trustedPhone=localStorage.getItem("weymela_trusted_phone")??"";
-  const [mode, setMode] = useState<Mode>(trustedPhone?"pin":"login"),
+  const welcomeSeen=localStorage.getItem("weymela_welcome_seen")==="1";
+  const [mode, setMode] = useState<Mode>(trustedPhone?"pin":welcomeSeen?"login":"welcome"),
     [login, setLogin] = useState(loginBlank),
     [shopper, setShopper] = useState(shopperBlank),
     [creator, setCreator] = useState(creatorBlank),
@@ -118,6 +119,9 @@ export function AuthWorkspace() {
       confirmation: "",
     }), [pinValue,setPinValue]=useState(""), [forgotPin,setForgotPin]=useState(false);
   const shopperSubmitting = useRef(false);
+  useEffect(()=>{
+    if(mode==="welcome")localStorage.setItem("weymela_welcome_seen","1");
+  },[mode]);
   function changeMode(next: Mode) {
     if (next === mode) return;
     setLogin(loginBlank());
@@ -280,10 +284,10 @@ export function AuthWorkspace() {
     <main className="auth">
       <section className="auth-card" aria-busy={busy}>
         <p className="eyebrow">{brand.logoText}</p>
-        <h1>{mode==="signup"?"Sign Up to Weymela":mode==="login"?"Sign In":"Create your account"}</h1>
+        <h1>{mode==="welcome"?"Welcome to Weymela":mode==="signup"?"Sign Up to Weymela":mode==="login"?"Sign In":"Create your account"}</h1>
         {mode==="login"&&<p className="auth-intro">Welcome back. Keep shopping, promoting, and earning with Weymela.</p>}
         {mode==="signup"&&<p className="auth-intro">Welcome to Weymela — where shoppers save, creators earn, and businesses grow.</p>}
-        {mode === "signup" ? <><div className="signup-choices"><button onClick={()=>changeMode("customer")}>{text.customer}</button><button onClick={()=>changeMode("creator")}>{text.creator}</button><button onClick={()=>changeMode("merchant")}>{text.business}</button></div><button type="button" className="quiet auth-back" onClick={()=>changeMode("login")}>Back to Sign In</button></> : mode === "login" ? (
+        {mode === "welcome" ? <><p className="auth-intro welcome-subtitle">Shop. Promote. Earn.</p><div className="signup-choices"><button onClick={()=>changeMode("customer")}>{text.customer}</button><button onClick={()=>changeMode("creator")}>{text.creator}</button><button onClick={()=>changeMode("merchant")}>{text.business}</button></div><button type="button" className="quiet auth-back" onClick={()=>changeMode("login")}>Already have an account? Sign In</button></> : mode === "signup" ? <><div className="signup-choices"><button onClick={()=>changeMode("customer")}>{text.customer}</button><button onClick={()=>changeMode("creator")}>{text.creator}</button><button onClick={()=>changeMode("merchant")}>{text.business}</button></div><button type="button" className="quiet auth-back" onClick={()=>changeMode("login")}>Back to Sign In</button></> : mode === "login" ? (
           forgot ? (
             <form
               className="form"
@@ -390,6 +394,7 @@ export function AuthWorkspace() {
               }
             }}
           >
+            <button type="button" className="quiet auth-back registration-back" onClick={()=>changeMode("login")}>Back to Sign In</button>
             {field(shopper, setShopper, "displayName", "Display Name")}
             {field(shopper, setShopper, "phoneNumber", text.phone, "tel")}
             {field(shopper, setShopper, "email", text.email, "email")}
@@ -469,6 +474,7 @@ export function AuthWorkspace() {
               }
             }}
           >
+            <button type="button" className="quiet auth-back registration-back" onClick={()=>changeMode("login")}>Back to Sign In</button>
             {field(creator, setCreator, "firstName", "Legal First Name")}
             {field(creator, setCreator, "lastName", "Father's Name")}
             {field(creator, setCreator, "displayName", "Public Display Name")}
@@ -501,7 +507,7 @@ export function AuthWorkspace() {
                   setCreator({ ...creator, termsAccepted: e.target.checked })
                 }
               />
-              I accept the pilot terms and privacy notice
+              I accept the Terms of Service and Privacy Notice
             </label>
             <button disabled={busy}>Create content creator account</button>
           </form>
@@ -526,6 +532,7 @@ export function AuthWorkspace() {
               }
             }}
           >
+            <button type="button" className="quiet auth-back registration-back" onClick={()=>changeMode("login")}>Back to Sign In</button>
             {field(
               business,
               setBusiness,
@@ -578,7 +585,7 @@ export function AuthWorkspace() {
                   setBusiness({ ...business, termsAccepted: e.target.checked })
                 }
               />
-              I accept the pilot terms and privacy notice
+              I accept the Terms of Service and Privacy Notice
             </label>
             <button disabled={busy}>Create business owner account</button>
           </form>

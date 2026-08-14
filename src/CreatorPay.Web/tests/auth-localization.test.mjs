@@ -23,6 +23,15 @@ test('pilot authentication UI is English-only',()=>{
   assert.doesNotMatch(auth,/locale|'am'|አማርኛ|ቋንቋ/)
 })
 
+test('first-visit welcome is UX-only and registration navigation stays available',()=>{
+  assert.match(auth,/weymela_welcome_seen/)
+  assert.match(auth,/Shop\. Promote\. Earn\./)
+  assert.match(auth,/Already have an account\? Sign In/)
+  assert.equal((auth.match(/>Back to Sign In<\/button>/g)??[]).length,4)
+  assert.match(auth,/I accept the Terms of Service and Privacy Notice/)
+  assert.doesNotMatch(auth,/I accept the pilot terms and privacy notice/)
+})
+
 test('registration validates passwords and Ethiopian phones',()=>{
   for(const rule of ['v.length>=8','/[A-Z]/.test(v)','/[a-z]/.test(v)','/\\d/.test(v)','/[^A-Za-z0-9]/.test(v)'])assert.ok(authCompact.includes(rule))
   assert.match(auth,/Passwords do not match\./)

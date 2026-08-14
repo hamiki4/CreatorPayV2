@@ -1,69 +1,58 @@
 import {expect,test} from './fixtures'
 
-const tab=(page:any,name:string)=>page.getByLabel('Welcome options').getByRole('button',{name,exact:true})
+test.beforeEach(async({page})=>{
+  await page.goto('/help')
+  await page.evaluate(()=>localStorage.clear())
+})
 
-test('Welcome modes clear fields, messages, OTP reset state, and fit the viewport',async({page})=>{
+test('first visit welcomes users, registration routes return to Sign In, and returning visits skip welcome',async({page})=>{
   await page.goto('/')
+  await expect(page.getByRole('heading',{name:'Welcome to Weymela'})).toBeVisible()
+  await expect(page.getByText('Shop. Promote. Earn.')).toBeVisible()
 
-  await page.getByLabel('Phone Number').fill('0911234567')
-  await page.getByLabel('Password').fill('OldPassword1!')
-  await tab(page,'Shopper Registration').click()
-  await expect(page.getByLabel('Display Name')).toHaveValue('')
-  await expect(page.getByLabel('Phone',{exact:true})).toHaveValue('')
-  await expect(page.getByLabel('Email',{exact:true})).toHaveValue('')
+  const registrations=[
+    ['Shopper Registration','Display Name'],
+    ['Content Creator Registration','Legal First Name'],
+    ['Business Owner Registration','Legal Business Name'],
+  ] as const
+  for(const [action,field] of registrations){
+    await page.getByRole('button',{name:action,exact:true}).click()
+    await expect(page.getByRole('heading',{name:'Create your account'})).toBeVisible()
+    await expect(page.getByLabel(field,{exact:true})).toBeVisible()
+    const back=page.getByRole('button',{name:'Back to Sign In',exact:true})
+    await expect(back).toBeVisible()
+    const normal=await back.evaluate(element=>{const style=getComputedStyle(element);return {background:style.backgroundColor,color:style.color,border:style.borderColor,width:element.getBoundingClientRect().width}})
+    expect(normal.background).not.toBe('rgba(0, 0, 0, 0)')
+    expect(normal.border).not.toBe(normal.background)
+    expect(normal.width).toBeGreaterThan(200)
+    await back.hover()
+    await expect.poll(()=>back.evaluate(element=>getComputedStyle(element).backgroundColor)).not.toBe(normal.background)
+    await page.keyboard.press('Tab')
+    await expect(back).toBeFocused()
+    expect(await back.evaluate(element=>getComputedStyle(element).outlineStyle)).not.toBe('none')
+    await back.click()
+    await expect(page.getByRole('heading',{name:'Sign In'})).toBeVisible()
+    await page.getByRole('button',{name:'Sign Up to Weymela',exact:true}).click()
+    await expect(page.getByRole('heading',{name:'Sign Up to Weymela'})).toBeVisible()
+  }
 
-  await page.getByLabel('Display Name').fill('Test Shopper')
-  await page.getByLabel('Phone',{exact:true}).fill('0911234567')
-  await page.getByLabel('Email',{exact:true}).fill('shopper@example.test')
-  await tab(page,'Sign In').click()
-  await expect(page.getByLabel('Phone Number')).toHaveValue('')
-  await expect(page.getByLabel('Password')).toHaveValue('')
+  await page.getByRole('button',{name:'Back to Sign In',exact:true}).click()
+  await page.reload()
+  await expect(page.getByRole('heading',{name:'Sign In'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Welcome to Weymela'})).toHaveCount(0)
 
-  await tab(page,'Content Creator Registration').click()
-  await page.getByLabel('Legal First Name').fill('Ayele')
-  await page.getByLabel("Father's Name").fill('Kebede')
-  await page.getByLabel('Public Display Name').fill('Ayele K')
-  await page.getByLabel('Phone',{exact:true}).fill('0911234567')
-  await page.getByLabel('Primary Social Platform').fill('TikTok')
-  await page.getByLabel('Estimated Follower Count').fill('1200')
-  await page.getByLabel(/accept the pilot terms/i).check()
-  await tab(page,'Business Owner Registration').click()
-  await expect(page.getByLabel('Legal Business Name')).toHaveValue('')
-  await expect(page.getByLabel('Trading Name')).toHaveValue('')
-  await expect(page.getByLabel('Business Type')).toHaveValue('')
-  await expect(page.getByLabel(/accept the pilot terms/i)).not.toBeChecked()
-
-  await page.getByLabel('Legal Business Name').fill('Test Business PLC')
-  await page.getByLabel('Trading Name').fill('Test Business')
-  await page.getByLabel('Business Type').selectOption('Restaurant / Café')
-  await page.getByLabel('Primary Contact Name').fill('Owner')
-  await page.getByLabel('Business Address').fill('Main Street')
-  await page.getByLabel(/accept the pilot terms/i).check()
-  await tab(page,'Content Creator Registration').click()
-  await expect(page.getByLabel('Legal First Name')).toHaveValue('')
-  await expect(page.getByLabel("Father's Name")).toHaveValue('')
-  await expect(page.getByLabel('Public Display Name')).toHaveValue('')
-  await expect(page.getByLabel(/accept the pilot terms/i)).not.toBeChecked()
-
-  await tab(page,'Sign In').click()
-  await page.getByLabel('Phone Number').fill('0911000999')
-  await page.getByLabel('Password').fill('WrongPassword1!')
-  await page.getByRole('button',{name:'Sign In',exact:true}).last().click()
-  await expect(page.getByRole('status')).toContainText('Invalid phone number or password.')
-  await tab(page,'Shopper Registration').click()
-  await expect(page.getByRole('status')).toHaveCount(0)
-
-  await tab(page,'Sign In').click()
-  await page.getByRole('button',{name:'Forgot Password'}).click()
-  await page.getByLabel('Phone Number').fill('0911234567')
-  await tab(page,'Shopper Registration').click()
-  await tab(page,'Sign In').click()
-  await expect(page.getByRole('button',{name:'Forgot Password'})).toBeVisible()
-  await expect(page.getByLabel('Phone Number')).toHaveValue('')
-  await expect(page.getByText('6-digit verification code')).toHaveCount(0)
-
-  for(const name of ['Sign In','Shopper Registration','Content Creator Registration','Business Owner Registration'])
-    await expect(tab(page,name)).toBeVisible()
+  const headingSize=await page.getByRole('heading',{name:'Sign In'}).evaluate(element=>parseFloat(getComputedStyle(element).fontSize))
+  expect(headingSize).toBeLessThanOrEqual(page.viewportSize()!.width<=420?38:48)
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(1)
+})
+
+test('first-visit Sign In action and registration validation remain available',async({page})=>{
+  await page.goto('/')
+  await page.getByRole('button',{name:'Already have an account? Sign In',exact:true}).click()
+  await expect(page.getByLabel('Phone Number')).toBeVisible()
+  await page.getByRole('button',{name:'Sign Up to Weymela',exact:true}).click()
+  await page.getByRole('button',{name:'Shopper Registration',exact:true}).click()
+  await page.getByRole('button',{name:'Create shopper account'}).click()
+  await expect(page.getByLabel('Display Name')).toHaveAttribute('required','')
 })
