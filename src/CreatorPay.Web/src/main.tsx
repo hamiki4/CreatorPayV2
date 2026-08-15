@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import "./responsive-fixes.css";
 import { CreatorQrWorkspace, MerchantQrWorkspace } from "./QrWorkspace";
 import { CommissionWorkspace } from "./CommissionWorkspace";
 import {
@@ -414,7 +415,6 @@ function CreateCashier({ done }: { done: () => void }) {
     [phoneNumber, setPhoneNumber] = useState(""),
     [temporaryPassword, setTemporaryPassword] = useState(""),
     [confirmation, setConfirmation] = useState(""),
-    [birthDay,setBirthDay]=useState(""),[birthMonth,setBirthMonth]=useState(""),[birthYear,setBirthYear]=useState(""),
     [locationName, setLocationName] = useState(""),
     [error, setError] = useState("");
   async function submit(e: FormEvent) {
@@ -427,9 +427,6 @@ function CreateCashier({ done }: { done: () => void }) {
     const parts = name.trim().split(/\s+/),
       firstName = parts.shift() ?? "",
       lastName = parts.join(" ") || "-";
-    const d=Number(birthDay),m=Number(birthMonth),y=Number(birthYear),date=new Date(Date.UTC(y,m-1,d));
-    if(y<1900||y>new Date().getUTCFullYear()||date.getUTCFullYear()!==y||date.getUTCMonth()!==m-1||date.getUTCDate()!==d){setError("Enter a valid birth date.");return}
-    const birthDate=`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     try {
       await api("/api/v1/merchant/cashiers", {
         method: "POST",
@@ -439,7 +436,6 @@ function CreateCashier({ done }: { done: () => void }) {
           phoneNumber,
           temporaryPassword,
           confirmation,
-          birthDate,
           locationName: locationName.trim() || null,
         }),
       });
@@ -498,7 +494,6 @@ function CreateCashier({ done }: { done: () => void }) {
           onChange={(e) => setConfirmation(e.target.value)}
         />
       </label>
-      <fieldset className="birth-date"><legend>Birth Date</legend><label>Day<input required type="number" inputMode="numeric" min="1" max="31" value={birthDay} onChange={e=>setBirthDay(e.target.value)}/></label><label>Month<input required type="number" inputMode="numeric" min="1" max="12" value={birthMonth} onChange={e=>setBirthMonth(e.target.value)}/></label><label>Year<input required type="number" inputMode="numeric" min="1900" max={new Date().getUTCFullYear()} value={birthYear} onChange={e=>setBirthYear(e.target.value)}/></label></fieldset>
       <label>
         Location / Branch (Optional)
         <input

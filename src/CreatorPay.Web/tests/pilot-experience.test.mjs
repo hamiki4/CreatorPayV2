@@ -34,7 +34,8 @@ test('Creator and Business use unified account chrome without duplicate header t
 test('Business Wallet uses the shared API client and friendly errors',()=>{
   assert.match(wallet,/import \{api,apiBlob\} from '\.\/apiClient'/)
   assert.doesNotMatch(wallet,/fetch\(/)
-  assert.match(wallet,/This section is temporarily unavailable\./)
+  assert.match(wallet,/Wallet balance could not be loaded\. Try again\./)
+  assert.match(wallet,/Deposit history could not be loaded\. Try again\./)
 })
 test('pilot deposits use image proof and Business controls advertising state',()=>{
   assert.match(wallet,/Upload Proof of Payment/)
@@ -73,6 +74,7 @@ test('Business creates phone-first Cashier credentials without email invitation 
   assert.match(cashier,/\/api\/v1\/cashier\/checkouts\/by-creator/)
   assert.match(cashier,/Shopper account not found\./)
   assert.doesNotMatch(auth,/type Mode=.*cashier/)
+  assert.doesNotMatch(main,/Birth Date|birthDate/)
 })
 test('Business Cashier creation uses POST, friendly errors, and shared responsive table columns',()=>{
   assert.match(mainCompact,/\/api\/v1\/merchant\/cashiers["'],\{method:["']POST["']/)
@@ -116,10 +118,12 @@ test('public authentication uses support-approved recovery without verification 
   assert.doesNotMatch(auth,/Send verification code|Verify your phone|6-digit verification code|code sent to your phone/)
 })
 test('Creator and Business discovery show relationship status without duplicate actions',()=>{
-  for(const label of ['Request Pending','Active Ad','Deactivated','Days Left'])assert.match(creatorAds,new RegExp(label))
+  for(const label of ['Request Pending','Active Ad','Deactivated'])assert.match(creatorAds,new RegExp(label))
+  const find=creatorAds.slice(creatorAds.indexOf('export function FindBusinesses'),creatorAds.indexOf('type AdBusiness'))
+  assert.doesNotMatch(find,/Days Left|data-label="Action"/)
   for(const label of ['Invitation Pending','Currently Advertising','Deactivated','Days Left'])assert.match(businessAds,new RegExp(label))
   assert.match(relationshipTime,/Activation Required/)
-  assert.match(creatorAds,/canRequest\s*&&/)
+  assert.match(creatorAds,/state\.canRequest\?/)
   assert.match(businessAds,/canInvite\s*&&/)
   assert.match(styles,/\.discovery-row/)
 })

@@ -1,5 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { api, ApiError } from "./apiClient";
+import { clearSession } from "./sessionStore";
 
 type Status={isEligible:boolean;hasBirthDate:boolean;isPinEnrolled:boolean;isLocked:boolean;failedAttemptCount:number};
 const validPin=(value:string)=>/^\d{5}$/.test(value);
@@ -23,6 +24,6 @@ export async function pinUnlock(phoneNumber:string,pin:string){if(!validPin(pin)
 export function ForgotPin({phoneNumber,onBack}:{phoneNumber:string;onBack:()=>void}){
   const [day,setDay]=useState(""),[month,setMonth]=useState(""),[year,setYear]=useState(""),[authorization,setAuthorization]=useState(""),[pin,setPin]=useState(""),[confirmation,setConfirmation]=useState(""),[message,setMessage]=useState("");
   async function verify(e:FormEvent){e.preventDefault();const birthDate=dateValue(day,month,year);if(!birthDate){setMessage("Enter a valid birth date.");return}try{const x=await api<{resetAuthorization:string}>("/api/v1/auth/pin/recovery-proof",{method:"POST",body:JSON.stringify({phoneNumber,birthDate})});setAuthorization(x.resetAuthorization);setMessage("")}catch(e){setMessage((e as Error).message)}}
-  async function reset(e:FormEvent){e.preventDefault();if(!validPin(pin)||pin!==confirmation){setMessage("PIN must contain exactly 5 numeric digits and match confirmation.");return}try{await api("/api/v1/auth/pin/reset",{method:"POST",body:JSON.stringify({resetAuthorization:authorization,newPin:pin,confirmation})});setMessage("PIN reset. Sign in with your new PIN.");setAuthorization("");setPin("");setConfirmation("")}catch(e){setMessage((e as Error).message)}}
+  async function reset(e:FormEvent){e.preventDefault();if(!validPin(pin)||pin!==confirmation){setMessage("PIN must contain exactly 5 numeric digits and match confirmation.");return}try{await api("/api/v1/auth/pin/reset",{method:"POST",body:JSON.stringify({resetAuthorization:authorization,newPin:pin,confirmation})});await clearSession();setMessage("PIN reset. Sign in with your new PIN.");setAuthorization("");setPin("");setConfirmation("")}catch(e){setMessage((e as Error).message)}}
   return <form onSubmit={authorization?reset:verify}><h1>{authorization?"Create New 5-digit PIN":"Forgot PIN"}</h1>{authorization?<><PinEntry label="New PIN" value={pin} onChange={setPin}/><PinEntry label="Confirm PIN" value={confirmation} onChange={setConfirmation}/></>:<BirthDate day={day} month={month} year={year} setDay={setDay} setMonth={setMonth} setYear={setYear}/>}<button>{authorization?"Reset PIN":"Continue"}</button><button type="button" className="quiet" onClick={onBack}>Back</button>{message&&<p role="alert">{message}</p>}</form>
 }

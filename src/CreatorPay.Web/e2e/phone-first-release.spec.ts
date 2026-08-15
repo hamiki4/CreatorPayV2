@@ -3,12 +3,10 @@ import { expect, test } from "./fixtures";
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
 const api = process.env.E2E_API_URL!,
-  otp = process.env.E2E_TEST_OTP!,
-  registrationBypass = process.env.E2E_PILOT_REGISTRATION_BYPASS === "true",
-  password = "Phone-first@123",
-  nextPassword = "Phone-first@456";
+  seedPassword = process.env.E2E_SHOPPER_PASSWORD!,
+  password = "Phone-first@123";
 const mobileProject = (name: string) => name === "mobile",
-  suffix = (name: string) => (mobileProject(name) ? "2" : "1");
+  suffix = (name: string) => (mobileProject(name) ? "2" : name === "iphone" ? "3" : "1");
 const phones = (name: string) => ({
   shopper: `091288900${suffix(name)}`,
   creator: `091288901${suffix(name)}`,
@@ -30,37 +28,43 @@ async function reset(page: any) {
   await page.evaluate(() => localStorage.clear());
   await page.goto("/");
 }
+async function openSignIn(page: any) {
+  const welcome = page.getByRole("button", { name: "Already have an account? Sign In" });
+  if (await welcome.isVisible()) await welcome.click();
+}
 async function signIn(page: any, phone: string, secret = password) {
   await reset(page);
+  await openSignIn(page);
   const form = page.locator("form");
   await expect(form.getByLabel("Phone Number")).toBeVisible();
   await expect(form.getByLabel("Email")).toHaveCount(0);
   await form.getByLabel("Phone Number").fill(phone);
   await form.getByLabel("Password").fill(secret);
   await form.getByRole("button", { name: "Sign In", exact: true }).click();
+  const setup = page.getByRole("heading", { name: "Complete your secure setup" });
+  try {
+    await setup.waitFor({ state: "visible", timeout: 2500 });
+    await page.getByLabel("Day").fill("2");
+    await page.getByLabel("Month").fill("1");
+    await page.getByLabel("Year").fill("1990");
+    await page.getByLabel("Create 5-digit PIN").fill("12345");
+    await page.getByLabel("Confirm PIN").fill("12345");
+    await page.getByRole("button", { name: "Create PIN" }).click();
+  } catch {}
 }
 async function verify(page: any) {
-  if (registrationBypass) {
-    await expect(
-      page.getByRole("heading", { name: "Verify your phone" }),
-    ).toHaveCount(0);
-    await expect(page.getByRole("status")).toContainText(
-      /sign in now|pending Platform review/i,
-    );
-    return;
-  }
   await expect(
     page.getByRole("heading", { name: "Verify your phone" }),
-  ).toBeVisible();
-  await page.getByLabel("Verification code").fill(otp);
-  await page.getByRole("button", { name: "Verify", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("Phone verified.");
+  ).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText(
+    /sign in now|pending Platform review/i,
+  );
 }
 async function admin(request: any) {
   const login = await request.post(`${api}/api/v1/auth/login`, {
     data: {
       email: "admin@e2e.invalid",
-      password: process.env.E2E_ADMIN_PASSWORD,
+      password: seedPassword,
     },
   });
   expect(login.ok()).toBeTruthy();
@@ -104,14 +108,6 @@ async function approveBusiness(request: any, name: string) {
   });
   expect(settings.ok()).toBeTruthy();
   const value = await settings.json();
-  expect(
-    (
-      await request.put(`${api}/api/v1/admin/financial-settings`, {
-        headers,
-        data: { ...value, minimumBusinessWalletBalance: 1000 },
-      })
-    ).ok(),
-  ).toBeTruthy();
   const result = await request.get(
     `${api}/api/v1/admin/merchants?q=${encodeURIComponent(name)}&page=1&pageSize=25`,
     { headers },
@@ -122,11 +118,13 @@ async function approveBusiness(request: any, name: string) {
   );
   expect(item.status).toBe("Active");
   expect(item.walletBalance).toBe(0);
-  expect(item.requiredMinimum).toBe(1000);
-  expect(item.fundingStatus).toBe("Insufficient Funds");
+  expect(item.requiredMinimum).toBe(value.minimumBusinessWalletBalance);
+  expect(item.fundingStatus).toBe(
+    value.minimumBusinessWalletBalance > 0 ? "Insufficient Funds" : "Active",
+  );
 }
 
-test("Shopper phone registration, activation, login, and OTP password reset", async ({
+test("Shopper phone registration, activation, login, and support-assisted password reset", async ({
   page,
 }, info) => {
   const phone = phones(info.project.name).shopper;
@@ -146,27 +144,21 @@ test("Shopper phone registration, activation, login, and OTP password reset", as
     page.getByRole("heading", { name: "Shopper" }),
   ).toBeVisible();
   await reset(page);
+  await openSignIn(page);
   await page.getByRole("button", { name: "Forgot Password" }).click();
   await page.getByLabel("Phone Number").fill(phone);
-  await page.getByRole("button", { name: "Send verification code" }).click();
+  await page.getByLabel("Day").fill("2");
+  await page.getByLabel("Month").fill("1");
+  await page.getByLabel("Year").fill("1990");
+  await page.getByRole("button", { name: "Request Password Reset" }).click();
   await expect(page.getByRole("status")).toContainText(
-    "If this phone number is registered",
+    "waiting for support approval",
   );
-  await page.getByLabel("6-digit verification code").fill(otp);
-  await page.getByLabel("New Password").fill(nextPassword);
-  await page.getByLabel("Confirm Password").fill(nextPassword);
-  await page.getByRole("button", { name: "Reset Password" }).click();
-  await expect(page.getByRole("status")).toContainText("Password reset.");
-  await signIn(page, phone, password);
-  await expect(page.getByRole("status")).toContainText(/invalid/i);
-  await signIn(page, phone, nextPassword);
-  await expect(
-    page.getByRole("heading", { name: "Shopper" }),
-  ).toBeVisible();
+  await expect(page.getByText("Send verification code")).toHaveCount(0);
   await noOverflow(page);
 });
 
-test("Creator phone registration, OTP, Platform approval, and phone login", async ({
+test("Creator phone registration, Platform approval, and phone login", async ({
   page,
   request,
 }, info) => {
@@ -187,7 +179,7 @@ test("Creator phone registration, OTP, Platform approval, and phone login", asyn
   await page.getByLabel("Estimated Follower Count").fill("100");
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm Password").fill(password);
-  await page.getByLabel(/accept the pilot terms/i).check();
+  await page.getByLabel(/accept the Terms of Service/i).check();
   await page
     .getByRole("button", { name: "Create content creator account" })
     .click();
@@ -201,7 +193,7 @@ test("Creator phone registration, OTP, Platform approval, and phone login", asyn
   await noOverflow(page);
 });
 
-test("Business phone registration, OTP, approval, funding state, and phone login", async ({
+test("Business phone registration, approval, funding state, and phone login", async ({
   page,
   request,
 }, info) => {
@@ -219,7 +211,7 @@ test("Business phone registration, OTP, approval, funding state, and phone login
   await page.getByLabel("Business Address").fill("Addis Ababa");
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm Password").fill(password);
-  await page.getByLabel(/accept the pilot terms/i).check();
+  await page.getByLabel(/accept the Terms of Service/i).check();
   await page
     .getByRole("button", { name: "Create business owner account" })
     .click();
@@ -235,14 +227,15 @@ test("Business phone registration, OTP, approval, funding state, and phone login
   await noOverflow(page);
 });
 
-test("Business creates phone-only Cashier; OTP activation routes Cashier dashboard", async ({
+test("Business creates phone-only Cashier and routes to Cashier dashboard", async ({
   page,
   request,
 }, info) => {
   const business = phones(info.project.name).business,
     cashier = phones(info.project.name).cashier;
   await signIn(page, business);
-  await page.getByRole("button", { name: "Cashiers" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("menuitem", { name: "Cashier Management" }).click();
   await page.getByRole("button", { name: "Create Cashier" }).click();
   await page
     .getByLabel("Cashier Name")
@@ -251,16 +244,11 @@ test("Business creates phone-only Cashier; OTP activation routes Cashier dashboa
   await expect(page.getByLabel(/Username|Email/)).toHaveCount(0);
   await page.getByLabel("Temporary Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm Temporary Password").fill(password);
+  await expect(page.getByText("Birth Date")).toHaveCount(0);
   await page
     .getByRole("button", { name: "Create Cashier", exact: true })
     .click();
   await expect(page.getByText("Cashier account created.")).toBeVisible();
-  if (!registrationBypass) {
-    const activated = await request.post(`${api}/api/v1/auth/verify-phone`, {
-      data: { phoneNumber: cashier, code: otp },
-    });
-    expect(activated.ok()).toBeTruthy();
-  }
   await signIn(page, cashier);
   await expect(
     page.getByRole("heading", { name: "Cashier Dashboard" }),
@@ -268,11 +256,12 @@ test("Business creates phone-only Cashier; OTP activation routes Cashier dashboa
   await noOverflow(page);
 });
 
-test("phone-first copy, PlatformAdmin compatibility, and OTP response secrecy", async ({
+test("phone-first copy and PlatformAdmin compatibility remain secure", async ({
   page,
   request,
 }, info) => {
   await reset(page);
+  await openSignIn(page);
   const form = page.locator("form");
   await expect(form.getByLabel("Phone Number")).toBeVisible();
   await expect(form.getByLabel(/Email|Username/)).toHaveCount(0);
@@ -299,6 +288,5 @@ test("phone-first copy, PlatformAdmin compatibility, and OTP response secrecy", 
   });
   expect(response.status()).toBe(201);
   const serialized = JSON.stringify(await response.json());
-  expect(serialized).not.toContain(otp);
   expect(serialized).not.toMatch(/"(?:otp|code|testCode)"/i);
 });

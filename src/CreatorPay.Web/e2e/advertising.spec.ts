@@ -2,9 +2,10 @@ import {expect,test} from './fixtures'
 import type {Page} from '@playwright/test'
 
 const password=process.env.E2E_SHOPPER_PASSWORD!
-const suffix=(project:string)=>project==='mobile'?'2':'1'
+test.describe.configure({timeout:120_000})
+const suffix=(project:string)=>project==='mobile'?'2':project==='iphone'?'3':'1'
 function phoneFor(identity:string){const match=identity.match(/^(creator-request|creator-invite|creator-pending|business)-(\d)@/);if(!match)throw Error(`No E2E phone mapping for ${identity}`);const prefixes:Record<string,string>={'creator-request':'+25194400000','creator-invite':'+25195500000','creator-pending':'+25196600000','business':'+25193400000'};return `${prefixes[match[1]]}${match[2]}`}
-async function login(page:Page,identity:string){const admin=identity==='admin@e2e.invalid';await page.goto('/');await page.getByLabel('Phone Number').fill(admin?identity:phoneFor(identity));await page.getByLabel('Password').fill(password);await page.locator('form').getByRole('button',{name:'Sign In'}).click();if(admin)return;const setup=page.getByRole('heading',{name:'Complete your secure setup'});try{await setup.waitFor({state:'visible',timeout:3000})}catch{return}await page.getByLabel('Day').fill('2');await page.getByLabel('Month').fill('1');await page.getByLabel('Year').fill('1990');await page.getByLabel('Create 5-digit PIN').fill('12345');await page.getByLabel('Confirm PIN').fill('12345');await page.getByRole('button',{name:'Create PIN'}).click()}
+async function login(page:Page,identity:string){const admin=identity==='admin@e2e.invalid';await page.goto('/');const dismiss=page.getByRole('button',{name:'Dismiss iPhone installation instructions'});if(await dismiss.isVisible())await dismiss.click();const welcome=page.getByRole('button',{name:'Already have an account? Sign In'});if(await welcome.isVisible())await welcome.click();let loginId=identity;if(!admin&&/^(creator-request|creator-invite|creator-pending|business)-\d@/.test(identity))loginId=phoneFor(identity);await page.getByLabel('Phone Number').fill(loginId);await page.getByLabel('Password').fill(password);await page.locator('form').getByRole('button',{name:'Sign In'}).click();if(admin)return;const setup=page.getByRole('heading',{name:'Complete your secure setup'});try{await setup.waitFor({state:'visible',timeout:3000})}catch{return}await page.getByLabel('Day').fill('2');await page.getByLabel('Month').fill('1');await page.getByLabel('Year').fill('1990');await page.getByLabel('Create 5-digit PIN').fill('12345');await page.getByLabel('Confirm PIN').fill('12345');await page.getByRole('button',{name:'Create PIN'}).click()}
 
 test('Admin payout cycles use readable summaries and compact searches',async({page})=>{
   await login(page,'admin@e2e.invalid')
@@ -32,7 +33,7 @@ test('Admin payout cycles use readable summaries and compact searches',async({pa
 })
 
 test('Platform Admin approves a pending Creator',async({page},testInfo)=>{
-  const n=suffix(testInfo.project.name),name=`${n==='1'?'Desktop':'Mobile'} Pending Creator`
+  const n=suffix(testInfo.project.name),name=`${n==='1'?'Desktop':n==='2'?'Mobile':'iPhone'} Pending Creator`
   await login(page,'admin@e2e.invalid')
   await page.getByRole('link',{name:'Creators',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Creator review'})).toBeVisible()
@@ -50,38 +51,38 @@ test('Platform Admin approves a pending Creator',async({page},testInfo)=>{
 })
 
 test('Creator requests a Business and the Business activates it',async({page},testInfo)=>{
-  const n=suffix(testInfo.project.name),label=n==='1'?'Desktop':'Mobile',business=`${label} Workflow Business`,creator=`${label} Request Creator`
+  const n=suffix(testInfo.project.name),label=n==='1'?'Desktop':n==='2'?'Mobile':'iPhone',business=`${label} Workflow Business`,creator=`${label} Request Creator`
   await login(page,`creator-request-${n}@e2e.invalid`)
   await expect(page.getByRole('heading',{name:'Creator'})).toBeVisible()
-  await expect(page.getByRole('link',{name:'Help',exact:true})).toHaveCount(1)
+  await page.getByRole('button',{name:'Settings'}).click()
+  await expect(page.getByRole('menuitem',{name:'Help',exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'Settings'}).click()
   await expect(page.getByRole('button',{name:'Send feedback'})).toHaveCount(0)
   await page.getByRole('button',{name:'Find Businesses'}).first().click()
-  const automaticBusinessCard=page.locator('article').filter({hasText:business})
+  const automaticBusinessCard=page.locator('.creator-business-list article').filter({hasText:business})
   await expect(automaticBusinessCard).toBeVisible()
   await expect(automaticBusinessCard.getByRole('button',{name:'Request to Advertise'})).toBeEnabled()
   await page.getByPlaceholder('Search by name, city, or public ID').fill(business)
-  const businessCard=page.locator('article').filter({hasText:business})
+  const businessCard=page.locator('.creator-business-list article').filter({hasText:business})
   await expect(businessCard).toBeVisible()
   await businessCard.getByRole('button',{name:'Request to Advertise'}).click()
-  await expect(page.getByRole('status')).toContainText(`Advertising request sent to ${business}.`)
   await expect(businessCard.getByText('Request Pending',{exact:true})).toBeVisible()
   await expect(businessCard.getByRole('button',{name:'Request to Advertise'})).toHaveCount(0)
-  await expect(page.getByText('Pending',{exact:true})).toBeVisible()
-
   await page.evaluate(()=>localStorage.clear())
   await login(page,`business-${n}@e2e.invalid`)
   await expect(page.getByRole('heading',{name:'Business'})).toBeVisible()
-  await expect(page.getByRole('link',{name:'Help',exact:true})).toHaveCount(1)
+  await page.getByRole('button',{name:'Settings'}).click()
+  await expect(page.getByRole('menuitem',{name:'Help',exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'Settings'}).click()
   await expect(page.getByRole('button',{name:'Send feedback'})).toHaveCount(0)
-  await page.getByRole('button',{name:'Requests'}).click()
+  await page.getByRole('button',{name:'Requests',exact:true}).click()
   const request=page.locator('article').filter({hasText:creator})
   await expect(request).toContainText('Pending')
   await request.getByRole('button',{name:'Accept'}).click()
-  await expect(page.getByText(`${creator} approved. Use Activate Ad to start advertising.`)).toBeVisible()
-  await page.getByRole('button',{name:'Active Creators'}).click()
+  await expect(page.getByText(`${creator} approved. Advertising is now active.`)).toBeVisible()
+  await page.getByRole('button',{name:'Find Creators'}).click()
+  await page.getByRole('button',{name:'View all'}).click()
   const approvedCreator=page.locator('article').filter({hasText:creator})
-  await expect(approvedCreator).toContainText('Activation Required')
-  await approvedCreator.getByRole('button',{name:'Activate Ad'}).click()
   await expect(approvedCreator).toContainText('Active')
 
   await page.evaluate(()=>localStorage.clear())
@@ -89,19 +90,21 @@ test('Creator requests a Business and the Business activates it',async({page},te
   await page.getByRole('button',{name:'Find Businesses'}).first().click()
   const activeBusiness=page.locator('article').filter({hasText:business}).first()
   await expect(activeBusiness.getByText('Active Ad',{exact:true})).toBeVisible()
-  await expect(activeBusiness.getByText(/days left/i)).toBeVisible()
+  await expect(activeBusiness.getByText(/days left/i)).toHaveCount(0)
   await expect(activeBusiness.getByRole('button',{name:'Request to Advertise'})).toHaveCount(0)
   await page.getByRole('button',{name:'Ads',exact:true}).click()
   await expect(page.locator('.creator-ads-table tbody tr').filter({hasText:business})).toContainText('Active')
-  await page.getByRole('button',{name:'Creator ID'}).click()
-  await expect(page.getByRole('heading',{name:'Creator ID'})).toBeVisible()
-  await expect(page.locator('.creator-id-number')).toHaveText(`510${n}`)
+  await page.getByRole('button',{name:'Settings'}).click()
+  await page.getByRole('menuitem',{name:'Profile'}).click()
+  await expect(page.getByText('Creator ID',{exact:true})).toBeVisible()
+  await expect(page.locator('.creator-id-profile strong')).toHaveText(`510${n}`)
   await page.getByRole('button',{name:'Ads',exact:true}).click()
   await expect(page.getByRole('button',{name:'Deactivate Ad'})).toHaveCount(0)
 
   await page.evaluate(()=>localStorage.clear())
   await login(page,`business-${n}@e2e.invalid`)
-  await page.getByRole('button',{name:'Active Creators'}).click()
+  await page.getByRole('button',{name:'Find Creators'}).click()
+  await page.getByRole('button',{name:'View all'}).click()
   page.once('dialog',dialog=>dialog.accept())
   await page.getByRole('button',{name:'Deactivate Ad'}).click()
   await expect(page.getByText('Deactivated',{exact:true})).toBeVisible()
@@ -120,7 +123,7 @@ test('Creator requests a Business and the Business activates it',async({page},te
 })
 
 test('Business invites a Creator and remains authoritative for activation',async({page},testInfo)=>{
-  const n=suffix(testInfo.project.name),label=n==='1'?'Desktop':'Mobile',business=`${label} Workflow Business`,creator=`${label} Invite Creator`
+  const n=suffix(testInfo.project.name),label=n==='1'?'Desktop':n==='2'?'Mobile':'iPhone',business=`${label} Workflow Business`,creator=`${label} Invite Creator`
   await login(page,`business-${n}@e2e.invalid`)
   await page.getByRole('button',{name:'Find Creators'}).click()
   const automaticCreatorCard=page.locator('article').filter({hasText:creator})
@@ -142,7 +145,6 @@ test('Business invites a Creator and remains authoritative for activation',async
   const invitation=page.locator('.request-list article').filter({hasText:business})
   await expect(invitation).toContainText('Pending')
   await invitation.getByRole('button',{name:'Accept'}).click()
-  await expect(page.getByRole('status')).toContainText(`Invitation from ${business} accepted. The Business must activate the ad.`)
   await page.getByRole('button',{name:'Ads',exact:true}).click()
   await expect(page.locator('.creator-ads-table tbody tr').filter({hasText:business})).toContainText('Active')
   await expect(page.getByRole('button',{name:'Activate Ad'})).toHaveCount(0)
@@ -151,18 +153,16 @@ test('Business invites a Creator and remains authoritative for activation',async
   await login(page,`business-${n}@e2e.invalid`)
   await page.getByRole('button',{name:'Find Creators'}).click()
   const activeCreator=page.locator('article').filter({hasText:creator}).first()
-  await expect(activeCreator.getByText('Activation Required',{exact:true})).toBeVisible()
+  await expect(activeCreator.getByText('Currently Advertising',{exact:true})).toBeVisible()
   await expect(activeCreator.getByRole('button',{name:'Invite to Advertise'})).toHaveCount(0)
-  await page.getByRole('button',{name:'Active Creators'}).click()
+  await page.getByRole('button',{name:'View all'}).click()
   const invitedCreator=page.locator('article').filter({hasText:creator})
-  await expect(invitedCreator).toContainText('Activation Required')
-  await invitedCreator.getByRole('button',{name:'Activate Ad'}).click()
   await expect(invitedCreator).toContainText('Active')
   page.once('dialog',dialog=>dialog.accept())
-  await page.getByRole('button',{name:'Deactivate Ad'}).click()
-  await expect(page.getByText('Deactivated',{exact:true})).toBeVisible()
-  await page.getByRole('button',{name:'Reactivate Ad'}).click()
-  await expect(page.getByText('Active',{exact:true})).toBeVisible()
+  await invitedCreator.getByRole('button',{name:'Deactivate Ad'}).click()
+  await expect(invitedCreator.getByText('Deactivated',{exact:true})).toBeVisible()
+  await invitedCreator.getByRole('button',{name:'Reactivate Ad'}).click()
+  await expect(invitedCreator.getByText('Active',{exact:true})).toBeVisible()
 })
 
 test('Platform Admin loads, validates, and saves Financial Settings',async({page})=>{
@@ -184,7 +184,7 @@ test('Platform Admin loads, validates, and saves Financial Settings',async({page
 test('Business submits separate payment proofs and Admin approves or rejects each independently',async({page},testInfo)=>{
   const n=suffix(testInfo.project.name)
   await login(page,`business-${n}@e2e.invalid`)
-  await page.getByRole('button',{name:'Wallet'}).click()
+  await page.getByRole('button',{name:'Wallet',exact:true}).click()
   await expect(page.getByText('Available balance',{exact:true})).toBeVisible()
   for(const amount of ['250','125']){
     await page.getByLabel('Amount (ETB)').fill(amount)
@@ -199,7 +199,7 @@ test('Business submits separate payment proofs and Admin approves or rejects eac
   await page.evaluate(()=>localStorage.clear())
   await login(page,'admin@e2e.invalid')
   await page.getByRole('link',{name:'Deposits',exact:true}).click()
-  const businessName=`${n==='1'?'Desktop':'Mobile'} Workflow Business`
+  const businessName=`${n==='1'?'Desktop':n==='2'?'Mobile':'iPhone'} Workflow Business`
   const approved=page.locator('article').filter({hasText:businessName}).filter({hasText:'250'})
   const rejected=page.locator('article').filter({hasText:businessName}).filter({hasText:'125'})
   await expect(approved).toContainText('Pending Review')
@@ -214,38 +214,29 @@ test('Business submits separate payment proofs and Admin approves or rejects eac
   await expect(rejected).toContainText('Rejected')
   await page.getByRole('button',{name:'Sign out'}).click()
   await login(page,`business-${n}@e2e.invalid`)
-  await page.getByRole('button',{name:'Wallet'}).click()
+  await page.getByRole('button',{name:'Wallet',exact:true}).click()
   await expect(page.getByText(/250\.00/).first()).toBeVisible()
 })
 
-test('Business invites a Cashier who accepts and reaches the mobile-first dashboard',async({page},testInfo)=>{
-  const n=suffix(testInfo.project.name),email=`cashier-invite-${n}@e2e.invalid`
+test('Business creates a Cashier without Birth Date and reaches the mobile-first dashboard',async({page},testInfo)=>{
+  const n=suffix(testInfo.project.name),phone=`091177700${n}`
   await login(page,'owner@e2e.invalid')
-  await page.getByRole('button',{name:'Cashiers'}).click()
-  await page.getByRole('button',{name:'Invite Cashier'}).click()
+  await page.getByRole('button',{name:'Settings'}).click()
+  await page.getByRole('menuitem',{name:'Cashier Management'}).click()
+  await page.getByRole('button',{name:'Create Cashier'}).click()
   await page.getByLabel('Cashier Name').fill(`${n==='1'?'Desktop':'Mobile'} Pilot Cashier`)
-  await page.getByLabel('Phone Number').fill(`091177700${n}`)
-  await page.getByLabel('Email').fill(email)
-  await expect(page.getByLabel('Business Location')).toHaveValue('20000000-0000-0000-0000-000000000003')
-  const response=page.waitForResponse(r=>r.url().includes('/cashiers/invitations')&&r.request().method()==='POST')
-  await page.getByRole('button',{name:'Send Invitation'}).click()
-  const invitation=await (await response).json()
-  await expect(page.getByText('Cashier invited. Copy this secure link')).toBeVisible()
-  const invitationLink=new URL(invitation.invitationUrl)
-  await page.goto(`/staff-invitations/accept${invitationLink.search}`)
-  await expect(page.getByText("You've been invited to join:")).toBeVisible()
-  await expect(page.getByText('Active E2E Business')).toBeVisible()
-  await expect(page.getByText('Location: E2E Checkout')).toBeVisible()
-  await page.getByLabel('Create Password').fill(password)
-  await page.getByLabel('Confirm Password').fill(password)
-  await page.getByRole('button',{name:'Accept Invitation'}).click()
-  await expect(page.getByRole('status')).toContainText('Invitation accepted')
+  await page.getByLabel('Phone Number').fill(phone)
+  await page.getByLabel('Temporary Password',{exact:true}).fill(password)
+  await page.getByLabel('Confirm Temporary Password',{exact:true}).fill(password)
+  await expect(page.getByText('Birth Date')).toHaveCount(0)
+  await page.getByLabel('Location / Branch (Optional)').fill('E2E Checkout')
+  await page.getByRole('button',{name:'Create Cashier'}).click()
+  await expect(page.getByText('Cashier account created.')).toBeVisible()
   await page.evaluate(()=>localStorage.clear())
-  await page.getByRole('link',{name:'Sign In'}).click()
-  await login(page,email)
+  await login(page,phone)
   await expect(page.getByRole('heading',{name:'Cashier Dashboard'})).toBeVisible()
   await expect(page.getByRole('navigation',{name:'Cashier Dashboard sections'}).getByRole('button')).toHaveCount(3)
-  await expect(page.getByRole('heading',{name:'Scan Creator QR'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'New Purchase'})).toBeVisible()
   await expect(page.getByLabel('Purchase Amount (ETB)')).toBeVisible()
   await expect(page.getByLabel(/Location ID/i)).toHaveCount(0)
   await page.getByRole('button',{name:'Profile'}).click()

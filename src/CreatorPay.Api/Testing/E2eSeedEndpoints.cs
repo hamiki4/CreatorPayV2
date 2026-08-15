@@ -61,7 +61,7 @@ public static class E2eSeedEndpoints
         var confirmationAccounts=new List<object>();
         var confirmationShopperEmails=new Dictionary<string,string>();
         var confirmationShopperPhones=new Dictionary<string,string>();
-        foreach(var (key,index) in new[]{("yes-desktop",1),("no-desktop",2),("yes-mobile",3),("no-mobile",4)})
+        foreach(var (key,index) in new[]{("yes-desktop",1),("no-desktop",2),("yes-mobile",3),("no-mobile",4),("yes-iphone",5),("no-iphone",6)})
         {
             var customerId=Id($"11000000-0000-0000-0000-00000000000{index}");
             var accountId=Id($"11000000-0000-0000-0000-00000000001{index}");
@@ -73,7 +73,7 @@ public static class E2eSeedEndpoints
             confirmationShopperEmails[key]=confirmationAccount.Email;
             confirmationShopperPhones[key]=phone;
         }
-        foreach(var (suffix,label) in new[]{("1","Desktop"),("2","Mobile")})
+        foreach(var (suffix,label) in new[]{("1","Desktop"),("2","Mobile"),("3","iPhone")})
         {
             var businessId=Id($"21000000-0000-0000-0000-00000000000{suffix}");var businessPhone=$"+25193400000{suffix}";var business=Merchant(businessId,$"{label} Workflow Business",MerchantStatus.Active,now);business.PublicMerchantId=$"MER-WORKFLOW-{suffix}";business.PhoneNumber=business.NormalizedPhoneNumber=businessPhone;var businessUser=new UserAccount{Id=Id($"21000000-0000-0000-0000-00000000001{suffix}"),Email=$"business-{suffix}@e2e.invalid",NormalizedEmail=$"BUSINESS-{suffix}@E2E.INVALID",PhoneNumber=businessPhone,NormalizedPhoneNumber=businessPhone,Role=UserRole.MerchantAdmin,Status=AccountStatus.Active,MerchantId=businessId,IsEmailVerified=true,IsPhoneVerified=true,CreatedAtUtc=now};businessUser.PasswordHash=passwords.Hash(businessUser,request.Password);
             var requestCreatorId=Id($"31000000-0000-0000-0000-00000000000{suffix}");var requestCreatorPhone=$"+25194400000{suffix}";var requestCreator=Creator(requestCreatorId,$"{label} Request Creator",CreatorStatus.Active,now);requestCreator.CreatorCode=$"510{suffix}";requestCreator.PublicCreatorId=$"CRE-REQUEST-{suffix}";requestCreator.PhoneNumber=requestCreator.NormalizedPhoneNumber=requestCreatorPhone;var requestCreatorUser=new UserAccount{Id=Id($"31000000-0000-0000-0000-00000000001{suffix}"),Email=$"creator-request-{suffix}@e2e.invalid",NormalizedEmail=$"CREATOR-REQUEST-{suffix}@E2E.INVALID",PhoneNumber=requestCreatorPhone,NormalizedPhoneNumber=requestCreatorPhone,Role=UserRole.Creator,Status=AccountStatus.Active,CreatorId=requestCreatorId,IsEmailVerified=true,IsPhoneVerified=true,CreatedAtUtc=now};requestCreatorUser.PasswordHash=passwords.Hash(requestCreatorUser,request.Password);

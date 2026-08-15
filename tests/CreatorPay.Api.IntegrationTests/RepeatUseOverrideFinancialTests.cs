@@ -502,6 +502,60 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Partnership_requests_persist_independently_from_notifications_and_both_directions_activate_once()
+    {
+        using var client=factory!.CreateClient();
+        Assert.Equal(HttpStatusCode.OK,(await client.PostAsJsonAsync("/api/v1/e2e/seed",new{password="E2e-test-password-1!"})).StatusCode);
+        var merchantId=Guid.Parse("21000000-0000-0000-0000-000000000001");
+        var owner=Token(UserRole.MerchantAdmin,"21000000-0000-0000-0000-000000000011",merchantId:merchantId.ToString());
+        var requestCreator=Token(UserRole.Creator,"31000000-0000-0000-0000-000000000011",creatorId:"31000000-0000-0000-0000-000000000001");
+        var inviteCreatorId=Guid.Parse("32000000-0000-0000-0000-000000000001");
+        var inviteCreator=Token(UserRole.Creator,"32000000-0000-0000-0000-000000000011",creatorId:inviteCreatorId.ToString());
+
+        var created=await Post(client,"/api/v1/creator/partnerships/requests",requestCreator,new{merchantId,introductoryMessage="Disposable request"});
+        Assert.Equal(HttpStatusCode.Created,created.StatusCode);
+        var requestId=(await created.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.Conflict,(await Post(client,"/api/v1/creator/partnerships/requests",requestCreator,new{merchantId,introductoryMessage="Retry"})).StatusCode);
+        var businessRows=await (await Get(client,"/api/v1/merchant/partnerships",owner)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("Pending",businessRows.EnumerateArray().Single(x=>x.GetProperty("id").GetGuid()==requestId).GetProperty("status").GetString());
+        var notices=await (await Get(client,"/api/v1/notifications?page=1&pageSize=30",owner)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var notice=notices.GetProperty("items").EnumerateArray().Single(x=>x.GetProperty("data").GetProperty("TargetPath").GetString()=="/?view=requests");
+        Assert.Equal(HttpStatusCode.NoContent,(await Post(client,$"/api/v1/notifications/{notice.GetProperty("notificationId").GetString()}/read",owner,new{})).StatusCode);
+        await using(var afterRead=Db())Assert.Equal(PartnershipStatus.Pending,(await afterRead.MerchantCreatorPartnerships.SingleAsync(x=>x.Id==requestId)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden,(await Post(client,$"/api/v1/merchant/partnerships/{requestId}/approve",requestCreator,new{reason=(string?)null})).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await Post(client,$"/api/v1/merchant/partnerships/{requestId}/approve",owner,new{reason=(string?)null})).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,(await Post(client,$"/api/v1/merchant/partnerships/{requestId}/approve",owner,new{reason=(string?)null})).StatusCode);
+        await using(var approved=Db()){Assert.Equal(PartnershipStatus.Approved,(await approved.MerchantCreatorPartnerships.SingleAsync(x=>x.Id==requestId)).Status);Assert.Single(await approved.CreatorMerchantCampaigns.Where(x=>x.MerchantCreatorPartnershipId==requestId&&x.Status==CampaignStatus.Active).ToListAsync());}
+
+        var invited=await Post(client,"/api/v1/merchant/partnerships/invitations",owner,new{creatorId=inviteCreatorId,introductoryMessage="Disposable invitation"});
+        Assert.Equal(HttpStatusCode.Created,invited.StatusCode);
+        var invitationId=(await invited.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        var creatorRows=await (await Get(client,"/api/v1/creator/partnerships",inviteCreator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("Pending",creatorRows.EnumerateArray().Single(x=>x.GetProperty("id").GetGuid()==invitationId).GetProperty("status").GetString());
+        var acceptedInvitation = await Post(client,$"/api/v1/creator/partnerships/{invitationId}/accept-invitation",inviteCreator,new{});
+        Assert.Equal(HttpStatusCode.OK,acceptedInvitation.StatusCode);
+        Assert.True((await acceptedInvitation.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("promotionActive").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict,(await Post(client,$"/api/v1/creator/partnerships/{invitationId}/accept-invitation",inviteCreator,new{})).StatusCode);
+        var performance=await (await Get(client,"/api/v1/creator/ads/performance",inviteCreator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains(performance.GetProperty("businesses").EnumerateArray(),x=>x.GetProperty("partnershipId").GetGuid()==invitationId&&x.GetProperty("status").GetString()=="Active");
+        await using(var accepted=Db()){Assert.Equal(PartnershipStatus.Approved,(await accepted.MerchantCreatorPartnerships.SingleAsync(x=>x.Id==invitationId)).Status);Assert.Single(await accepted.CreatorMerchantCampaigns.Where(x=>x.MerchantCreatorPartnershipId==invitationId&&x.Status==CampaignStatus.Active).ToListAsync());}
+
+        var otherMerchantId=Guid.Parse("21000000-0000-0000-0000-000000000002");
+        var otherOwner=Token(UserRole.MerchantAdmin,"21000000-0000-0000-0000-000000000012",merchantId:otherMerchantId.ToString());
+        var rejectedCreator=Token(UserRole.Creator,"31000000-0000-0000-0000-000000000012",creatorId:"31000000-0000-0000-0000-000000000002");
+        var declinedCreatorId=Guid.Parse("32000000-0000-0000-0000-000000000002");
+        var declinedCreator=Token(UserRole.Creator,"32000000-0000-0000-0000-000000000012",creatorId:declinedCreatorId.ToString());
+        var rejection=await Post(client,"/api/v1/creator/partnerships/requests",rejectedCreator,new{merchantId=otherMerchantId,introductoryMessage=(string?)null});
+        var rejectionId=(await rejection.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NotFound,(await Post(client,$"/api/v1/merchant/partnerships/{rejectionId}/reject",owner,new{reason="Out of scope"})).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await Post(client,$"/api/v1/merchant/partnerships/{rejectionId}/reject",otherOwner,new{reason="Not a fit"})).StatusCode);
+        var declined=await Post(client,"/api/v1/merchant/partnerships/invitations",otherOwner,new{creatorId=declinedCreatorId,introductoryMessage=(string?)null});
+        var declinedId=(await declined.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK,(await Post(client,$"/api/v1/creator/partnerships/{declinedId}/decline-invitation",declinedCreator,new{})).StatusCode);
+        await using var decisions=Db();Assert.Equal(PartnershipStatus.Rejected,(await decisions.MerchantCreatorPartnerships.SingleAsync(x=>x.Id==rejectionId)).Status);Assert.Equal(PartnershipStatus.Rejected,(await decisions.MerchantCreatorPartnerships.SingleAsync(x=>x.Id==declinedId)).Status);Assert.Empty(await decisions.CreatorMerchantCampaigns.Where(x=>x.MerchantCreatorPartnershipId==rejectionId||x.MerchantCreatorPartnershipId==declinedId).ToListAsync());
+    }
+
+    [DockerFact]
     public async Task Business_creator_discovery_returns_only_active_approved_accounts_and_supports_name_public_id_and_handle()
     {
         using var client = factory!.CreateClient();
@@ -908,10 +962,30 @@ db.Add(new Merchant{Id=merchantId,PublicMerchantId=$"MER-{Guid.NewGuid():N}"[..2
             var response=await Post(client,"/api/v1/merchant/cashiers/invitations",owner,new{firstName="Default",lastName="Cashier",email=input.Email,phoneNumber=input.Phone,locationName=(string?)null});
             Assert.True(response.StatusCode==HttpStatusCode.Created,await response.Content.ReadAsStringAsync());
         }
-        const string temporaryPassword="Temporary1!Secure";var created=await Post(client,"/api/v1/merchant/cashiers",owner,new{firstName="Direct",lastName="Cashier",phoneNumber="0911222555",temporaryPassword,confirmation=temporaryPassword,birthDate="1990-01-02",locationName=(string?)null});Assert.True(created.StatusCode==HttpStatusCode.OK,await created.Content.ReadAsStringAsync());
-        var duplicate=await Post(client,"/api/v1/merchant/cashiers",owner,new{firstName="Other",lastName="Cashier",phoneNumber="+251911222555",temporaryPassword,confirmation=temporaryPassword,birthDate="1990-01-02",locationName="Bole Branch"});Assert.Equal(HttpStatusCode.Conflict,duplicate.StatusCode);
+        const string temporaryPassword="Temporary1!Secure";var created=await Post(client,"/api/v1/merchant/cashiers",owner,new{firstName="Direct",lastName="Cashier",phoneNumber="0911222555",temporaryPassword,confirmation=temporaryPassword,locationName=(string?)null});Assert.True(created.StatusCode==HttpStatusCode.OK,await created.Content.ReadAsStringAsync());
+        var duplicate=await Post(client,"/api/v1/merchant/cashiers",owner,new{firstName="Other",lastName="Cashier",phoneNumber="+251911222555",temporaryPassword,confirmation=temporaryPassword,locationName="Bole Branch"});Assert.Equal(HttpStatusCode.Conflict,duplicate.StatusCode);
         var login=await client.PostAsJsonAsync("/api/v1/auth/login",new{email="+251911222555",password=temporaryPassword});Assert.Equal(HttpStatusCode.OK,login.StatusCode);var loginBody=await login.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();Assert.Equal("Cashier",loginBody.GetProperty("user").GetProperty("role").GetString());
-        await using var verify=Db();var location=Assert.Single(await verify.MerchantLocations.Where(x=>x.MerchantId==merchantId).ToListAsync());Assert.Equal("Main Location",location.Name);Assert.True(location.IsActive);Assert.Equal(3,await verify.CashierLocationAssignments.CountAsync(x=>x.MerchantLocationId==location.Id&&x.IsPrimary));var account=await verify.UserAccounts.SingleAsync(x=>x.NormalizedPhoneNumber=="+251911222555");Assert.False(account.IsPhoneVerified);Assert.Equal(new DateOnly(1990,1,2),account.BirthDate);Assert.Equal(AccountStatus.Active,account.Status);Assert.NotEqual(temporaryPassword,account.PasswordHash);Assert.DoesNotContain(temporaryPassword,account.PasswordHash);
+        await using var verify=Db();var location=Assert.Single(await verify.MerchantLocations.Where(x=>x.MerchantId==merchantId).ToListAsync());Assert.Equal("Main Location",location.Name);Assert.True(location.IsActive);Assert.Equal(3,await verify.CashierLocationAssignments.CountAsync(x=>x.MerchantLocationId==location.Id&&x.IsPrimary));var account=await verify.UserAccounts.SingleAsync(x=>x.NormalizedPhoneNumber=="+251911222555");Assert.False(account.IsPhoneVerified);Assert.Null(account.BirthDate);Assert.Equal(AccountStatus.Active,account.Status);Assert.NotEqual(temporaryPassword,account.PasswordHash);Assert.DoesNotContain(temporaryPassword,account.PasswordHash);
+    }
+
+    [DockerFact]
+    public async Task Concurrent_initial_wallet_reads_create_exactly_one_wallet()
+    {
+        using var client = factory!.CreateClient();
+        var merchantId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        await using (var db = Db())
+        {
+            db.Add(new Merchant { Id = merchantId, PublicMerchantId = $"MER-{Guid.NewGuid():N}"[..20], LegalBusinessName = "Concurrent Wallet PLC", TradingName = "Concurrent Wallet", BusinessType = "Retail", PrimaryContactName = "Owner", PhoneNumber = "0911555099", NormalizedPhoneNumber = "251911555099", Email = "concurrent-wallet@e2e.invalid", PreferredLanguage = "en", TermsAcceptedAtUtc = DateTime.UtcNow, BusinessAddress = "Bole Road", City = "Addis Ababa", Region = "Addis Ababa", Country = "Ethiopia", TimeZone = "Africa/Addis_Ababa", Status = MerchantStatus.Active, CreatedAtUtc = DateTime.UtcNow });
+            db.Add(new UserAccount { Id = ownerId, Email = "concurrent-wallet@e2e.invalid", NormalizedEmail = "CONCURRENT-WALLET@E2E.INVALID", Role = UserRole.MerchantAdmin, Status = AccountStatus.Active, MerchantId = merchantId, IsEmailVerified = true, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+        var owner = Token(UserRole.MerchantAdmin, ownerId.ToString(), merchantId: merchantId.ToString());
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Get(client, "/api/v1/merchant/wallet", owner)));
+        Assert.All(responses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+        await using var verify = Db();
+        Assert.Equal(1, await verify.MerchantWallets.CountAsync(x => x.MerchantId == merchantId && x.CurrencyCode == "ETB"));
+        Assert.Equal(1, await verify.MerchantAuditEvents.CountAsync(x => x.MerchantId == merchantId && x.EventType == "WalletCreated"));
     }
 
     [DockerFact]

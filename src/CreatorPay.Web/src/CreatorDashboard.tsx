@@ -16,14 +16,15 @@ export function CreatorDashboard({onSignOut}:{onSignOut:()=>void}){
   useEffect(()=>{let current=true;void load().then(()=>{if(!current)return});return()=>{current=false}},[])
   const pending=requests.filter(x=>x.status==='Pending').length,date=(value?:string)=>value?new Intl.DateTimeFormat('en-GB').format(new Date(value)):'—'
   const tabs:[Tab,string][]=[['find','Find Businesses'],['ads','Ads'],['payout','Payout']]
-  const navigate=(target:string)=>setTab(target.includes('payout')?'payout':target.includes('ads')?'ads':target.includes('profile')?'profile':target.includes('find')?'find':'home')
+  const select=(next:Tab)=>{setTab(next);if(next==='ads'||next==='find')void load()}
+  const navigate=(target:string)=>select(target.includes('payout')?'payout':target.includes('ads')||target.includes('request')||target.includes('invitation')?'ads':target.includes('profile')?'profile':target.includes('find')?'find':'home')
   return <AccountChrome role="Creator" name={profile?.displayName} status={profile?statusLabel(profile.creatorStatus):'Active'} onProfile={()=>setTab('profile')} onHelp={()=>location.assign('/help')} onSignOut={onSignOut} onNavigate={navigate}><div className="creator-dashboard">
-    <nav className="creator-tabs" aria-label="Creator sections">{tabs.map(([value,label])=><button key={value} className={tab===value?'active':''} aria-current={tab===value?'page':undefined} onClick={()=>setTab(value)}>{label}</button>)}</nav>
+    <nav className="creator-tabs" aria-label="Creator sections">{tabs.map(([value,label])=><button key={value} className={tab===value?'active':''} aria-current={tab===value?'page':undefined} onClick={()=>select(value)}>{label}</button>)}</nav>
     {tab==='home'&&<><div className="creator-summary compact-role-summary">
       <article><span>Pending Requests</span><strong>{pending}</strong></article>
       <article><span>Payout Amount</span><strong>{money(earnings?.currentPayoutAmount??0,earnings?.currencyCode)}</strong></article>
       <article><span>Next Payout Date</span><strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong></article>
-    </div>{error&&<p className="friendly-error">{error}</p>}<div className="creator-start"><h2>Start advertising</h2><p>Find a Business, request permission to promote, and start earning money!</p><button onClick={()=>setTab('find')}>Find Businesses</button></div></>}
+    </div>{error&&<p className="friendly-error">{error}</p>}<div className="creator-start"><h2>Start advertising</h2><p>Find a Business, request permission to promote, and start earning money!</p><button onClick={()=>select('find')}>Find Businesses</button></div></>}
     {tab==='find'&&<FindBusinesses onRequested={()=>void load()}/>} 
     {tab==='ads'&&<ActiveAds items={requests} loading={loading} refresh={()=>void load()}/>} 
     {tab==='payout'&&<section className="creator-section"><h2>Payout</h2><div className="summary-grid"><article className="summary-card"><span>Payout Amount</span><strong>{money(earnings?.currentPayoutAmount??0,earnings?.currencyCode)}</strong></article><article className="summary-card"><span>Next Payout Date</span><strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong></article></div></section>}

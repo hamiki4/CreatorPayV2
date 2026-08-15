@@ -306,9 +306,7 @@ export function AdvertisingRequests({
   refresh: () => void;
 }) {
   const [message, setMessage] = useState("");
-  const requests = items.filter(
-    (x) => !["Approved", "Suspended", "Revoked"].includes(x.status),
-  );
+  const requests = items.filter((x) => x.status === "Pending");
   async function decide(x: BusinessRelationship, accept: boolean) {
     try {
       await api(
@@ -322,7 +320,7 @@ export function AdvertisingRequests({
       );
       setMessage(
         accept
-          ? `${x.creatorName} approved. Use Activate Ad to start advertising.`
+          ? `${x.creatorName} approved. Advertising is now active.`
           : `Request from ${x.creatorName} declined.`,
       );
       refresh();
