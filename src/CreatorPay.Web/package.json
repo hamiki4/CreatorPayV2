@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
-    "test": "node --test tests/auth-localization.test.mjs tests/pin-security.test.mjs tests/shopper-discovery.test.mjs tests/public-help.test.mjs tests/operations-dashboard.test.mjs tests/pilot-operations.test.mjs tests/pilot-experience.test.mjs",
+    "test": "node --test tests/account-simplification.test.mjs tests/auth-localization.test.mjs tests/session-foundation.test.mjs tests/pin-security.test.mjs tests/shopper-discovery.test.mjs tests/public-help.test.mjs tests/operations-dashboard.test.mjs tests/pilot-operations.test.mjs tests/pilot-experience.test.mjs",
     "test:e2e": "node scripts/run-e2e.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.0",
     "firebase": "^12.16.0",
     "jsqr": "^1.4.0",
     "react": "^19.1.1",

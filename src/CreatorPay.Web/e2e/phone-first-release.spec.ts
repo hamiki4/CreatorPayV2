@@ -143,7 +143,7 @@ test("Shopper phone registration, activation, login, and OTP password reset", as
   await verify(page);
   await signIn(page, phone);
   await expect(
-    page.getByRole("heading", { name: "Shopper Dashboard" }),
+    page.getByRole("heading", { name: "Shopper" }),
   ).toBeVisible();
   await reset(page);
   await page.getByRole("button", { name: "Forgot Password" }).click();
@@ -161,7 +161,7 @@ test("Shopper phone registration, activation, login, and OTP password reset", as
   await expect(page.getByRole("status")).toContainText(/invalid/i);
   await signIn(page, phone, nextPassword);
   await expect(
-    page.getByRole("heading", { name: "Shopper Dashboard" }),
+    page.getByRole("heading", { name: "Shopper" }),
   ).toBeVisible();
   await noOverflow(page);
 });
@@ -197,9 +197,7 @@ test("Creator phone registration, OTP, Platform approval, and phone login", asyn
   );
   await approveCreator(request, name);
   await signIn(page, phone);
-  await expect(
-    page.getByRole("heading", { name: "Creator Dashboard" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator" })).toBeVisible();
   await noOverflow(page);
 });
 
@@ -213,7 +211,6 @@ test("Business phone registration, OTP, approval, funding state, and phone login
   await page
     .getByRole("button", { name: "Business Owner Registration" })
     .click();
-  await page.getByLabel("Legal Business Name").fill(`${name} PLC`);
   await page.getByLabel("Trading Name").fill(name);
   await page.getByLabel("Business Type").selectOption({ index: 1 });
   await page.getByLabel("Primary Contact Name").fill("Browser Owner");
@@ -233,7 +230,7 @@ test("Business phone registration, OTP, approval, funding state, and phone login
   await approveBusiness(request, name);
   await signIn(page, phone);
   await expect(
-    page.getByRole("heading", { name: "Business Dashboard" }),
+    page.getByRole("heading", { name: "Business" }),
   ).toBeVisible();
   await noOverflow(page);
 });

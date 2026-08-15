@@ -13,7 +13,7 @@ test('first visit welcomes users, registration routes return to Sign In, and ret
   const registrations=[
     ['Shopper Registration','Display Name'],
     ['Content Creator Registration','Legal First Name'],
-    ['Business Owner Registration','Legal Business Name'],
+    ['Business Owner Registration','Trading Name'],
   ] as const
   for(const [action,field] of registrations){
     await page.getByRole('button',{name:action,exact:true}).click()

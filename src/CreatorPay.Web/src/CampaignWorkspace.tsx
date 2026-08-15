@@ -1,8 +1,9 @@
 import {useEffect,useState} from 'react'
+import {getAccessToken} from './sessionStore'
 type ReuseRule='OncePerDay'|'OncePerWeek'|'OncePerMonth'|'OncePerOffer'|'Unlimited'
 type Campaign={id:string;publicCampaignId:string;status:string;durationDays:number;startsAtUtc?:string;expiresAtUtc?:string;qrStatus?:string;campaignCode?:string;reuseRule:ReuseRule;merchantName?:string;offerTitle?:string;offerLink?:string;qrPayload?:string}
 type MerchantProfile={businessType:string}
-const base=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'');const token=()=>localStorage.getItem('creatorpay_access_token')??''
+const base=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'');const token=getAccessToken
 async function api<T>(path:string,method='GET',body?:unknown):Promise<T>{const r=await fetch(`${base}${path}`,{method,headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const value=await r.json().catch(()=>({}));if(!r.ok)throw Error(value.detail??`Request failed (${r.status}).`);return value}
 const remaining=(v?:string)=>v?`${Math.max(0,Math.ceil((new Date(v).getTime()-Date.now())/86400000))} days remaining`:'Not started'
 export const suggestedReuseRule=(businessType:string):ReuseRule|''=>businessType==='Restaurant / Café'||businessType==='Grocery / Mini-market'?'OncePerDay':businessType==='Beauty / Salon'?'OncePerWeek':['Clothing / Boutique','Furniture','Electronics','Hotel / Travel','Professional Services'].includes(businessType)?'OncePerOffer':''

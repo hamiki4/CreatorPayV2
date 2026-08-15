@@ -1,5 +1,6 @@
 import {FormEvent,useEffect,useState} from 'react'
-const base=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'');const token=()=>localStorage.getItem('creatorpay_access_token')??'';
+import {getAccessToken} from './sessionStore'
+const base=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'');const token=getAccessToken;
 async function api<T>(path:string,init?:RequestInit):Promise<T>{const r=await fetch(`${base}${path}`,{...init,headers:{'Content-Type':'application/json',Authorization:`Bearer ${token()}`,...init?.headers}});if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail??`Request failed (${r.status})`);return r.status===204?undefined as T:r.json()}
 type Dispute={id:string;publicDisputeId:string;purchaseTransactionId:string;type:string;status:string;description:string;openedAtUtc:string;history:{status:string;reason?:string;changedAtUtc:string}[]};
 type Alert={id:string;publicFraudAlertId:string;ruleCode:string;severity:string;status:string;detectedAtUtc:string};type Reversal={id:string;publicReversalId:string;purchaseTransactionId:string;type:string;amount:number;currencyCode:string;status:string;reason:string};

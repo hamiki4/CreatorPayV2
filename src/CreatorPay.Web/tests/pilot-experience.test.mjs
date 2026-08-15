@@ -22,13 +22,14 @@ test('pilot experience supports every operational role in English',()=>{
   assert.doesNotMatch(experience,/[\u1200-\u137f]|Locale='en'\|'am'/)
 })
 test('offline, feedback, toast, and anonymous UX support remain available',()=>{
-  for(const item of ['navigator.onLine','creatorpay_access_token','weymela:toast','weymela:ux','/api/v1/pilot/feedback'])assert.ok(experience.includes(item))
+  for(const item of ['navigator.onLine','getAccessToken','weymela:toast','weymela:ux','/api/v1/pilot/feedback'])assert.ok(experience.includes(item))
   assert.doesNotMatch(experience,/analytics.*(?:email|phone|displayName)/i)
 })
-test('Creator and Business dashboards have one header Help link and no feedback tools',()=>{
+test('Creator and Business use unified account chrome without duplicate header tools',()=>{
   assert.match(experienceCompact,/role===["']Creator["']\|\|role===["']BusinessOwner["']/)
   assert.match(experienceCompact,/!dashboardRole/)
-  assert.match(mainCompact,/HelpLinkcategory=\{creator\?["']ContentCreators["']:["']Businesses["']\}/)
+  assert.doesNotMatch(mainCompact,/HelpLinkcategory=\{creator\?["']ContentCreators["']:["']Businesses["']\}/)
+  assert.match(creatorDashboard,/AccountChrome/)
 })
 test('Business Wallet uses the shared API client and friendly errors',()=>{
   assert.match(wallet,/import \{api,apiBlob\} from '\.\/apiClient'/)
@@ -54,7 +55,8 @@ test('Creator Ads preserves historical performance without exposing Shopper or p
   assert.doesNotMatch(creatorAds,/purchaseAmount|shopper|phone|customer/i)
   assert.doesNotMatch(creatorDashboard,/\['ads','Active Ads'\]|Confirmed Sales — Current Period/)
   assert.match(creatorDashboard,/\['ads','Ads'\]/)
-  for(const label of ['Payout Amount','Pending Requests','Reserved Payout'])assert.match(creatorDashboard,new RegExp(label))
+  for(const label of ['Payout Amount','Pending Requests','Next Payout Date'])assert.match(creatorDashboard,new RegExp(label))
+  assert.doesNotMatch(creatorDashboard,/Reserved Payout/)
 })
 test('Business creates phone-first Cashier credentials without email invitation delivery',()=>{
   for(const label of ['Create Cashier','Cashier Name','Phone Number','Temporary Password','Confirm Temporary Password','Location / Branch (Optional)','Cashier account created.','Disable','Reactivate'])assert.ok(main.includes(label))

@@ -1,9 +1,10 @@
 import {FormEvent,ReactNode,useEffect,useState} from 'react'
 import {ReportingWorkspace} from './ReportingWorkspace'
 import {clearAuthState,handleUnauthorized} from './authSession'
+import {getAccessToken} from './sessionStore'
 import {rankMatches,useTypeahead} from './typeahead'
 type Row=Record<string,unknown>;type Page={items:Row[];page:number;total:number;totalPages:number};type Ops=Record<string,ReactNode>
-const base=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'');const token=()=>localStorage.getItem('creatorpay_access_token')??''
+const base=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'');const token=getAccessToken
 async function api<T>(path:string):Promise<T>{const r=await fetch(`${base}${path}`,{headers:{Authorization:`Bearer ${token()}`}});if(handleUnauthorized(r.status))throw Error('Your session has expired.');const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(r.status===403?'Platform Admin permission is required.':b.detail??b.error??`Request failed (${r.status}).`);return b}
 // The redundant admin 'Transactions' page is intentionally not exposed in navigation.
 const routes=[['dashboard','Dashboard'],['reports','Reports'],['creators','Creators'],['merchants','Businesses'],['accounts','Accounts'],['commission','Commission'],['deposits','Deposits'],['wallets','Wallets'],['payouts','Payouts'],['fraud','Fraud'],['system','System']]

@@ -94,6 +94,21 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Public_role_registration_succeeds_without_birth_date_or_legal_business_name()
+    {
+        using var client=factory!.CreateClient(); const string password="Registration-test-1!";
+        var shopper=await client.PostAsJsonAsync("/api/v1/customers/register",new{displayName="No DOB Shopper",email=(string?)null,phoneNumber="0977000101",password,confirmation=password});
+        Assert.Equal(HttpStatusCode.Created,shopper.StatusCode);
+        var creator=await client.PostAsJsonAsync("/api/v1/creators/register",new{firstName="No",lastName="Birthdate",displayName="No DOB Creator",phoneNumber="0977000102",email=(string?)null,password,confirmation=password,preferredLanguage="en",city="Addis Ababa",biography="",contentCategories="Lifestyle",termsAccepted=true,socialProfiles=new[]{new{platform="TikTok",handle="no-dob-creator",profileUrl=(string?)null,followerCount=10,isPrimary=true}}});
+        Assert.Equal(HttpStatusCode.Created,creator.StatusCode);
+        var merchant=await client.PostAsJsonAsync("/api/v1/merchants/register",new{tradingName="No DOB Business",businessType="Other",primaryContactName="Business Owner",phoneNumber="0977000103",email=(string?)null,password,confirmation=password,businessAddress="Addis Ababa",city="Addis Ababa",region="Addis Ababa",country="Ethiopia",timeZone="Africa/Addis_Ababa",preferredLanguage="en",termsAccepted=true,documents=Array.Empty<object>()});
+        Assert.Equal(HttpStatusCode.Created,merchant.StatusCode);
+        await using var db=Db();
+        Assert.Equal(3,await db.UserAccounts.CountAsync(x=>new[]{"+251977000101","+251977000102","+251977000103"}.Contains(x.NormalizedPhoneNumber)&&x.BirthDate==null));
+        Assert.Equal("No DOB Business",await db.Merchants.Where(x=>x.TradingName=="No DOB Business").Select(x=>x.LegalBusinessName).SingleAsync());
+    }
+
+    [DockerFact]
     public async Task Reusable_offer_qr_checkout_validates_phone_and_posts_exactly_once()
     {
         using var client = factory!.CreateClient();

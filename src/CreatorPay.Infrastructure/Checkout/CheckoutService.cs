@@ -30,7 +30,6 @@ public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IP
         if (r.Password != r.Confirmation) throw new ArgumentException("Passwords do not match.");
         var errors = policy.Validate(r.Password); if (errors.Count > 0) throw new ArgumentException(string.Join(" ", errors));
         var phone = EthiopianMobileNumber.Normalize(r.PhoneNumber); var email = r.Email?.Trim().ToUpperInvariant() ?? "";
-        if (r.BirthDate is null) throw new ArgumentException("Birth date is required.");
         if (email.Length > 0 && await db.UserAccounts.AnyAsync(x => x.NormalizedEmail == email, ct)) throw new InvalidOperationException("Email is already registered.");
         if (await db.Customers.AnyAsync(x => x.NormalizedPhoneNumber == phone, ct) || await db.Creators.AnyAsync(x => x.NormalizedPhoneNumber == phone, ct) || await db.Merchants.AnyAsync(x => x.NormalizedPhoneNumber == phone, ct)) throw new InvalidOperationException("Phone number is already registered.");
         var now = clock.UtcNow;

@@ -4,7 +4,7 @@ import type {Page} from '@playwright/test'
 const password=process.env.E2E_SHOPPER_PASSWORD!
 const suffix=(project:string)=>project==='mobile'?'2':'1'
 function phoneFor(identity:string){const match=identity.match(/^(creator-request|creator-invite|creator-pending|business)-(\d)@/);if(!match)throw Error(`No E2E phone mapping for ${identity}`);const prefixes:Record<string,string>={'creator-request':'+25194400000','creator-invite':'+25195500000','creator-pending':'+25196600000','business':'+25193400000'};return `${prefixes[match[1]]}${match[2]}`}
-async function login(page:Page,identity:string){const admin=identity==='admin@e2e.invalid';await page.goto('/');await page.getByLabel('Phone Number').fill(admin?identity:phoneFor(identity));await page.getByLabel('Password').fill(password);await page.locator('form').getByRole('button',{name:'Sign In'}).click();if(admin)return;const setup=page.getByRole('heading',{name:'Complete your secure setup'});try{await setup.waitFor({state:'visible',timeout:3000})}catch{return}await page.getByLabel('Day').fill('2');await page.getByLabel('Month').fill('1');await page.getByLabel('Year').fill('1990');await page.getByLabel('Create your 5-digit PIN').fill('12345');await page.getByLabel('Confirm PIN').fill('12345');await page.getByRole('button',{name:'Create PIN'}).click()}
+async function login(page:Page,identity:string){const admin=identity==='admin@e2e.invalid';await page.goto('/');await page.getByLabel('Phone Number').fill(admin?identity:phoneFor(identity));await page.getByLabel('Password').fill(password);await page.locator('form').getByRole('button',{name:'Sign In'}).click();if(admin)return;const setup=page.getByRole('heading',{name:'Complete your secure setup'});try{await setup.waitFor({state:'visible',timeout:3000})}catch{return}await page.getByLabel('Day').fill('2');await page.getByLabel('Month').fill('1');await page.getByLabel('Year').fill('1990');await page.getByLabel('Create 5-digit PIN').fill('12345');await page.getByLabel('Confirm PIN').fill('12345');await page.getByRole('button',{name:'Create PIN'}).click()}
 
 test('Admin payout cycles use readable summaries and compact searches',async({page})=>{
   await login(page,'admin@e2e.invalid')
@@ -45,14 +45,14 @@ test('Platform Admin approves a pending Creator',async({page},testInfo)=>{
   await expect(page.locator('article').filter({hasText:name})).toHaveCount(0)
   await page.getByRole('button',{name:'Sign out'}).click()
   await login(page,`creator-pending-${n}@e2e.invalid`)
-  await expect(page.getByRole('heading',{name:'Creator Dashboard'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Creator'})).toBeVisible()
   await expect(page.getByText('Active',{exact:true}).first()).toBeVisible()
 })
 
 test('Creator requests a Business and the Business activates it',async({page},testInfo)=>{
   const n=suffix(testInfo.project.name),label=n==='1'?'Desktop':'Mobile',business=`${label} Workflow Business`,creator=`${label} Request Creator`
   await login(page,`creator-request-${n}@e2e.invalid`)
-  await expect(page.getByRole('heading',{name:'Creator Dashboard'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Creator'})).toBeVisible()
   await expect(page.getByRole('link',{name:'Help',exact:true})).toHaveCount(1)
   await expect(page.getByRole('button',{name:'Send feedback'})).toHaveCount(0)
   await page.getByRole('button',{name:'Find Businesses'}).first().click()
@@ -70,7 +70,7 @@ test('Creator requests a Business and the Business activates it',async({page},te
 
   await page.evaluate(()=>localStorage.clear())
   await login(page,`business-${n}@e2e.invalid`)
-  await expect(page.getByRole('heading',{name:'Business Dashboard'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Business'})).toBeVisible()
   await expect(page.getByRole('link',{name:'Help',exact:true})).toHaveCount(1)
   await expect(page.getByRole('button',{name:'Send feedback'})).toHaveCount(0)
   await page.getByRole('button',{name:'Requests'}).click()

@@ -3,6 +3,8 @@ import { brand } from "./brand";
 import { workspaceRoute } from "./authSession";
 import {takeCreatorQrPath} from './creatorQrDeepLink'
 import { ForgotPin, pinUnlock } from './PinExperience'
+import {getTrustedPhone,setSessionTokens,setTrustedPhone} from './sessionStore'
+import {NATIVE_BACK_EVENT} from './mobileLifecycle'
 
 const base = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 type Mode = "welcome" | "login" | "pin" | "signup" | "customer" | "creator" | "merchant";
@@ -59,7 +61,6 @@ const loginBlank = () => ({ email: "", password: "" }),
     phoneNumber: "",
     password: "",
     confirmation: "",
-    birthDay:"",birthMonth:"",birthYear:"",
   }),
   creatorBlank = () => ({
     firstName: "",
@@ -75,10 +76,8 @@ const loginBlank = () => ({ email: "", password: "" }),
     profileUrl: "",
     followerCount: 0,
     termsAccepted: false,
-    birthDay:"",birthMonth:"",birthYear:"",
   }),
   businessBlank = () => ({
-    legalBusinessName: "",
     tradingName: "",
     businessType: "",
     primaryContactName: "",
@@ -95,12 +94,11 @@ const loginBlank = () => ({ email: "", password: "" }),
     businessRegistrationNumber: null,
     preferredLanguage: "en",
     termsAccepted: false,
-    birthDay:"",birthMonth:"",birthYear:"",
   });
 const dob=(x:{birthDay:string;birthMonth:string;birthYear:string})=>{const d=Number(x.birthDay),m=Number(x.birthMonth),y=Number(x.birthYear),v=new Date(Date.UTC(y,m-1,d));return y>=1900&&y<=new Date().getUTCFullYear()&&v.getUTCFullYear()===y&&v.getUTCMonth()===m-1&&v.getUTCDate()===d?`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`:null};
 
 export function AuthWorkspace() {
-  const trustedPhone=localStorage.getItem("weymela_trusted_phone")??"";
+  const trustedPhone=getTrustedPhone();
   const welcomeSeen=localStorage.getItem("weymela_welcome_seen")==="1";
   const [mode, setMode] = useState<Mode>(trustedPhone?"pin":welcomeSeen?"login":"welcome"),
     [login, setLogin] = useState(loginBlank),
@@ -136,6 +134,17 @@ export function AuthWorkspace() {
     shopperSubmitting.current = false;
     setMode(next);
   }
+  useEffect(()=>{
+    const back=(event:Event)=>{
+      if(forgotPin){event.preventDefault();setForgotPin(false);return}
+      if(forgot){event.preventDefault();setForgot(false);setResetStage("request");setResetReference("");return}
+      if(mode==="customer"||mode==="creator"||mode==="merchant"||mode==="signup"){
+        event.preventDefault();changeMode("login")
+      }
+    }
+    addEventListener(NATIVE_BACK_EVENT,back)
+    return()=>removeEventListener(NATIVE_BACK_EVENT,back)
+  },[mode,forgot,forgotPin])
   async function post(path: string, body: unknown) {
     setBusy(true);
     setMessage("");
@@ -197,9 +206,8 @@ export function AuthWorkspace() {
         return;
       }
       const x = v as Tokens;
-      localStorage.setItem("creatorpay_access_token", x.accessToken);
-      localStorage.setItem("creatorpay_refresh_token", x.refreshToken);
-      if(x.user.role!=="PlatformAdmin"&&x.user.phoneNumber)localStorage.setItem("weymela_trusted_phone",x.user.phoneNumber);
+      await setSessionTokens(x.accessToken,x.refreshToken);
+      if(x.user.role!=="PlatformAdmin"&&x.user.phoneNumber)await setTrustedPhone(x.user.phoneNumber);
       const continuation=takeCreatorQrPath()
       location.assign(continuation??workspaceRoute(x.user.role));
     } catch (error) {
@@ -209,7 +217,7 @@ export function AuthWorkspace() {
       setBusy(false);
     }
   }
-  async function unlockPin(e:FormEvent){e.preventDefault();setBusy(true);setMessage("");try{const x=await pinUnlock(trustedPhone,pinValue);localStorage.setItem("creatorpay_access_token",x.accessToken);localStorage.setItem("creatorpay_refresh_token",x.refreshToken);location.assign(workspaceRoute(x.user.role))}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}
+  async function unlockPin(e:FormEvent){e.preventDefault();setBusy(true);setMessage("");try{const x=await pinUnlock(trustedPhone,pinValue);await setSessionTokens(x.accessToken,x.refreshToken);location.assign(workspaceRoute(x.user.role))}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}
   if(mode==="pin") return <main className="auth pin-auth"><section className="panel pin-panel"><p className="pin-brand">WEYMELA</p>{forgotPin?<ForgotPin phoneNumber={trustedPhone} onBack={()=>setForgotPin(false)}/>:<form onSubmit={unlockPin}><h1>Enter your 5-digit PIN</h1><label className="pin-entry"><span className="sr-only">5-digit PIN</span><input inputMode="numeric" autoComplete="current-password" pattern="[0-9]{5}" maxLength={5} required autoFocus value={pinValue} onChange={e=>setPinValue(e.target.value.replace(/\D/g,"").slice(0,5))}/><span className="pin-cells" aria-hidden="true">{Array.from({length:5},(_,i)=><i key={i}>{pinValue[i]?"•":""}</i>)}</span></label><button disabled={busy}>Sign In</button><button type="button" className="quiet" onClick={()=>setForgotPin(true)}>Forgot PIN</button><button type="button" className="quiet" onClick={()=>changeMode("signup")}>Sign Up to Weymela</button>{message&&<p role="alert">{message}</p>}</form>}</section></main>;
   const field = (
     state: Record<string, unknown>,
@@ -284,7 +292,7 @@ export function AuthWorkspace() {
     <main className="auth">
       <section className="auth-card" aria-busy={busy}>
         <p className="eyebrow">{brand.logoText}</p>
-        <h1>{mode==="welcome"?"Welcome to Weymela":mode==="signup"?"Sign Up to Weymela":mode==="login"?"Sign In":"Create your account"}</h1>
+        <h1>{mode==="welcome"?"Welcome to Weymela":mode==="signup"?"Sign Up to Weymela":mode==="login"?"Sign In":mode==="merchant"?"Create business account":"Create your account"}</h1>
         {mode==="login"&&<p className="auth-intro">Welcome back. Keep shopping, promoting, and earning with Weymela.</p>}
         {mode==="signup"&&<p className="auth-intro">Welcome to Weymela — where shoppers save, creators earn, and businesses grow.</p>}
         {mode === "welcome" ? <><p className="auth-intro welcome-subtitle">Shop. Promote. Earn.</p><div className="signup-choices"><button onClick={()=>changeMode("customer")}>{text.customer}</button><button onClick={()=>changeMode("creator")}>{text.creator}</button><button onClick={()=>changeMode("merchant")}>{text.business}</button></div><button type="button" className="quiet auth-back" onClick={()=>changeMode("login")}>Already have an account? Sign In</button></> : mode === "signup" ? <><div className="signup-choices"><button onClick={()=>changeMode("customer")}>{text.customer}</button><button onClick={()=>changeMode("creator")}>{text.creator}</button><button onClick={()=>changeMode("merchant")}>{text.business}</button></div><button type="button" className="quiet auth-back" onClick={()=>changeMode("login")}>Back to Sign In</button></> : mode === "login" ? (
@@ -383,13 +391,11 @@ export function AuthWorkspace() {
                 },
                 p = phone(shopper.phoneNumber);
               if (!p || !validPassword(credentials)) return;
-              const birthDate=dob(credentials);if(!birthDate){setMessage("Enter a valid birth date using Day, Month, and Year.");return}
               shopperSubmitting.current = true;
               try {
                 const result = await post("/api/v1/customers/register", {
                     ...credentials,
                     phoneNumber: p,
-                    birthDate,
                   });
                 if (result) {
                   setMessage(result.message ?? "Shopper account created. Sign in with your phone and password.");
@@ -403,7 +409,6 @@ export function AuthWorkspace() {
             {field(shopper, setShopper, "displayName", "Display Name")}
             {field(shopper, setShopper, "phoneNumber", text.phone, "tel")}
             {field(shopper, setShopper, "email", text.email, "email")}
-            {birthFields(shopper,setShopper)}
             <label>
               {text.password}
               <input
@@ -447,7 +452,6 @@ export function AuthWorkspace() {
               e.preventDefault();
               const p = phone(creator.phoneNumber);
               if (!p || !validPassword(creator)) return;
-              const birthDate=dob(creator);if(!birthDate){setMessage("Enter a valid birth date using Day, Month, and Year.");return}
               const {
                 confirmation,
                 platform,
@@ -459,7 +463,6 @@ export function AuthWorkspace() {
                   ...request,
                   phoneNumber: p,
                   confirmation,
-                  birthDate,
                   biography: "Pilot creator",
                   contentCategories: "General",
                   socialProfiles: profileUrl
@@ -485,7 +488,6 @@ export function AuthWorkspace() {
             {field(creator, setCreator, "displayName", "Public Display Name")}
             {field(creator, setCreator, "phoneNumber", text.phone, "tel")}
             {field(creator, setCreator, "email", text.email, "email")}
-            {birthFields(creator,setCreator)}
             {field(creator, setCreator, "city", "Primary City")}
             {field(creator, setCreator, "platform", "Primary Social Platform")}
             {field(
@@ -524,13 +526,11 @@ export function AuthWorkspace() {
               const p = phone(business.phoneNumber);
               if (!p || !validPassword(business)) return;
               const { confirmation, ...request } = business;
-              const birthDate=dob(business);if(!birthDate){setMessage("Enter a valid birth date using Day, Month, and Year.");return}
               const result = await post("/api/v1/merchants/register", {
                   ...request,
                   phoneNumber: p,
                   documents: [],
                   confirmation,
-                  birthDate,
                 });
               if (result) {
                 setMessage(result.message ?? "Business Owner registration received. Your account is pending Platform review.");
@@ -538,12 +538,6 @@ export function AuthWorkspace() {
             }}
           >
             <button type="button" className="quiet auth-back registration-back" onClick={()=>changeMode("login")}>Back to Sign In</button>
-            {field(
-              business,
-              setBusiness,
-              "legalBusinessName",
-              "Legal Business Name",
-            )}
             {field(business, setBusiness, "tradingName", "Trading Name")}
             <label>
               Business Type
@@ -572,7 +566,6 @@ export function AuthWorkspace() {
             )}
             {field(business, setBusiness, "phoneNumber", text.phone, "tel")}
             {field(business, setBusiness, "email", text.email, "email")}
-            {birthFields(business,setBusiness)}
             {field(
               business,
               setBusiness,

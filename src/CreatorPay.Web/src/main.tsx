@@ -31,10 +31,17 @@ import { MerchantWorkspace } from "./MerchantWorkspace";
 import {
   clearAuthState,
   handleUnauthorized,
-  installInactivityLogout,
   isWorkspacePathAllowed,
   workspaceRoute,
 } from "./authSession";
+import { installNativeBackNavigation, installSessionLifecycle } from "./mobileLifecycle";
+import { isNativePlatform } from "./runtimePlatform";
+import {
+  getAccessToken,
+  getRefreshToken,
+  hydrateSession,
+  setSessionTokens,
+} from "./sessionStore";
 import { OnboardingStatus } from "./OnboardingStatus";
 import { ContactSupport, HelpCenter, HelpLink, LegalPage } from "./PublicPages";
 import { PilotExperience } from "./PilotExperience";
@@ -84,7 +91,7 @@ const strings = {
   },
 };
 const t = strings.en;
-const token = () => localStorage.getItem("creatorpay_access_token") ?? "";
+const token = getAccessToken;
 const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 function claims(): User {
   try {
@@ -103,7 +110,7 @@ function claims(): User {
   }
 }
 async function refreshAccess() {
-  const refreshToken = localStorage.getItem("creatorpay_refresh_token");
+  const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
   const response = await fetch(`${apiBase}/api/v1/auth/refresh`, {
     method: "POST",
@@ -112,8 +119,7 @@ async function refreshAccess() {
   });
   if (!response.ok) return false;
   const value = await response.json();
-  localStorage.setItem("creatorpay_access_token", value.accessToken);
-  localStorage.setItem("creatorpay_refresh_token", value.refreshToken);
+  await setSessionTokens(value.accessToken, value.refreshToken);
   return true;
 }
 async function api<T>(
@@ -144,7 +150,7 @@ async function api<T>(
   return response.status === 204 ? (undefined as T) : response.json();
 }
 async function signOut() {
-  const refreshToken = localStorage.getItem("creatorpay_refresh_token");
+  const refreshToken = getRefreshToken();
   try {
     if (refreshToken)
       await fetch(`${apiBase}/api/v1/auth/logout`, {
@@ -153,7 +159,7 @@ async function signOut() {
         body: JSON.stringify({ refreshToken }),
       });
   } finally {
-    clearAuthState();
+    await clearAuthState();
     location.assign("/");
   }
 }
@@ -777,27 +783,18 @@ function App({initialQrPayload}:{initialQrPayload?:string}={}) {
       <a className="skip" href="#workspace-content">
         Skip to content
       </a>
-      <header>
-        <div>
-          <p className="eyebrow">{brand.productName}</p>
-          <h1>{creator ? "Creator Dashboard" : "Business Dashboard"}</h1>
-        </div>
-        <div className="header-actions">
-          <HelpLink category={creator ? "Content Creators" : "Businesses"} />
-          <SignOutButton />
-        </div>
-      </header>
       <PilotExperience role={creator ? "Creator" : "Business Owner"} />
       <div id="workspace-content" tabIndex={-1}>
         {!active ? (
           <OnboardingStatus role={creator ? "Creator" : "MerchantAdmin"} />
         ) : creator ? (
-          <CreatorDashboard />
+          <CreatorDashboard onSignOut={()=>void signOut()} />
         ) : (
           <BusinessDashboard
             cashiers={<StaffArea kind="cashiers" />}
             wallet={<MerchantWalletWorkspace />}
             profile={<MerchantWorkspace />}
+            onSignOut={()=>void signOut()}
           />
         )}
       </div>
@@ -832,19 +829,9 @@ function Root() {
         <a className="skip" href="#workspace-content">
           Skip to content
         </a>
-        <header>
-          <div>
-            <p className="eyebrow">{brand.productName}</p>
-            <h1>Shopper Dashboard</h1>
-          </div>
-          <div className="header-actions">
-            <HelpLink category="Shoppers" />
-            <SignOutButton />
-          </div>
-        </header>
         <div id="workspace-content" tabIndex={-1}>
           {user.status === "Active" ? (
-            <CustomerWorkspace />
+            <CustomerWorkspace onSignOut={()=>void signOut()} />
           ) : (
             <OnboardingStatus role="Customer" />
           )}
@@ -870,19 +857,33 @@ function Root() {
   );
 }
 function SessionGuard({ children }: { children: ReactNode }) {
-  useEffect(() => (token() ? installInactivityLogout() : undefined), []);
+  useEffect(() => {
+    const removeBack = installNativeBackNavigation();
+    const removeSession = token()
+      ? installSessionLifecycle(async () => {
+          if (!token()) return false;
+          return refreshAccess();
+        })
+      : undefined;
+    return () => { removeBack?.(); removeSession?.(); };
+  }, []);
   return children;
 }
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <SessionGuard>
-        <Root />
-      </SessionGuard>
-    </ErrorBoundary>
-  </StrictMode>,
-);
-if ("serviceWorker" in navigator)
+
+function renderApplication() {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <SessionGuard>
+          <Root />
+        </SessionGuard>
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}
+
+function registerServiceWorker() {
+  if (isNativePlatform() || !("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     if (import.meta.env.DEV) {
       void Promise.all([
@@ -922,4 +923,22 @@ if ("serviceWorker" in navigator)
         });
       })
       .catch(() => {});
+  });
+}
+
+void hydrateSession()
+  .then(() => {
+    renderApplication();
+    registerServiceWorker();
+  })
+  .catch((error) => {
+    console.error("Authentication storage could not be initialized.", error);
+    createRoot(document.getElementById("root")!).render(
+      <main className="auth">
+        <section className="panel" role="alert">
+          <h1>Weymela could not start</h1>
+          <p>Close and reopen the app. If this continues, contact support.</p>
+        </section>
+      </main>,
+    );
   });

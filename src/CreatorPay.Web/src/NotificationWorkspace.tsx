@@ -1,7 +1,8 @@
 import {useEffect,useState} from 'react'
+import {getAccessToken} from './sessionStore'
 
 const apiBase=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'')
-const token=()=>localStorage.getItem('creatorpay_access_token')??''
+const token=getAccessToken
 const invalidResponse='This section is temporarily unavailable.'
 
 async function notificationApi<T>(path:string,init?:RequestInit):Promise<T>{

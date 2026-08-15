@@ -20,7 +20,6 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         if (error is not null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(error));
         var passwordErrors = passwordPolicy.Validate(request.Password);
         if (passwordErrors.Count > 0) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(string.Join(" ", passwordErrors)));
-        if (request.BirthDate is null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure("Birth date is required."));
         if (request.Confirmation is not null && request.Password != request.Confirmation) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure("Password confirmation does not match."));
         return RegisterValidatedAsync(request, ct);
     }

@@ -32,11 +32,11 @@ test("simplified phone, PIN, birth-date recovery, lockout, signup, and admin flo
   await page.getByLabel("Phone Number").fill(phone);
   await page.getByLabel("Password").fill(password);
   await page.locator("form").getByRole("button",{name:"Sign In",exact:true}).click();
-  await expect(page.getByRole("heading",{name:"Create your 5-digit PIN"})).toBeVisible();
-  await fillPin(page,"Create your 5-digit PIN",initialPin);
+  await expect(page.getByRole("heading",{name:"Create 5-digit PIN"})).toBeVisible();
+  await fillPin(page,"Create 5-digit PIN",initialPin);
   await fillPin(page,"Confirm PIN",initialPin);
   await page.getByRole("button",{name:"Create PIN"}).click();
-  await expect(page.getByRole("heading",{name:"Shopper Dashboard"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Shopper"})).toBeVisible();
 
   await clearSession(page);await page.goto("/");
   await expect(page.getByRole("heading",{name:"Enter your 5-digit PIN"})).toBeVisible();

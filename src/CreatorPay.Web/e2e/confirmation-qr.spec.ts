@@ -12,12 +12,12 @@ async function login(page:Page,phone:string){
   await expect(pinUnlock.or(page.getByLabel('Phone Number'))).toBeVisible()
   if(await pinUnlock.isVisible()){await page.getByLabel('5-digit PIN').fill('12345');await page.locator('form').getByRole('button',{name:'Sign In'}).click();await page.waitForFunction(()=>location.pathname!=='/');return}
   await page.getByLabel('Phone Number').fill(phone);await page.getByLabel('Password').fill(password);const pending=page.waitForResponse(r=>r.url().includes('/api/v1/auth/login')&&r.request().method()==='POST');await page.locator('form').getByRole('button',{name:'Sign In'}).click();expect((await pending).ok()).toBeTruthy();await page.waitForFunction(()=>location.pathname!=='/')
-  const setup=page.getByRole('heading',{name:/^(Complete your secure setup|Create your 5-digit PIN)$/})
+  const setup=page.getByRole('heading',{name:/^(Complete your secure setup|Create 5-digit PIN)$/})
   const workspace=page.locator('main.app')
   await expect(setup.or(workspace)).toBeVisible()
   if(await workspace.isVisible())return
   if(await page.getByLabel('Day').isVisible()){await page.getByLabel('Day').fill('2');await page.getByLabel('Month').fill('1');await page.getByLabel('Year').fill('1990')}
-  await page.getByLabel('Create your 5-digit PIN').fill('12345');await page.getByLabel('Confirm PIN').fill('12345');await page.getByRole('button',{name:'Create PIN'}).click()
+  await page.getByLabel('Create 5-digit PIN').fill('12345');await page.getByLabel('Confirm PIN').fill('12345');await page.getByRole('button',{name:'Create PIN'}).click()
   await expect(workspace).toBeVisible()
 }
 async function logout(page:Page){await page.evaluate(()=>localStorage.clear());await page.goto('/')}
