@@ -5,6 +5,7 @@ import {takeCreatorQrPath} from './creatorQrDeepLink'
 import { ForgotPin, pinUnlock } from './PinExperience'
 import {getTrustedPhone,setSessionTokens,setTrustedPhone} from './sessionStore'
 import {NATIVE_BACK_EVENT} from './mobileLifecycle'
+import { PasswordInput } from './PasswordInput'
 
 const base = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 type Mode = "welcome" | "login" | "pin" | "signup" | "customer" | "creator" | "merchant";
@@ -95,8 +96,6 @@ const loginBlank = () => ({ email: "", password: "" }),
     preferredLanguage: "en",
     termsAccepted: false,
   });
-const dob=(x:{birthDay:string;birthMonth:string;birthYear:string})=>{const d=Number(x.birthDay),m=Number(x.birthMonth),y=Number(x.birthYear),v=new Date(Date.UTC(y,m-1,d));return y>=1900&&y<=new Date().getUTCFullYear()&&v.getUTCFullYear()===y&&v.getUTCMonth()===m-1&&v.getUTCDate()===d?`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`:null};
-
 export function AuthWorkspace() {
   const trustedPhone=getTrustedPhone();
   const welcomeSeen=localStorage.getItem("weymela_welcome_seen")==="1";
@@ -112,7 +111,6 @@ export function AuthWorkspace() {
     [resetReference,setResetReference]=useState(""),
     [reset, setReset] = useState({
       phoneNumber: "",
-      birthDay:"",birthMonth:"",birthYear:"",
       newPassword: "",
       confirmation: "",
     }), [pinValue,setPinValue]=useState(""), [forgotPin,setForgotPin]=useState(false);
@@ -129,7 +127,7 @@ export function AuthWorkspace() {
     setMessage("");
     setForgot(false);
     setResetStage("request");setResetReference("");
-    setReset({ phoneNumber: "", birthDay:"",birthMonth:"",birthYear:"", newPassword: "", confirmation: "" });
+    setReset({ phoneNumber: "", newPassword: "", confirmation: "" });
     setPinValue(""); setForgotPin(false);
     shopperSubmitting.current = false;
     setMode(next);
@@ -225,7 +223,13 @@ export function AuthWorkspace() {
     key: string,
     label: string,
     type = "text",
-  ) => (
+  ) => type === "password" ? <PasswordInput
+      label={label}
+      required
+      autoComplete={key === "password" && mode === "login" ? "current-password" : "new-password"}
+      value={String(state[key] ?? "")}
+      onChange={value => set({...state,[key]:value})}
+    /> : (
     <label>
       {label}
       <input
@@ -261,33 +265,14 @@ export function AuthWorkspace() {
     set: (x: any) => void,
   ) => (
     <>
-      <label>
-        {text.password}
-        <input
-          type="password"
-          required
-          minLength={8}
-          value={state.password}
-          onChange={(e) => set({ ...state, password: e.target.value })}
-        />
-      </label>
-      <label>
-        {text.confirm}
-        <input
-          type="password"
-          required
-          minLength={8}
-          value={state.confirmation}
-          onChange={(e) => set({ ...state, confirmation: e.target.value })}
-        />
-      </label>
+      <PasswordInput label={text.password} required minLength={8} autoComplete="new-password" value={state.password} onChange={value=>set({...state,password:value})}/>
+      <PasswordInput label={text.confirm} required minLength={8} autoComplete="new-password" value={state.confirmation} onChange={value=>set({...state,confirmation:value})}/>
       <small className="full">
         At least 8 characters with uppercase, lowercase, a number, and a special
         character.
       </small>
     </>
   );
-  const birthFields=(state:any,set:(x:any)=>void)=><fieldset className="birth-date"><legend>Birth Date</legend>{[["birthDay","Day",31],["birthMonth","Month",12],["birthYear","Year",new Date().getUTCFullYear()]].map(([key,label,max])=><label key={String(key)}>{label}<input type="number" inputMode="numeric" min={key==="birthYear"?1900:1} max={max} required value={state[key as string]} onChange={e=>set({...state,[key as string]:e.target.value})}/></label>)}</fieldset>;
   return (
     <main className="auth">
       <section className="auth-card" aria-busy={busy}>
@@ -302,8 +287,7 @@ export function AuthWorkspace() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 if(resetStage==="request"){
-                  const birthDate=dob(reset);if(!birthDate){setMessage("Enter a valid birth date using Day, Month, and Year.");return}
-                  const result=await post("/api/v1/auth/password-reset-requests",{phoneNumber:reset.phoneNumber,birthDate});
+                  const result=await post("/api/v1/auth/password-reset-requests",{phoneNumber:reset.phoneNumber});
                   if(result){setResetReference(result.reference??"");setResetStage("waiting");setMessage("Your password reset request is waiting for support approval.")}
                   return;
                 }
@@ -316,7 +300,7 @@ export function AuthWorkspace() {
             >
               <h2>Forgot Password</h2>
               <p className="full">Request help resetting your password.</p>
-              {resetStage==="request"&&<>{field(reset, setReset, "phoneNumber", "Phone Number", "tel")}{birthFields(reset,setReset)}</>}
+              {resetStage==="request"&&field(reset, setReset, "phoneNumber", "Phone Number", "tel")}
               {resetStage==="approved" && (
                 <>
                   {field(
@@ -344,7 +328,7 @@ export function AuthWorkspace() {
                 onClick={() => {
                   setForgot(false);
                   setResetStage("request");setResetReference("");
-                  setReset({ phoneNumber: "", birthDay:"",birthMonth:"",birthYear:"", newPassword: "", confirmation: "" });
+                  setReset({ phoneNumber: "", newPassword: "", confirmation: "" });
                   setMessage("");
                 }}
               >
@@ -368,7 +352,7 @@ export function AuthWorkspace() {
                 onClick={() => {
                   setForgot(true);
                   setResetStage("request");setResetReference("");
-                  setReset({ phoneNumber: "", birthDay:"",birthMonth:"",birthYear:"", newPassword: "", confirmation: "" });
+                  setReset({ phoneNumber: "", newPassword: "", confirmation: "" });
                   setMessage("");
                 }}
               >
@@ -409,36 +393,8 @@ export function AuthWorkspace() {
             {field(shopper, setShopper, "displayName", "Display Name")}
             {field(shopper, setShopper, "phoneNumber", text.phone, "tel")}
             {field(shopper, setShopper, "email", text.email, "email")}
-            <label>
-              {text.password}
-              <input
-                id="shopper-password"
-                name="shopperPassword"
-                type="password"
-                required
-                minLength={8}
-                autoComplete="new-password"
-                value={shopper.password}
-                onChange={(e) =>
-                  setShopper({ ...shopper, password: e.target.value })
-                }
-              />
-            </label>
-            <label>
-              {text.confirm}
-              <input
-                id="shopper-confirm-password"
-                name="shopperConfirmation"
-                type="password"
-                required
-                minLength={8}
-                autoComplete="new-password"
-                value={shopper.confirmation}
-                onChange={(e) =>
-                  setShopper({ ...shopper, confirmation: e.target.value })
-                }
-              />
-            </label>
+            <PasswordInput label={text.password} id="shopper-password" name="shopperPassword" required minLength={8} autoComplete="new-password" value={shopper.password} onChange={value=>setShopper({...shopper,password:value})}/>
+            <PasswordInput label={text.confirm} id="shopper-confirm-password" name="shopperConfirmation" required minLength={8} autoComplete="new-password" value={shopper.confirmation} onChange={value=>setShopper({...shopper,confirmation:value})}/>
             <small className="full">
               At least 8 characters with uppercase, lowercase, a number, and a
               special character.

@@ -89,9 +89,8 @@ public sealed class CampaignService(ApplicationDbContext db, IUtcClock clock, IO
     }
     private async Task<bool> IsFundingEligible(Guid merchantId, CancellationToken ct)
     {
-        var minimum = await db.PlatformFinancialSettings.Where(x => x.CurrencyCode == options.CurrencyCode).Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? options.MinimumActivationBalance;
-        return await db.Merchants.AnyAsync(x => x.Id == merchantId && x.Status == MerchantStatus.Active, ct)
-            && await db.MerchantWallets.AnyAsync(x => x.MerchantId == merchantId && x.CurrencyCode == options.CurrencyCode && x.AvailableBalance >= minimum, ct)
+        return await db.Merchants.AnyAsync(x => x.Id == merchantId && (x.Status == MerchantStatus.Active || x.Status == MerchantStatus.LowBalance), ct)
+            && await db.MerchantWallets.AnyAsync(x => x.MerchantId == merchantId && x.CurrencyCode == options.CurrencyCode && x.AvailableBalance > 0, ct)
             && await db.MerchantLocations.AnyAsync(x => x.MerchantId == merchantId && x.IsActive, ct);
     }
     private Task<bool> HasOpenCampaign(Guid partnershipId, Guid? excluding, CancellationToken ct) => db.CreatorMerchantCampaigns.AnyAsync(x => x.MerchantCreatorPartnershipId == partnershipId && x.Id != excluding && (x.Status == CampaignStatus.ApprovedAwaitingStart || x.Status == CampaignStatus.Scheduled || x.Status == CampaignStatus.Active), ct);

@@ -73,7 +73,9 @@ public sealed class Merchant : Entity
     {
         if (Status is MerchantStatus.Suspended or MerchantStatus.Rejected or MerchantStatus.Closed or MerchantStatus.PendingApproval or MerchantStatus.PendingReview or MerchantStatus.CorrectionRequested) return "Unchanged";
         var previous = Status;
-        Status = balance < minimum ? MerchantStatus.FundingRestricted : balance < warning ? MerchantStatus.LowBalance : MerchantStatus.Active;
+        // Minimum activation balance is not a per-transaction block. A funded
+        // merchant below the warning threshold remains operational in LowBalance.
+        Status = balance < warning ? MerchantStatus.LowBalance : MerchantStatus.Active;
         UpdatedAtUtc = now; UpdatedBy = updatedBy;
         return previous == Status ? "Unchanged" : $"{previous}->{Status}";
     }

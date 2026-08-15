@@ -74,7 +74,6 @@ test('Business creates phone-first Cashier credentials without email invitation 
   assert.match(cashier,/\/api\/v1\/cashier\/checkouts\/by-creator/)
   assert.match(cashier,/Shopper account not found\./)
   assert.doesNotMatch(auth,/type Mode=.*cashier/)
-  assert.doesNotMatch(main,/Birth Date|birthDate/)
 })
 test('Business Cashier creation uses POST, friendly errors, and shared responsive table columns',()=>{
   assert.match(mainCompact,/\/api\/v1\/merchant\/cashiers["'],\{method:["']POST["']/)
@@ -118,13 +117,11 @@ test('public authentication uses support-approved recovery without verification 
   assert.doesNotMatch(auth,/Send verification code|Verify your phone|6-digit verification code|code sent to your phone/)
 })
 test('Creator and Business discovery show relationship status without duplicate actions',()=>{
-  for(const label of ['Request Pending','Active Ad','Deactivated'])assert.match(creatorAds,new RegExp(label))
-  const find=creatorAds.slice(creatorAds.indexOf('export function FindBusinesses'),creatorAds.indexOf('type AdBusiness'))
-  assert.doesNotMatch(find,/Days Left|data-label="Action"/)
+  for(const label of ['Request Pending','Active Ad','Deactivated','Days Left'])assert.match(creatorAds,new RegExp(label))
   for(const label of ['Invitation Pending','Currently Advertising','Deactivated','Days Left'])assert.match(businessAds,new RegExp(label))
   assert.match(relationshipTime,/Activation Required/)
-  assert.match(creatorAds,/state\.canRequest\?/)
-  assert.match(businessAds,/canInvite\s*&&/)
+  assert.match(creatorAds,/canRequest:true/)
+  assert.match(businessAds,/canInvite\s*:\s*true/)
   assert.match(styles,/\.discovery-row/)
 })
 test('Creator dashboard presents the permanent four-digit Creator ID',()=>{

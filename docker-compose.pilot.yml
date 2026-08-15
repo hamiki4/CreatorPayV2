@@ -7,6 +7,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Pilot
       PublicAppBaseUrl: ${PUBLIC_APP_BASE_URL:-https://pilot.weymela.com}
+      Cors__AllowedOrigins__1: https://localhost
       SmsOtp__HashSecret: ${SmsOtp__HashSecret:?Set a distinct OTP hash secret of at least 32 characters}
       SmsOtp__TestCode: ${SmsOtp__TestCode:?Set the controlled six-digit pilot OTP}
       SmsOtp__PilotRegistrationAutoVerifyEnabled: ${SmsOtp__PilotRegistrationAutoVerifyEnabled:-false}

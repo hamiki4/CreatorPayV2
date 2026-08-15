@@ -16,13 +16,13 @@ test("normal roles are gated by PIN while PlatformAdmin remains unchanged", () =
 test("PIN UI enforces five digits and exposes recovery", () => {
   assert.match(pin, /\^\\d\{5\}\$/);
   assert.match(auth, /Forgot PIN/);
-  assert.match(pin, /\/api\/v1\/auth\/pin\/recovery-proof/);
-  assert.match(pin, /\/api\/v1\/auth\/pin\/reset/);
+  assert.match(pin, /\/api\/v1\/auth\/pin\/reset-with-password/);
+  assert.match(pin, /Confirm your account password/);
 });
 
 test("PIN enrollment and recovery no longer use Firebase, email, SMS, or OTP", () => {
-  assert.match(pin, /Birth Date/);
-  assert.match(pin, /phoneNumber,birthDate/);
+  assert.doesNotMatch(pin, /Birth Date|birthDate|birthDay|birthMonth|birthYear/);
+  assert.match(pin, /phoneNumber,password,newPin:pin,confirmation/);
   assert.doesNotMatch(pin, /firebase|recovery email|sms|one-time password/i);
   assert.doesNotMatch(main, /firebase-action|FirebaseRecoveryCallback/);
 });

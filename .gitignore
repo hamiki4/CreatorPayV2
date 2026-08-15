@@ -35,6 +35,9 @@ backups/
 *.pem
 *.key
 *.pfx
+*.jks
+*.keystore
+**/key.properties
 uploads/
 **/deposit-proofs/
 *.log

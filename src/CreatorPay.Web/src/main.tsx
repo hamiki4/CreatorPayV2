@@ -8,7 +8,6 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
-import "./responsive-fixes.css";
 import { CreatorQrWorkspace, MerchantQrWorkspace } from "./QrWorkspace";
 import { CommissionWorkspace } from "./CommissionWorkspace";
 import {
@@ -27,6 +26,7 @@ import { AdminPortal } from "./AdminPortal";
 import { CustomerWorkspace, ShopperOfferPage } from "./CustomerWorkspace";
 import { AuthWorkspace } from "./AuthWorkspace";
 import { PinEnrollmentGate } from "./PinExperience";
+import { PasswordInput } from "./PasswordInput";
 import { brand } from "./brand";
 import { MerchantWorkspace } from "./MerchantWorkspace";
 import {
@@ -48,7 +48,6 @@ import { ContactSupport, HelpCenter, HelpLink, LegalPage } from "./PublicPages";
 import { PilotExperience } from "./PilotExperience";
 import { CreatorDashboard } from "./CreatorDashboard";
 import { BusinessDashboard } from "./BusinessDashboard";
-import { IosInstallHint } from "./IosInstallHint";
 
 type Location = {
   id: string;
@@ -472,28 +471,8 @@ function CreateCashier({ done }: { done: () => void }) {
           onChange={(e) => setPhoneNumber(e.target.value)}
         />
       </label>
-      <label>
-        Temporary Password
-        <input
-          required
-          type="password"
-          minLength={8}
-          autoComplete="new-password"
-          value={temporaryPassword}
-          onChange={(e) => setTemporaryPassword(e.target.value)}
-        />
-      </label>
-      <label>
-        Confirm Temporary Password
-        <input
-          required
-          type="password"
-          minLength={8}
-          autoComplete="new-password"
-          value={confirmation}
-          onChange={(e) => setConfirmation(e.target.value)}
-        />
-      </label>
+      <PasswordInput label="Temporary Password" required minLength={8} autoComplete="new-password" value={temporaryPassword} onChange={setTemporaryPassword} />
+      <PasswordInput label="Confirm Temporary Password" required minLength={8} autoComplete="new-password" value={confirmation} onChange={setConfirmation} />
       <label>
         Location / Branch (Optional)
         <input
@@ -649,26 +628,8 @@ function AcceptInvitation() {
             <p>Location: {preview.locationName}</p>
           </div>
         )}
-        <label>
-          Create Password
-          <input
-            type="password"
-            required
-            minLength={8}
-            value={f.password}
-            onChange={(e) => setF({ ...f, password: e.target.value })}
-          />
-        </label>
-        <label>
-          Confirm Password
-          <input
-            type="password"
-            required
-            minLength={8}
-            value={f.confirmation}
-            onChange={(e) => setF({ ...f, confirmation: e.target.value })}
-          />
-        </label>
+        <PasswordInput label="Create Password" required minLength={8} value={f.password} onChange={password => setF({ ...f, password })} />
+        <PasswordInput label="Confirm Password" required minLength={8} value={f.confirmation} onChange={confirmation => setF({ ...f, confirmation })} />
         <button disabled={!preview}>Accept Invitation</button>
         {message && (
           <aside role="status">
@@ -863,7 +824,7 @@ function SessionGuard({ children }: { children: ReactNode }) {
       : undefined;
     return () => { removeBack?.(); removeSession?.(); };
   }, []);
-  return <>{children}<IosInstallHint /></>;
+  return children;
 }
 
 function renderApplication() {

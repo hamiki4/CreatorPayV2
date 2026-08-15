@@ -126,7 +126,7 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = x => x.
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = x => x.Tags.Contains("ready"), ResponseWriter = WriteHealth });
 app.MapGet("/health", () => Results.Redirect("/health/live")).ExcludeFromDescription();
 app.MapAuthEndpoints(); app.MapCreatorEndpoints(); app.MapMerchantEndpoints(); app.MapOrganizationEndpoints(); app.MapPartnershipEndpoints(); app.MapQrEndpoints(); app.MapCommissionEndpoints(); app.MapWalletEndpoints(); app.MapOfflineSyncEndpoints(); app.MapEarningsEndpoints(); app.MapNotificationEndpoints(); app.MapRiskEndpoints();
-app.MapAdminEndpoints();
+app.MapAdminEndpoints(); app.MapPilotTestActorEndpoints();
 app.MapReportingEndpoints();
 app.MapCampaignEndpoints();
 app.MapCheckoutEndpoints(); app.MapHub<CheckoutHub>("/hubs/checkout");
