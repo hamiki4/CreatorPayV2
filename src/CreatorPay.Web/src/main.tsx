@@ -47,6 +47,7 @@ import { ContactSupport, HelpCenter, HelpLink, LegalPage } from "./PublicPages";
 import { PilotExperience } from "./PilotExperience";
 import { CreatorDashboard } from "./CreatorDashboard";
 import { BusinessDashboard } from "./BusinessDashboard";
+import { IosInstallHint } from "./IosInstallHint";
 
 type Location = {
   id: string;
@@ -867,7 +868,7 @@ function SessionGuard({ children }: { children: ReactNode }) {
       : undefined;
     return () => { removeBack?.(); removeSession?.(); };
   }, []);
-  return children;
+  return <>{children}<IosInstallHint /></>;
 }
 
 function renderApplication() {
