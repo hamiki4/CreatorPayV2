@@ -188,7 +188,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     private static bool ValidPin(string pin) => pin.Length == 5 && pin.All(char.IsAsciiDigit);
     private static string PinCredential(string pin) => $"weymela-pin-v1:{pin}";
     private static bool ValidBirthDate(DateOnly value) => value <= DateOnly.FromDateTime(DateTime.UtcNow) && value >= new DateOnly(1900, 1, 1);
-    private static string NormalizeLogin(string identifier) { var value=identifier.Trim().ToUpperInvariant(); return value.Contains('@')?value:$"{value}@CASHIER.WEYMELA.LOCAL"; }
+    private static string NormalizeLogin(string identifier) { var value = identifier.Trim().ToUpperInvariant(); return value.Contains('@') ? value : $"{value}@CASHIER.WEYMELA.LOCAL"; }
 }
 public sealed class FirebasePinOptions
 {

@@ -61,9 +61,12 @@ public static class PilotTestActorEndpoints
             .ExecuteUpdateAsync(x => x.SetProperty(token => token.RevokedAtUtc, DateTime.UtcNow), ct);
         db.OperationalAuditEvents.Add(new OperationalAuditEvent
         {
-            Id = Guid.NewGuid(), EventType = "PilotTestActorCredentialsRotated", ActorUserId = current.UserAccountId,
+            Id = Guid.NewGuid(),
+            EventType = "PilotTestActorCredentialsRotated",
+            ActorUserId = current.UserAccountId,
             MetadataJson = JsonSerializer.Serialize(new { batchId, label, count = accounts.Count }),
-            CorrelationId = batchId.ToString("N"), CreatedAtUtc = DateTime.UtcNow
+            CorrelationId = batchId.ToString("N"),
+            CreatedAtUtc = DateTime.UtcNow
         });
         await db.SaveChangesAsync(ct);
 
@@ -91,10 +94,21 @@ public static class PilotTestActorEndpoints
         {
             var user = new UserAccount
             {
-                Id = Guid.NewGuid(), Email = email, NormalizedEmail = email.ToUpperInvariant(),
-                PhoneNumber = phone, NormalizedPhoneNumber = phone, Role = role, Status = AccountStatus.Active,
-                CustomerId = customerId, CreatorId = creatorId, MerchantId = merchantId, CashierId = cashierId,
-                IsEmailVerified = true, IsPhoneVerified = true, CreatedAtUtc = now, CreatedBy = current.UserAccountId.Value.ToString()
+                Id = Guid.NewGuid(),
+                Email = email,
+                NormalizedEmail = email.ToUpperInvariant(),
+                PhoneNumber = phone,
+                NormalizedPhoneNumber = phone,
+                Role = role,
+                Status = AccountStatus.Active,
+                CustomerId = customerId,
+                CreatorId = creatorId,
+                MerchantId = merchantId,
+                CashierId = cashierId,
+                IsEmailVerified = true,
+                IsPhoneVerified = true,
+                CreatedAtUtc = now,
+                CreatedBy = current.UserAccountId.Value.ToString()
             };
             var password = Secret();
             user.PasswordHash = passwords.Hash(user, password);

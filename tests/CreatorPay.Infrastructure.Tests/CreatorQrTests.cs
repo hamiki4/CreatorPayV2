@@ -27,9 +27,9 @@ public sealed class CreatorQrTests
     [Fact]
     public void UrlBuilder_ChangesOnlyConfiguredOriginAndPreservesPermanentIdentity()
     {
-        var configuration=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"PublicAppBaseUrl","https://pilot.weymela.com"}}).Build();
-        var url=new CreatorQrUrlBuilder(configuration).Create("existing-public-id",1,"signed_token_value_that_is_long_enough_123");
-        Assert.Equal("https://pilot.weymela.com/c/existing-public-id?t=signed_token_value_that_is_long_enough_123&v=1",url);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { { "PublicAppBaseUrl", "https://pilot.weymela.com" } }).Build();
+        var url = new CreatorQrUrlBuilder(configuration).Create("existing-public-id", 1, "signed_token_value_that_is_long_enough_123");
+        Assert.Equal("https://pilot.weymela.com/c/existing-public-id?t=signed_token_value_that_is_long_enough_123&v=1", url);
     }
 
     [Fact]
