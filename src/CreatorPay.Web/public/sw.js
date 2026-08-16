@@ -1,12 +1,18 @@
-const CACHE='creatorpay-shell-v20'
-const SHELL=['/','/offline.html','/manifest.webmanifest','/favicon.ico','/icons/weymela-180x180.png','/icons/weymela-192x192.png','/icons/weymela-512x512.png']
+const CACHE='creatorpay-shell-v21'
+const LEGACY_ORIGIN='https://www.weymela.com'
+const CANONICAL_ORIGIN='https://weymela.com'
+const LEGACY_SELF=self.location.origin===LEGACY_ORIGIN
+const SHELL=['/','/offline.html','/manifest.webmanifest','/favicon.ico','/icons/weymela-192x192.png','/icons/weymela-512x512.png']
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()))
 })
 
 self.addEventListener('activate',event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()))
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE||LEGACY_SELF).map(key=>caches.delete(key)))).then(async()=>{
+    if(LEGACY_SELF){await self.registration.unregister();for(const client of await self.clients.matchAll({type:'window'}))await client.navigate(CANONICAL_ORIGIN+new URL(client.url).pathname+new URL(client.url).search+new URL(client.url).hash);return}
+    await self.clients.claim()
+  }))
 })
 
 self.addEventListener('fetch',event=>{

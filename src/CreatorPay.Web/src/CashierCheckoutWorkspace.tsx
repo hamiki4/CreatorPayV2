@@ -70,6 +70,21 @@ export function CashierCheckoutWorkspace({
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     submissionKey = useRef(crypto.randomUUID());
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const resetEntryForm = () => {
+    setCreatorCode("");
+    setShopperPhoneNumber("");
+    setPurchaseAmount("");
+    setValidation(undefined);
+    setResult(undefined);
+    setMessage("");
+    submissionKey.current = crypto.randomUUID();
+  };
+  const showResultThenReset = (nextMessage: string) => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    setMessage(nextMessage);
+    resetTimer.current = setTimeout(resetEntryForm, 3000);
+  };
   const load = () =>
     Promise.all([
       api<Staff>("/api/v1/cashier/me"),
@@ -85,6 +100,9 @@ export function CashierCheckoutWorkspace({
       });
   useEffect(() => {
     void load();
+    return () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+    };
   }, []);
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -100,7 +118,7 @@ export function CashierCheckoutWorkspace({
       );
       setValidation(eligibility);
       if (!eligibility.isValid) {
-        setMessage(
+        showResultThenReset(
           eligibility.message ||
             "This Creator promotion is not currently eligible at this Business.",
         );
@@ -119,17 +137,18 @@ export function CashierCheckoutWorkspace({
         },
       );
       setResult(response);
+      void load();
       if (response.code === "shopper_not_registered")
-        setMessage("Shopper account not found.");
+        showResultThenReset("Shopper account not found.");
       else
-        setMessage(
+        showResultThenReset(
           response.code === "awaiting_shopper_confirmation"
-            ? "Awaiting Shopper Confirmation"
+            ? "Purchase submitted — awaiting Shopper confirmation."
             : response.message,
         );
     } catch (error) {
       console.error(error);
-      setMessage(
+      showResultThenReset(
         (error as Error).message ||
           "We couldn't submit this sale. Please check the information and try again.",
       );
@@ -161,7 +180,7 @@ export function CashierCheckoutWorkspace({
         <p
           role="status"
           className={
-            message === "Awaiting Shopper Confirmation"
+            message.includes("awaiting Shopper confirmation")
               ? "success-note"
               : "friendly-error"
           }

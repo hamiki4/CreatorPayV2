@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import "./pwa-safe-area.css";
 import { CreatorQrWorkspace, MerchantQrWorkspace } from "./QrWorkspace";
 import { CommissionWorkspace } from "./CommissionWorkspace";
 import {
@@ -48,6 +49,7 @@ import { ContactSupport, HelpCenter, HelpLink, LegalPage } from "./PublicPages";
 import { PilotExperience } from "./PilotExperience";
 import { CreatorDashboard } from "./CreatorDashboard";
 import { BusinessDashboard } from "./BusinessDashboard";
+import { canonicalOriginMigration } from "./canonicalOrigin";
 
 type Location = {
   id: string;
@@ -883,7 +885,7 @@ function registerServiceWorker() {
   });
 }
 
-void hydrateSession()
+void canonicalOriginMigration.then(() => hydrateSession())
   .then(() => {
     renderApplication();
     registerServiceWorker();

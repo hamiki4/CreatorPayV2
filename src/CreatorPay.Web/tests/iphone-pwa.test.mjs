@@ -40,9 +40,11 @@ test("service worker does not cache API or authenticated requests", async () => 
 
 test("safe-area rules cover overlays and bottom actions", async () => {
   const css = await read("src/styles.css");
-  assert.match(css, /safe-area-inset-top/);
-  assert.match(css, /safe-area-inset-bottom/);
-  assert.match(css, /\.notification-drawer/);
-  assert.match(css, /\.settings-menu/);
-  assert.match(css, /\.ios-install-hint/);
+  const safeAreaCss = await read("src/pwa-safe-area.css");
+  const pwaCss = `${css}\n${safeAreaCss}`;
+  assert.match(pwaCss, /safe-area-inset-top/);
+  assert.match(pwaCss, /safe-area-inset-bottom/);
+  assert.match(pwaCss, /\.notification-drawer/);
+  assert.match(pwaCss, /\.settings-menu/);
+  assert.match(pwaCss, /\.ios-install-hint/);
 });
