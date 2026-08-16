@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react'
 import {api,statusLabel} from './apiClient'
 import {ActiveAds,AdvertisingRequest,FindBusinesses} from './CreatorAdvertising'
 import {AccountChrome} from './AccountChrome'
+import {onActionableRefresh} from './actionableRefresh'
 
 type Tab='home'|'find'|'ads'|'payout'|'profile'
 type Profile={displayName:string;publicCreatorId:string;creatorCode:string;creatorStatus:string;accountStatus:string;email:string;phoneNumber:string;city:string;biography?:string;contentCategories?:string}
@@ -13,7 +14,7 @@ function ProfilePanel({profile,error}:{profile?:Profile;error:string}){const[cop
 export function CreatorDashboard({onSignOut}:{onSignOut:()=>void}){
   const[tab,setTab]=useState<Tab>('home'),[profile,setProfile]=useState<Profile>(),[earnings,setEarnings]=useState<Earnings>(),[requests,setRequests]=useState<AdvertisingRequest[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState('')
   const load=()=>Promise.allSettled([api<Profile>('/api/v1/creators/me'),api<Earnings>('/api/v1/creator/earnings/summary'),api<AdvertisingRequest[]>('/api/v1/creator/partnerships')]).then(results=>{const[p,e,a]=results;if(p.status==='fulfilled')setProfile(p.value);if(e.status==='fulfilled')setEarnings(e.value);if(a.status==='fulfilled')setRequests(a.value);if(results.some(x=>x.status==='rejected'))setError("We couldn't load some information.");setLoading(false)})
-  useEffect(()=>{let current=true;void load().then(()=>{if(!current)return});return()=>{current=false}},[])
+  useEffect(()=>{let current=true;void load().then(()=>{if(!current)return});const unsubscribe=onActionableRefresh(()=>{void load()});return()=>{current=false;unsubscribe()}},[])
   const pending=requests.filter(x=>x.status==='Pending').length,date=(value?:string)=>value?new Intl.DateTimeFormat('en-GB').format(new Date(value)):'—'
   const tabs:[Tab,string][]=[['find','Find Businesses'],['ads','Ads'],['payout','Payout']]
   const navigate=(target:string)=>setTab(target.includes('payout')?'payout':target.includes('ads')?'ads':target.includes('profile')?'profile':target.includes('find')?'find':'home')

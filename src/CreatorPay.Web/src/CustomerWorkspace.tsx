@@ -2,6 +2,7 @@ import {FormEvent,useEffect,useState} from 'react'
 import {getAccessToken} from './sessionStore'
 import {rankMatches,useTypeahead} from './typeahead'
 import {AccountChrome} from './AccountChrome'
+import {onActionableRefresh} from './actionableRefresh'
 import {api as request} from './apiClient'
 type Wallet={availableCashback:number;reservedCashback:number;currencyCode:string;nextPayoutAtUtc?:string;lastPayoutAtUtc?:string;currentPeriodConfirmedPurchases:number}
 type Checkout={id:string;publicCheckoutId:string;status:string;campaignId:string;purchaseAmount?:number;cashbackAmount?:number;expiresAtUtc:string;qrPayload?:string;merchantName?:string;creatorName?:string;createdAtUtc?:string;resolvedAtUtc?:string}
@@ -16,7 +17,7 @@ export function CustomerWorkspace({onSignOut}:{onSignOut:()=>void}){const[wallet
  const loadAccount=()=>{api<Wallet>('/api/v1/customer/wallet').then(setWallet).catch(error=>{console.error(error);setMessage("We couldn't load this information.")});api<Checkout[]>('/api/v1/customer/checkouts').then(setCheckouts).catch(error=>{console.error(error);setMessage("We couldn't load this information.")});api<ShopperProfile>('/api/v1/customer/profile').then(setProfile).catch(error=>console.error('Shopper profile unavailable',error))};
  const find=async(term:string)=>{try{const p=new URLSearchParams();if(term)p.set('q',term);return rankMatches(await api<AdvertisingRow[]>(`/api/v1/customer/discovery/advertising?${p}`),term,x=>[x.businessName,x.city,x.creatorName,x.publicBusinessId,x.publicCreatorId])}catch{setMessage("We couldn't load Businesses right now.");return[]}};
  useTypeahead(query,find,setRows);
- useEffect(()=>{loadAccount()},[]);
+ useEffect(()=>{loadAccount();return onActionableRefresh(loadAccount)},[]);
  async function submit(e:FormEvent){e.preventDefault();setRows(await find(query.trim()))}
  async function decide(x:Checkout,approve:boolean){if(processing)return;setProcessing(x.id);try{const resolved=await api<Checkout>(`/api/v1/customer/checkouts/${x.id}/${approve?'approve':'reject'}`,'POST');setCheckouts(current=>current.map(item=>item.id===x.id?resolved:item));setMessage(approve?'Purchase confirmed.':'Purchase rejected.');loadAccount()}catch(e){console.error(e);setMessage("We couldn't update this purchase confirmation.")}finally{setProcessing(undefined)}}
  const pendingCount=checkouts.filter(x=>x.status==='AwaitingCustomerApproval').length;
