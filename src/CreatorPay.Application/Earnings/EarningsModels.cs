@@ -9,6 +9,8 @@ public sealed record CreatePayoutBatchRequest(DateTime CutoffAtUtc, DateTime Sch
 public sealed record PayoutCycleLine(string PartyId, string PartyName, decimal EligibleAmount, decimal ReservedAmount, string Status, Guid? PayoutId = null, Guid? PayoutBatchId = null);
 public sealed record PayoutCycleHistory(DateTime CycleStartUtc, DateTime CutoffAtUtc, DateTime PayoutDateUtc, int PartyCount, decimal TotalAmount, string Status);
 public sealed record PayoutCycleReport(string CurrencyCode, DateTime CycleStartUtc, DateTime CutoffAtUtc, DateTime PayoutDateUtc, decimal ScheduledTotal, decimal ReservedTotal, decimal PaidTotal, IReadOnlyList<PayoutCycleLine> Lines, IReadOnlyList<PayoutCycleHistory> History, DateTime? LastPayoutDateUtc = null);
+public sealed record PayoutHistoryRow(string PartyName, string PartyId, DateTime CycleStartUtc, DateTime CutoffAtUtc, DateTime? PayoutDateUtc, decimal EligibleAmount, decimal PaidAmount, string Status, string PayoutReference, string? BatchReference);
+public sealed record PayoutHistoryPage(IReadOnlyList<PayoutHistoryRow> Items, int Page, int PageSize, int TotalCount, decimal TotalPaidAmount);
 public sealed record PlatformRevenueHistory(DateTime PeriodStartUtc, DateTime PeriodEndUtc, int TransactionCount, decimal PlatformRevenue);
 public sealed record PlatformRevenueReport(string CurrencyCode, DateTime CycleStartUtc, DateTime CycleEndUtc, decimal CurrentRevenue, int CurrentTransactionCount, IReadOnlyList<PlatformRevenueHistory> History);
 public sealed record CreatorAdPerformanceRow(Guid PartnershipId, Guid MerchantId, string BusinessName, string Status, DateTime? ExpiresAtUtc, int ConfirmedSales, decimal CreatorEarned, string CurrencyCode);

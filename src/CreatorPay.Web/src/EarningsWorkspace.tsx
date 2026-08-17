@@ -47,6 +47,12 @@ type HistoryRow = {
   totalAmount: number;
   status: string;
 };
+type PayoutHistoryRow = {
+  partyName: string; partyId: string; cycleStartUtc: string; cutoffAtUtc: string;
+  payoutDateUtc?: string; eligibleAmount: number; paidAmount: number; status: string;
+  payoutReference: string; batchReference?: string;
+};
+type PayoutHistoryPage = { items: PayoutHistoryRow[]; page: number; pageSize: number; totalCount: number; totalPaidAmount: number };
 type Cycle = {
   currencyCode: string;
   cycleStartUtc: string;
@@ -176,10 +182,24 @@ export function AdminPayoutWorkspace() {
     ),
     [cycle, setCycle] = useState<Cycle>(),
     [revenue, setRevenue] = useState<Revenue>(),
+    [history, setHistory] = useState<PayoutHistoryPage>(),
     [search, setSearch] = useState(""),
     [appliedSearch, setAppliedSearch] = useState(""),
+    [fromDate, setFromDate] = useState(""),
+    [toDate, setToDate] = useState(""),
+    [statusFilter, setStatusFilter] = useState(""),
+    [historyPage, setHistoryPage] = useState(1),
     [busy, setBusy] = useState(""),
     [error, setError] = useState("");
+  const loadHistory = (page = historyPage, term = appliedSearch, filters = { from: fromDate, to: toDate, status: statusFilter }) => {
+    if (tab === "revenue") return Promise.resolve();
+    const params = new URLSearchParams({ page: String(page), pageSize: "25" });
+    if (term.trim()) params.set("search", term.trim());
+    if (filters.from) params.set("fromUtc", `${filters.from}T00:00:00.000Z`);
+    if (filters.to) params.set("toUtc", `${filters.to}T23:59:59.999Z`);
+    if (filters.status) params.set("status", filters.status);
+    return api<PayoutHistoryPage>(`/api/v1/admin/payout-history/${tab}?${params}`).then(setHistory);
+  };
   const load = () =>
     (tab === "revenue"
       ? api<Revenue>("/api/v1/admin/payout-cycles/platform-revenue").then(
@@ -188,15 +208,18 @@ export function AdminPayoutWorkspace() {
             setError("");
           },
         )
-      : api<Cycle>(`/api/v1/admin/payout-cycles/${tab}`).then((c) => {
-          setCycle(c);
-          setError("");
+      : Promise.all([api<Cycle>(`/api/v1/admin/payout-cycles/${tab}`), loadHistory()]).then(([c]) => {
+          setCycle(c); setError("");
         })
     ).catch((x) => setError(x.message));
   useEffect(() => {
     setSearch("");
     setAppliedSearch("");
-    void load();
+    setFromDate(""); setToDate(""); setStatusFilter(""); setHistoryPage(1);
+    if (tab === "revenue") void load();
+    else Promise.all([api<Cycle>(`/api/v1/admin/payout-cycles/${tab}`), loadHistory(1, "", { from: "", to: "", status: "" })])
+      .then(([c]) => { setCycle(c); setError(""); })
+      .catch((x) => setError(x.message));
   }, [tab]);
   async function post(path: string, body?: unknown, key?: string) {
     return api(path, {
@@ -316,6 +339,8 @@ export function AdminPayoutWorkspace() {
             onSubmit={(e) => {
               e.preventDefault();
               setAppliedSearch(search);
+              setHistoryPage(1);
+              void loadHistory(1, search);
             }}
           >
             <label>
@@ -329,12 +354,16 @@ export function AdminPayoutWorkspace() {
               />
             </label>
             <button>Search</button>
+            <label>From <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
+            <label>To <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></label>
+            <label>Status <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">All</option><option value="Paid">Paid</option><option value="Requested">Requested</option><option value="Processing">Processing</option><option value="Scheduled">Scheduled</option><option value="Failed">Failed</option><option value="Cancelled">Cancelled</option></select></label>
             <button
               type="button"
               className="quiet"
               onClick={() => {
                 setSearch("");
                 setAppliedSearch("");
+                setFromDate(""); setToDate(""); setStatusFilter(""); setHistoryPage(1); void loadHistory(1, "", { from: "", to: "", status: "" });
               }}
             >
               Clear
@@ -397,7 +426,7 @@ export function AdminPayoutWorkspace() {
             </table>
           </div>
           <h3>{tab === "creators" ? "Creator" : "Shopper"} Payout History</h3>
-          <History rows={cycle.history} />
+          <PayoutHistoryTable page={history} currency={cycle.currencyCode} onPage={(p) => { setHistoryPage(p); void loadHistory(p); }} />
         </>
       )}
       {tab === "revenue" && revenue && (
@@ -464,4 +493,13 @@ function History({ rows }: { rows: HistoryRow[] }) {
       </table>
     </div>
   );
+}
+function PayoutHistoryTable({ page, currency, onPage }: { page?: PayoutHistoryPage; currency: string; onPage: (page: number) => void }) {
+  if (!page) return <p className="muted">No payout history found.</p>;
+  const totalPages = Math.max(1, Math.ceil(page.totalCount / page.pageSize));
+  return <>
+    <div className="summary-grid payout-history-totals"><article><span>Payout records</span><strong>{page.totalCount}</strong></article><article><span>Total paid</span><strong>{money(page.totalPaidAmount, currency)}</strong></article></div>
+    <div className="table-wrap"><table className="admin-payout-history-table"><thead><tr><th>{"Name"}</th><th>Public ID</th><th>Cycle Start</th><th>Cutoff</th><th>Payout Date</th><th>Eligible Amount</th><th>Paid Amount</th><th>Status</th><th>Reference</th></tr></thead><tbody>{page.items.map((x) => <tr key={x.payoutReference}><td>{x.partyName}</td><td>{x.partyId}</td><td>{displayDate(x.cycleStartUtc)}</td><td>{displayDateTime(x.cutoffAtUtc)}</td><td>{x.payoutDateUtc ? displayDate(x.payoutDateUtc) : "—"}</td><td>{money(x.eligibleAmount, currency)}</td><td>{money(x.paidAmount, currency)}</td><td><Badge value={x.status} /></td><td><code>{x.payoutReference}</code>{x.batchReference && <small className="secondary-id">{x.batchReference}</small>}</td></tr>)}</tbody></table></div>
+    <div className="pagination-controls" aria-label="Payout history pages"><button disabled={page.page <= 1} onClick={() => onPage(page.page - 1)}>Previous</button><span>Page {page.page} of {totalPages}</span><button disabled={page.page >= totalPages} onClick={() => onPage(page.page + 1)}>Next</button></div>
+  </>;
 }
