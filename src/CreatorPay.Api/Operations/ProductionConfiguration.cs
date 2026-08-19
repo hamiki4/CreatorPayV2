@@ -62,8 +62,8 @@ public static class ProductionConfiguration
             var proxy = configuration.GetSection(ReverseProxyOptions.SectionName).Get<ReverseProxyOptions>() ?? new();
             if (proxy.KnownProxies.Any(value => !System.Net.IPAddress.TryParse(value, out _)))
                 errors.Add("ReverseProxy:KnownProxies (IP addresses only)");
-            var publicAppBaseUrl=configuration["PublicAppBaseUrl"];
-            if(!Uri.TryCreate(publicAppBaseUrl,UriKind.Absolute,out var publicAppUri)||(!environment.IsEnvironment("E2E")&&publicAppUri.Scheme!=Uri.UriSchemeHttps)||(environment.IsEnvironment("E2E")&&publicAppUri.Scheme is not ("http" or "https"))||publicAppUri.UserInfo.Length>0||publicAppUri.Query.Length>0||publicAppUri.Fragment.Length>0)
+            var publicAppBaseUrl = configuration["PublicAppBaseUrl"];
+            if (!Uri.TryCreate(publicAppBaseUrl, UriKind.Absolute, out var publicAppUri) || (!environment.IsEnvironment("E2E") && publicAppUri.Scheme != Uri.UriSchemeHttps) || (environment.IsEnvironment("E2E") && publicAppUri.Scheme is not ("http" or "https")) || publicAppUri.UserInfo.Length > 0 || publicAppUri.Query.Length > 0 || publicAppUri.Fragment.Length > 0)
                 errors.Add("PublicAppBaseUrl must be an HTTPS URL without credentials, query, or fragment");
         }
         if (environment.IsEnvironment("Pilot"))

@@ -32,9 +32,16 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var values = new Dictionary<string, string?>
         {
             ["ConnectionStrings:CreatorPayDatabase"] = database.GetConnectionString(),
-            ["Authentication:Jwt:Issuer"] = "CreatorPay", ["Authentication:Jwt:Audience"] = "CreatorPay.Web", ["Authentication:Jwt:SigningKey"] = SigningKey,
-            ["CustomerVerification:HmacSecret"] = new string('h', 32), ["CustomerVerification:EncryptionKey"] = new string('e', 32),
-            ["SmsOtp:SmsProvider"] = "PilotTest", ["SmsOtp:HashSecret"] = new string('o', 32), ["SmsOtp:TestCode"] = "654321", ["Support:Email"] = "tests@example.invalid", ["Storage:Provider"] = "MetadataOnly"
+            ["Authentication:Jwt:Issuer"] = "CreatorPay",
+            ["Authentication:Jwt:Audience"] = "CreatorPay.Web",
+            ["Authentication:Jwt:SigningKey"] = SigningKey,
+            ["CustomerVerification:HmacSecret"] = new string('h', 32),
+            ["CustomerVerification:EncryptionKey"] = new string('e', 32),
+            ["SmsOtp:SmsProvider"] = "PilotTest",
+            ["SmsOtp:HashSecret"] = new string('o', 32),
+            ["SmsOtp:TestCode"] = "654321",
+            ["Support:Email"] = "tests@example.invalid",
+            ["Storage:Provider"] = "MetadataOnly"
         };
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => { builder.UseEnvironment("Test"); foreach (var value in values) builder.UseSetting(value.Key, value.Value); builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(values)); });
         await using var db = Db();

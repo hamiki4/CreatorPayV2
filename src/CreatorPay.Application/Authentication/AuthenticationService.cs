@@ -187,7 +187,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     private static bool IsPinRole(UserRole role) => role is UserRole.Customer or UserRole.Creator or UserRole.MerchantAdmin or UserRole.Cashier;
     private static bool ValidPin(string pin) => pin.Length == 5 && pin.All(char.IsAsciiDigit);
     private static string PinCredential(string pin) => $"weymela-pin-v1:{pin}";
-    private static string NormalizeLogin(string identifier) { var value=identifier.Trim().ToUpperInvariant(); return value.Contains('@')?value:$"{value}@CASHIER.WEYMELA.LOCAL"; }
+    private static string NormalizeLogin(string identifier) { var value = identifier.Trim().ToUpperInvariant(); return value.Contains('@') ? value : $"{value}@CASHIER.WEYMELA.LOCAL"; }
 }
 public sealed class FirebasePinOptions
 {

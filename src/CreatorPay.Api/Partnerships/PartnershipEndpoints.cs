@@ -82,7 +82,7 @@ public static class PartnershipEndpoints
         var p = new MerchantCreatorPartnership { Id = Guid.NewGuid(), CreatorId = creatorId, MerchantId = request.MerchantId, RequestedAtUtc = now, RequestedByUserId = user.UserAccountId, IntroductoryMessage = request.IntroductoryMessage?.Trim(), CreatedAtUtc = now, CreatedBy = user.UserAccountId.ToString() };
         if (request.RequestedStartDateUtc.HasValue) p.SetDates(request.RequestedStartDateUtc, null, now, user.UserAccountId!.Value);
         db.Add(p); Audit(db, p, user.UserAccountId!.Value, PartnershipStatus.Pending, PartnershipStatus.Pending, "PartnershipRequested", null, http, now);
-        await NotifyMerchant(notifications,db,p.MerchantId,NotificationType.PartnershipRequested,$"partnership:{p.Id}:requested","New Creator request",$"{creator.DisplayName} requested permission to promote your Business.","/?view=requests",http.TraceIdentifier,p.Id,ct); await db.SaveChangesAsync(ct);
+        await NotifyMerchant(notifications, db, p.MerchantId, NotificationType.PartnershipRequested, $"partnership:{p.Id}:requested", "New Creator request", $"{creator.DisplayName} requested permission to promote your Business.", "/?view=requests", http.TraceIdentifier, p.Id, ct); await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/creator/partnerships/{p.Id}", Item(p, merchant, creator));
     }
 
@@ -100,14 +100,19 @@ public static class PartnershipEndpoints
         if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => EF.Functions.ILike(x.DisplayName, $"%{q}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{q}%") || x.SocialProfiles.Any(s => EF.Functions.ILike(s.Handle, $"%{q}%")));
         return Results.Ok(await query.OrderBy(x => x.DisplayName).Take(50).Select(x => new
         {
-            x.Id, x.PublicCreatorId, x.DisplayName, x.City, x.Biography, x.ContentCategories,
+            x.Id,
+            x.PublicCreatorId,
+            x.DisplayName,
+            x.City,
+            x.Biography,
+            x.ContentCategories,
             SocialPlatform = x.SocialProfiles.OrderByDescending(s => s.IsPrimary).Select(s => (SocialPlatform?)s.Platform).FirstOrDefault(),
             FollowerCount = x.SocialProfiles.OrderByDescending(s => s.IsPrimary).Select(s => (long?)s.FollowerCount).FirstOrDefault()
         }).ToListAsync(ct));
     }
     private static async Task<IResult> MerchantPartnerships(string? status, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct)
     { var query = Query(db).Where(x => x.MerchantId == u.MerchantId); if (Enum.TryParse<PartnershipStatus>(status, true, out var s)) query = query.Where(x => x.Status == s); return Results.Ok(await ItemsWithInitiator(query, db, ct)); }
-    private static async Task<IResult> MerchantDashboardMetrics(ICurrentUserService u,ApplicationDbContext db,CancellationToken ct){var now=DateTime.UtcNow;var start=new DateTime(now.Year,now.Month,1,0,0,0,DateTimeKind.Utc);var sales=await db.PurchaseTransactions.CountAsync(x=>x.MerchantId==u.MerchantId&&x.TransactionDateUtc>=start&&(x.Status==TransactionStatus.Confirmed||x.Status==TransactionStatus.Settled),ct);return Results.Ok(new{confirmedSales=sales,period="This Month",periodStartedAtUtc=start});}
+    private static async Task<IResult> MerchantDashboardMetrics(ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) { var now = DateTime.UtcNow; var start = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc); var sales = await db.PurchaseTransactions.CountAsync(x => x.MerchantId == u.MerchantId && x.TransactionDateUtc >= start && (x.Status == TransactionStatus.Confirmed || x.Status == TransactionStatus.Settled), ct); return Results.Ok(new { confirmedSales = sales, period = "This Month", periodStartedAtUtc = start }); }
     private static async Task<IResult> MerchantPartnership(Guid id, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => await Query(db).FirstOrDefaultAsync(x => x.Id == id && x.MerchantId == u.MerchantId, ct) is { } p ? Results.Ok(Item(p)) : NotFound();
 
     private static async Task<IResult> MerchantInvite(MerchantInviteCreatorRequest request, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, INotificationService notifications, HttpContext h, CancellationToken ct)
@@ -119,9 +124,9 @@ public static class PartnershipEndpoints
         if (existing.Contains(PartnershipStatus.Blocked)) return Problem(409, "This relationship is blocked.");
         if (existing.Any(x => x is PartnershipStatus.Pending or PartnershipStatus.Approved)) return Problem(409, "A pending or active relationship with this creator already exists.");
         var now = DateTime.UtcNow; var p = new MerchantCreatorPartnership { Id = Guid.NewGuid(), MerchantId = u.MerchantId!.Value, CreatorId = request.CreatorId, RequestedAtUtc = now, RequestedByUserId = u.UserAccountId, IntroductoryMessage = request.IntroductoryMessage?.Trim(), CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() };
-        var merchant=await db.Merchants.FindAsync([u.MerchantId.Value],ct)??new();
+        var merchant = await db.Merchants.FindAsync([u.MerchantId.Value], ct) ?? new();
         db.Add(p); Audit(db, p, u.UserAccountId!.Value, PartnershipStatus.Pending, PartnershipStatus.Pending, "CreatorAdvertisingInvitationSent", null, h, now);
-        await NotifyCreator(notifications,db,p.CreatorId,NotificationType.PartnershipRequested,$"partnership:{p.Id}:invited","New Business invitation",$"{merchant.TradingName} invited you to promote their Business.","/?view=find",h.TraceIdentifier,p.Id,ct); await db.SaveChangesAsync(ct);
+        await NotifyCreator(notifications, db, p.CreatorId, NotificationType.PartnershipRequested, $"partnership:{p.Id}:invited", "New Business invitation", $"{merchant.TradingName} invited you to promote their Business.", "/?view=find", h.TraceIdentifier, p.Id, ct); await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/merchant/partnerships/{p.Id}", Item(p, merchant, creator) with { InitiatedBy = "Business" });
     }
 
@@ -224,8 +229,13 @@ public static class PartnershipEndpoints
         var selected = await commissions.SelectAsync(new(0m, partnership.MerchantId, partnership.CreatorId, partnership.Id, null, options.CurrencyCode, now), ct);
         var campaign = new CreatorMerchantCampaign
         {
-            Id = Guid.NewGuid(), PublicCampaignId = $"CMP-{Guid.NewGuid():N}"[..16].ToUpperInvariant(), CreatorId = partnership.CreatorId,
-            MerchantId = partnership.MerchantId, MerchantCreatorPartnershipId = partnership.Id, CreatedAtUtc = now, CreatedBy = actor.ToString()
+            Id = Guid.NewGuid(),
+            PublicCampaignId = $"CMP-{Guid.NewGuid():N}"[..16].ToUpperInvariant(),
+            CreatorId = partnership.CreatorId,
+            MerchantId = partnership.MerchantId,
+            MerchantCreatorPartnershipId = partnership.Id,
+            CreatedAtUtc = now,
+            CreatedBy = actor.ToString()
         };
         campaign.Approve(options.DefaultDurationDays, null, selected.Version.Id, actor, Convert.ToHexString(RandomNumberGenerator.GetBytes(5)), $"{merchant.TradingName} Creator promotion", now, BusinessTypes.SuggestedReuseRule(merchant.BusinessType) ?? OfferReuseRule.OncePerOffer);
         campaign.Start(now);
@@ -250,9 +260,9 @@ public static class PartnershipEndpoints
     private static void Audit(ApplicationDbContext db, MerchantCreatorPartnership p, Guid user, PartnershipStatus old, PartnershipStatus next, string type, string? reason, HttpContext h, DateTime now) { db.PartnershipStatusHistories.Add(new() { Id = Guid.NewGuid(), MerchantCreatorPartnershipId = p.Id, PreviousStatus = old, NewStatus = next, ChangedAtUtc = now, ChangedByUserId = user, Reason = reason, CorrelationId = h.TraceIdentifier, CreatedAtUtc = now, CreatedBy = user.ToString() }); AddMerchantAudit(db, p, type, user, reason); }
     private static void AddMerchantAudit(ApplicationDbContext db, MerchantCreatorPartnership p, string type, Guid? user, string? detail) => db.MerchantAuditEvents.Add(new() { Id = Guid.NewGuid(), MerchantId = p.MerchantId, ActorUserAccountId = user, EventType = type, Detail = detail, CreatedAtUtc = DateTime.UtcNow, CreatedBy = user?.ToString() });
     private static async Task NotifyCreator(INotificationService notifications, ApplicationDbContext db, Guid creatorId, NotificationType type, string key, string title, string body, string target, string correlation, Guid entityId, CancellationToken ct)
-    { var userId=await db.UserAccounts.Where(x=>x.CreatorId==creatorId).Select(x=>(Guid?)x.Id).SingleOrDefaultAsync(ct); if(userId.HasValue)await notifications.CreateAsync(new(type,key,new Dictionary<string,string>{{"Title",title},{"Body",body},{"TargetPath",target}},[new(userId,NotificationRecipientType.User,NotificationChannel.InApp,null,null)],NotificationPriority.Normal,correlation,"Partnership",entityId.ToString()),ct); }
+    { var userId = await db.UserAccounts.Where(x => x.CreatorId == creatorId).Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct); if (userId.HasValue) await notifications.CreateAsync(new(type, key, new Dictionary<string, string> { { "Title", title }, { "Body", body }, { "TargetPath", target } }, [new(userId, NotificationRecipientType.User, NotificationChannel.InApp, null, null)], NotificationPriority.Normal, correlation, "Partnership", entityId.ToString()), ct); }
     private static async Task NotifyMerchant(INotificationService notifications, ApplicationDbContext db, Guid merchantId, NotificationType type, string key, string title, string body, string target, string correlation, Guid entityId, CancellationToken ct)
-    { var users=await db.UserAccounts.Where(x=>x.MerchantId==merchantId&&x.Role==UserRole.MerchantAdmin&&x.Status==AccountStatus.Active).Select(x=>x.Id).ToListAsync(ct); if(users.Count>0)await notifications.CreateAsync(new(type,key,new Dictionary<string,string>{{"Title",title},{"Body",body},{"TargetPath",target}},users.Select(x=>new NotificationRecipientRequest(x,NotificationRecipientType.User,NotificationChannel.InApp,null,null)).ToList(),NotificationPriority.Normal,correlation,"Partnership",entityId.ToString()),ct); }
+    { var users = await db.UserAccounts.Where(x => x.MerchantId == merchantId && x.Role == UserRole.MerchantAdmin && x.Status == AccountStatus.Active).Select(x => x.Id).ToListAsync(ct); if (users.Count > 0) await notifications.CreateAsync(new(type, key, new Dictionary<string, string> { { "Title", title }, { "Body", body }, { "TargetPath", target } }, users.Select(x => new NotificationRecipientRequest(x, NotificationRecipientType.User, NotificationChannel.InApp, null, null)).ToList(), NotificationPriority.Normal, correlation, "Partnership", entityId.ToString()), ct); }
     private static IResult Problem(int status, string detail) => Results.Problem(statusCode: status, title: "Partnership request failed", detail: detail);
     private static IResult NotFound() => Problem(404, "Partnership was not found in your scope.");
 }

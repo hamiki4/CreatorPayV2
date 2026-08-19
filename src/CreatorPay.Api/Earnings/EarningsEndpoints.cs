@@ -49,16 +49,16 @@ public static class EarningsEndpoints
     static async Task<CreatorAdPerformanceReport> CreatorAds(ApplicationDbContext db, Guid creatorId, DateTime now, CancellationToken ct)
     {
         var relationships = await (from p in db.MerchantCreatorPartnerships.AsNoTracking()
-            join m in db.Merchants.AsNoTracking() on p.MerchantId equals m.Id
-            where p.CreatorId == creatorId && (p.Status == PartnershipStatus.Approved || p.Status == PartnershipStatus.Suspended || p.Status == PartnershipStatus.Revoked || p.Status == PartnershipStatus.Expired || p.Status == PartnershipStatus.Blocked)
-            select new { p.Id, p.MerchantId, BusinessName = m.TradingName, p.Status, p.EndDateUtc }).ToListAsync(ct);
+                                   join m in db.Merchants.AsNoTracking() on p.MerchantId equals m.Id
+                                   where p.CreatorId == creatorId && (p.Status == PartnershipStatus.Approved || p.Status == PartnershipStatus.Suspended || p.Status == PartnershipStatus.Revoked || p.Status == PartnershipStatus.Expired || p.Status == PartnershipStatus.Blocked)
+                                   select new { p.Id, p.MerchantId, BusinessName = m.TradingName, p.Status, p.EndDateUtc }).ToListAsync(ct);
         var relationshipIds = relationships.Select(x => x.Id).ToArray();
         var transactions = await (from earning in db.CreatorEarnings.AsNoTracking()
-            join transaction in db.PurchaseTransactions.AsNoTracking() on earning.PurchaseTransactionId equals transaction.Id
-            join merchant in db.Merchants.AsNoTracking() on transaction.MerchantId equals merchant.Id
-            where earning.CreatorId == creatorId && relationshipIds.Contains(transaction.MerchantCreatorPartnershipId) && (transaction.Status == TransactionStatus.Confirmed || transaction.Status == TransactionStatus.Settled)
-            orderby transaction.ConfirmedAtUtc descending, transaction.TransactionDateUtc descending
-            select new CreatorAdTransactionRow(transaction.Id, transaction.MerchantCreatorPartnershipId, transaction.MerchantId, merchant.TradingName, transaction.ConfirmedAtUtc ?? transaction.TransactionDateUtc, "Confirmed", earning.Amount, earning.CurrencyCode)).ToListAsync(ct);
+                                  join transaction in db.PurchaseTransactions.AsNoTracking() on earning.PurchaseTransactionId equals transaction.Id
+                                  join merchant in db.Merchants.AsNoTracking() on transaction.MerchantId equals merchant.Id
+                                  where earning.CreatorId == creatorId && relationshipIds.Contains(transaction.MerchantCreatorPartnershipId) && (transaction.Status == TransactionStatus.Confirmed || transaction.Status == TransactionStatus.Settled)
+                                  orderby transaction.ConfirmedAtUtc descending, transaction.TransactionDateUtc descending
+                                  select new CreatorAdTransactionRow(transaction.Id, transaction.MerchantCreatorPartnershipId, transaction.MerchantId, merchant.TradingName, transaction.ConfirmedAtUtc ?? transaction.TransactionDateUtc, "Confirmed", earning.Amount, earning.CurrencyCode)).ToListAsync(ct);
         var totals = transactions.GroupBy(x => x.PartnershipId).ToDictionary(x => x.Key, x => new { Count = x.Count(), Earned = x.Sum(y => y.CreatorEarned), Currency = x.Select(y => y.CurrencyCode).FirstOrDefault() ?? "ETB" });
         var businesses = relationships.Select(x => { var total = totals.GetValueOrDefault(x.Id); var status = x.Status == PartnershipStatus.Approved && x.EndDateUtc > now ? "Active" : x.Status == PartnershipStatus.Approved || x.Status == PartnershipStatus.Expired ? "Expired" : "Deactivated"; return new CreatorAdPerformanceRow(x.Id, x.MerchantId, x.BusinessName, status, x.EndDateUtc, total?.Count ?? 0, total?.Earned ?? 0, total?.Currency ?? "ETB"); }).OrderBy(x => x.Status == "Active" ? 0 : x.Status == "Deactivated" ? 1 : 2).ThenBy(x => x.BusinessName).ToList();
         return new(businesses, transactions);

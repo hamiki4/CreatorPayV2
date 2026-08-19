@@ -58,9 +58,9 @@ public sealed class ProductionConfigurationTests
     [Fact]
     public void ProductionRejectsInsecureOrCredentialedPublicAppUrl()
     {
-        var values=ValidPilotValues();values["PublicAppBaseUrl"]="http://user:password@pilot.example/redirect?target=elsewhere";
-        var error=Assert.Throws<InvalidOperationException>(()=>ProductionConfiguration.Validate(new ConfigurationBuilder().AddInMemoryCollection(values).Build(),new EnvironmentStub()));
-        Assert.Contains("PublicAppBaseUrl",error.Message);
+        var values = ValidPilotValues(); values["PublicAppBaseUrl"] = "http://user:password@pilot.example/redirect?target=elsewhere";
+        var error = Assert.Throws<InvalidOperationException>(() => ProductionConfiguration.Validate(new ConfigurationBuilder().AddInMemoryCollection(values).Build(), new EnvironmentStub()));
+        Assert.Contains("PublicAppBaseUrl", error.Message);
     }
 
     [Fact]
@@ -84,13 +84,31 @@ public sealed class ProductionConfigurationTests
     private static Dictionary<string, string?> ValidPilotValues() => new()
     {
         ["ConnectionStrings:CreatorPayDatabase"] = "Host=db;Password=" + new string('d', 32),
-        ["Authentication:Jwt:Issuer"] = "CreatorPay.Pilot", ["Authentication:Jwt:Audience"] = "CreatorPay.Pilot.Web", ["Authentication:Jwt:SigningKey"] = new('j', 32),
-        ["CustomerVerification:HmacSecret"] = new('h', 32), ["CustomerVerification:EncryptionKey"] = new('e', 32),
-        ["SmsOtp:SmsProvider"] = "PilotTest", ["SmsOtp:HashSecret"] = new('o', 32), ["SmsOtp:TestCode"] = "654321",
-        ["Cors:AllowedOrigins:0"] = "https://pilot.example", ["Support:Email"] = "pilot@example.invalid", ["Storage:Provider"] = "MetadataOnly",
+        ["Authentication:Jwt:Issuer"] = "CreatorPay.Pilot",
+        ["Authentication:Jwt:Audience"] = "CreatorPay.Pilot.Web",
+        ["Authentication:Jwt:SigningKey"] = new('j', 32),
+        ["CustomerVerification:HmacSecret"] = new('h', 32),
+        ["CustomerVerification:EncryptionKey"] = new('e', 32),
+        ["SmsOtp:SmsProvider"] = "PilotTest",
+        ["SmsOtp:HashSecret"] = new('o', 32),
+        ["SmsOtp:TestCode"] = "654321",
+        ["Cors:AllowedOrigins:0"] = "https://pilot.example",
+        ["Support:Email"] = "pilot@example.invalid",
+        ["Storage:Provider"] = "MetadataOnly",
         ["PublicAppBaseUrl"] = "https://pilot.example",
-        ["Pilot:Enabled"] = "true", ["Pilot:RequireHttps"] = "true", ["Pilot:AuditLoggingEnabled"] = "true", ["Pilot:HealthMonitoringEnabled"] = "true", ["Pilot:ManualWalletFundingOnly"] = "true",
-        ["Pilot:MaximumBusinesses"] = "10", ["Pilot:MaximumCreators"] = "25", ["Pilot:MaximumPurchaseAmount"] = "5000", ["Pilot:MaximumCommissionAmount"] = "500", ["Pilot:DailyMerchantSpendingLimit"] = "10000", ["Pilot:ShopperCashbackLimit"] = "500", ["Pilot:CreatorEarningLimit"] = "1000", ["Pilot:PayoutHoldDays"] = "7"
+        ["Pilot:Enabled"] = "true",
+        ["Pilot:RequireHttps"] = "true",
+        ["Pilot:AuditLoggingEnabled"] = "true",
+        ["Pilot:HealthMonitoringEnabled"] = "true",
+        ["Pilot:ManualWalletFundingOnly"] = "true",
+        ["Pilot:MaximumBusinesses"] = "10",
+        ["Pilot:MaximumCreators"] = "25",
+        ["Pilot:MaximumPurchaseAmount"] = "5000",
+        ["Pilot:MaximumCommissionAmount"] = "500",
+        ["Pilot:DailyMerchantSpendingLimit"] = "10000",
+        ["Pilot:ShopperCashbackLimit"] = "500",
+        ["Pilot:CreatorEarningLimit"] = "1000",
+        ["Pilot:PayoutHoldDays"] = "7"
     };
 
     private sealed class EnvironmentStub : IHostEnvironment { public string EnvironmentName { get; set; } = Environments.Production; public string ApplicationName { get; set; } = "tests"; public string ContentRootPath { get; set; } = "."; public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider(); }

@@ -56,8 +56,17 @@ public static partial class PilotExperienceEndpoints
 
     private static SupportRequest NewRequest(string subject, string message, string userType, string language) => new()
     {
-        Id = Guid.NewGuid(), PublicReference = $"PIL-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..25].ToUpperInvariant(), Name = "Authenticated pilot user", Contact = "Not collected", UserType = userType,
-        Subject = subject, Message = message, PreferredLanguage = language, ConsentAcknowledged = true, Status = "Open", CreatedAtUtc = DateTime.UtcNow
+        Id = Guid.NewGuid(),
+        PublicReference = $"PIL-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..25].ToUpperInvariant(),
+        Name = "Authenticated pilot user",
+        Contact = "Not collected",
+        UserType = userType,
+        Subject = subject,
+        Message = message,
+        PreferredLanguage = language,
+        ConsentAcknowledged = true,
+        Status = "Open",
+        CreatedAtUtc = DateTime.UtcNow
     };
     private static string NormalizeLanguage(string? value) => string.Equals(value?.Trim(), "am", StringComparison.OrdinalIgnoreCase) ? "am" : "en";
     private static string NormalizeContext(string? value) { var context = (value ?? "").Trim(); return context.StartsWith('/') && context.Length <= 120 && !context.Contains('?') ? context : "/"; }

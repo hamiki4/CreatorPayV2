@@ -39,7 +39,8 @@ public sealed class PilotRuntimeTests
     {
         await using var factory = Factory("Test", new Dictionary<string, string?>
         {
-            ["Pilot:Enabled"] = "true", ["Pilot:MaximumPurchaseAmount"] = "50"
+            ["Pilot:Enabled"] = "true",
+            ["Pilot:MaximumPurchaseAmount"] = "50"
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token());
@@ -56,10 +57,17 @@ public sealed class PilotRuntimeTests
         var values = new Dictionary<string, string?>
         {
             ["ConnectionStrings:CreatorPayDatabase"] = "Host=127.0.0.1;Port=1;Database=unused;Username=unused;Password=" + new string('d', 32),
-            ["Authentication:Jwt:Issuer"] = "CreatorPay", ["Authentication:Jwt:Audience"] = "CreatorPay.Web", ["Authentication:Jwt:SigningKey"] = SigningKey,
-            ["CustomerVerification:HmacSecret"] = new string('h', 32), ["CustomerVerification:EncryptionKey"] = new string('e', 32),
-            ["SmsOtp:SmsProvider"] = "PilotTest", ["SmsOtp:HashSecret"] = new string('o', 32), ["SmsOtp:TestCode"] = "654321",
-            ["Cors:AllowedOrigins:0"] = "https://pilot.example", ["Support:Email"] = "pilot@example.invalid", ["Storage:Provider"] = "MetadataOnly"
+            ["Authentication:Jwt:Issuer"] = "CreatorPay",
+            ["Authentication:Jwt:Audience"] = "CreatorPay.Web",
+            ["Authentication:Jwt:SigningKey"] = SigningKey,
+            ["CustomerVerification:HmacSecret"] = new string('h', 32),
+            ["CustomerVerification:EncryptionKey"] = new string('e', 32),
+            ["SmsOtp:SmsProvider"] = "PilotTest",
+            ["SmsOtp:HashSecret"] = new string('o', 32),
+            ["SmsOtp:TestCode"] = "654321",
+            ["Cors:AllowedOrigins:0"] = "https://pilot.example",
+            ["Support:Email"] = "pilot@example.invalid",
+            ["Storage:Provider"] = "MetadataOnly"
         };
         foreach (var pair in overrides) values[pair.Key] = pair.Value;
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>

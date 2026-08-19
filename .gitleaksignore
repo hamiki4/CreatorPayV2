@@ -1,0 +1,7 @@
+# Verified fake unit-test fixtures; no runtime usage. Historical findings only;
+# credential rotation is not required. Each entry is an exact Gitleaks fingerprint.
+66833967ce677b3d370a6227a0e67a0cec8b26b4:tests/CreatorPay.Infrastructure.Tests/PhoneProtectionTests.cs:generic-api-key:13
+04999e6a450f901d050cd19b61414b9890a71689:tests/CreatorPay.Infrastructure.Tests/PhoneProtectionTests.cs:generic-api-key:13
+fb1c33dd94fae2379a05139cc2a4b4a9f445964d:tests/CreatorPay.Infrastructure.Tests/PhoneProtectionTests.cs:generic-api-key:13
+dbf19da5e996f051d2b74d92c447f77185d7eb9e:tests/CreatorPay.Infrastructure.Tests/PhoneProtectionTests.cs:generic-api-key:9
+2c1e39080ad639ae06f6f19de8a8acb05606b394:tests/CreatorPay.Infrastructure.Tests/AuthenticationSecurityTests.cs:generic-api-key:28

@@ -19,8 +19,12 @@ public sealed class PhoneOtpPersistenceTests : IAsyncLifetime
     private readonly MutableClock clock = new() { Now = new(2026, 8, 10, 12, 0, 0, DateTimeKind.Utc) };
     private readonly SmsOtpOptions otp = new()
     {
-        SmsProvider = "PilotTest", TestCode = "123456", HashSecret = "phone-otp-test-secret-at-least-32-characters",
-        OtpExpiryMinutes = 5, ResendCooldownSeconds = 60, MaxAttempts = 3
+        SmsProvider = "PilotTest",
+        TestCode = "123456",
+        HashSecret = "phone-otp-test-secret-at-least-32-characters",
+        OtpExpiryMinutes = 5,
+        ResendCooldownSeconds = 60,
+        MaxAttempts = 3
     };
     private readonly PasswordHasherService passwords = new();
 
@@ -91,8 +95,12 @@ public sealed class PhoneOtpPersistenceTests : IAsyncLifetime
         var user = await AddUser(db, "+251911000105", "Old-password-1!");
         db.RefreshTokens.Add(new RefreshToken
         {
-            Id = Guid.NewGuid(), UserAccountId = user.Id, TokenHash = new string('A', 64), TokenFamily = "family",
-            ExpiresAtUtc = clock.Now.AddDays(1), CreatedAtUtc = clock.Now
+            Id = Guid.NewGuid(),
+            UserAccountId = user.Id,
+            TokenHash = new string('A', 64),
+            TokenFamily = "family",
+            ExpiresAtUtc = clock.Now.AddDays(1),
+            CreatedAtUtc = clock.Now
         });
         await db.SaveChangesAsync();
         var service = Service(db);
@@ -143,8 +151,13 @@ public sealed class PhoneOtpPersistenceTests : IAsyncLifetime
     {
         var user = new UserAccount
         {
-            Id = Guid.NewGuid(), Email = string.Empty, NormalizedEmail = string.Empty, PhoneNumber = phone,
-            NormalizedPhoneNumber = phone, Role = UserRole.Customer, Status = AccountStatus.PendingVerification,
+            Id = Guid.NewGuid(),
+            Email = string.Empty,
+            NormalizedEmail = string.Empty,
+            PhoneNumber = phone,
+            NormalizedPhoneNumber = phone,
+            Role = UserRole.Customer,
+            Status = AccountStatus.PendingVerification,
             CreatedAtUtc = clock.Now
         };
         user.PasswordHash = passwords.Hash(user, password);

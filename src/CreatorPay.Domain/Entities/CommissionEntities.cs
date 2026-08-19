@@ -60,7 +60,8 @@ public sealed class PlatformFinancialSetting : Entity
     public DayOfWeek CreatorCutoffDay { get; set; } = DayOfWeek.Friday; public TimeSpan CreatorCutoffTime { get; set; } = TimeSpan.Zero; public DayOfWeek CreatorPayoutDay { get; set; } = DayOfWeek.Saturday;
     public int ShopperCutoffDay { get; set; } = 0; public TimeSpan ShopperCutoffTime { get; set; } = TimeSpan.Zero; public int ShopperPayoutDay { get; set; } = 1;
     public DateTime PayoutScheduleEffectiveFromUtc { get; set; } = DateTime.UnixEpoch;
-    public Guid ChangedByUserId { get; set; } public DateTime ChangedAtUtc { get; set; }
+    public Guid ChangedByUserId { get; set; }
+    public DateTime ChangedAtUtc { get; set; }
 }
 public sealed class PayoutScheduleVersion : Entity
 {

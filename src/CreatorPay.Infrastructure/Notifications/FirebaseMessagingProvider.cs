@@ -57,10 +57,10 @@ public sealed class FirebaseMessagingProvider : IPushNotificationProvider, IDisp
 #pragma warning disable CS0618 // Firebase Admin retains Token delivery for FCM registration tokens.
         return new Message
         {
-        Token = token,
-        Notification = new FirebaseAdmin.Messaging.Notification { Title = title, Body = body },
-        Data = new Dictionary<string, string>(data),
-        Android = new AndroidConfig { Priority = Priority.High }
+            Token = token,
+            Notification = new FirebaseAdmin.Messaging.Notification { Title = title, Body = body },
+            Data = new Dictionary<string, string>(data),
+            Android = new AndroidConfig { Priority = Priority.High }
         };
 #pragma warning restore CS0618
     }
