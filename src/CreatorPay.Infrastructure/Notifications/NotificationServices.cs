@@ -1,12 +1,14 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using CreatorPay.Application.Notifications;
+using CreatorPay.Application.Wallet;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using CreatorPay.Infrastructure.Eligibility;
 
 namespace CreatorPay.Infrastructure.Notifications;
 
@@ -24,14 +26,41 @@ public sealed class NotificationDispatcher(IEmailNotificationProvider email, ISm
 {
     public Task<NotificationProviderResult> DispatchAsync(NotificationChannel c, ProviderNotification n, CancellationToken ct) => c switch { NotificationChannel.Email => email.SendAsync(n, ct), NotificationChannel.Sms => sms.SendAsync(n, ct), NotificationChannel.Push => push.SendAsync(n, ct), NotificationChannel.InApp => inApp.SendAsync(n, ct), _ => Task.FromResult(new NotificationProviderResult(false, null, DeliveryAttemptStatus.Failed, "PROVIDER_NOT_IMPLEMENTED", "This channel is reserved for future use.", false)) };
 }
-public sealed class NotificationService(ApplicationDbContext db) : INotificationService
+public sealed class NotificationService(ApplicationDbContext db, IOptions<WalletOptions> walletConfigured) : INotificationService
 {
+    readonly WalletOptions walletOptions = walletConfigured.Value;
     static readonly HashSet<NotificationType> Mandatory = [NotificationType.SecurityAlert, NotificationType.PasswordResetRequested, NotificationType.CustomerVerificationCode, NotificationType.PurchaseConfirmed, NotificationType.PayoutPaid, NotificationType.PayoutFailed, NotificationType.SystemOperationalAlert];
     public async Task<Guid> CreateAsync(CreateNotificationRequest r, CancellationToken ct)
     {
         var prior = await db.Notifications.Where(x => x.IdempotencyKey == r.IdempotencyKey).Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct); if (prior.HasValue) return prior.Value; var now = DateTime.UtcNow; var data = JsonSerializer.Serialize(r.Data); var n = new Notification { Id = Guid.NewGuid(), PublicNotificationId = $"NTF-{Guid.NewGuid():N}", IdempotencyKey = r.IdempotencyKey, NotificationType = r.Type, Title = r.Data.GetValueOrDefault("Title", Humanize(r.Type)), Body = r.Data.GetValueOrDefault("Body", Humanize(r.Type)), DataJson = data, Priority = r.Priority, Status = NotificationStatus.Pending, ScheduledAtUtc = now, ExpiresAtUtc = r.ExpiresAtUtc, CorrelationId = r.CorrelationId, RelatedEntityType = r.RelatedEntityType, RelatedEntityId = r.RelatedEntityId, CreatedAtUtc = now };
         foreach (var recipient in r.Recipients.DistinctBy(x => new { x.UserAccountId, x.Channel, x.DestinationReference })) n.Recipients.Add(new() { Id = Guid.NewGuid(), UserAccountId = recipient.UserAccountId, RecipientType = recipient.RecipientType, Channel = recipient.Channel, DestinationReference = recipient.DestinationReference, MaskedDestination = recipient.MaskedDestination, LanguageCode = recipient.LanguageCode, Status = NotificationRecipientStatus.Pending, CreatedAtUtc = now });
-        db.Notifications.Add(n); db.NotificationOutboxMessages.Add(new() { Id = Guid.NewGuid(), NotificationId = n.Id, Status = NotificationOutboxStatus.Pending, AvailableAtUtc = now, CorrelationId = r.CorrelationId, CreatedAtUtc = now }); Audit(n.Id, "NotificationCreated", null); Audit(n.Id, "OutboxMessageCreated", null); await db.SaveChangesAsync(ct); return n.Id;
+        await AddPushRecipientsAsync(n, now, ct);
+        db.Notifications.Add(n); db.NotificationOutboxMessages.Add(new() { Id = Guid.NewGuid(), NotificationId = n.Id, Status = NotificationOutboxStatus.Pending, AvailableAtUtc = now, CorrelationId = r.CorrelationId, CreatedAtUtc = now }); Audit(n.Id, "NotificationCreated", null); Audit(n.Id, "OutboxMessageCreated", null);
+        if (r.Type == NotificationType.CustomerCashbackEarned && Guid.TryParse(r.RelatedEntityId, out var purchaseId)) await AddLowBalanceNotificationAsync(purchaseId, now, ct);
+        await db.SaveChangesAsync(ct); return n.Id;
+    }
+    async Task AddLowBalanceNotificationAsync(Guid purchaseId, DateTime now, CancellationToken ct)
+    {
+        var entry = await db.MerchantWalletEntries.AsNoTracking().Where(x => x.RelatedTransactionId == purchaseId && x.EntryType == MerchantWalletEntryType.CommissionDebit).SingleOrDefaultAsync(ct);
+        var minimum = await RewardEligibilityQueries.CurrentMinimumAsync(db, walletOptions.CurrencyCode, ct);
+        if (entry is null || minimum <= 0m || entry.BalanceBefore < minimum || entry.BalanceAfter >= minimum) return;
+        var key = $"merchant-low-balance:{entry.Id}";
+        if (await db.Notifications.AnyAsync(x => x.IdempotencyKey == key, ct)) return;
+        var recipients = await db.UserAccounts.AsNoTracking().Where(x => x.MerchantId == entry.MerchantId && x.Role == UserRole.MerchantAdmin && x.Status == AccountStatus.Active).Select(x => x.Id).ToListAsync(ct);
+        if (recipients.Count == 0) return;
+        var n = new Notification { Id = Guid.NewGuid(), PublicNotificationId = $"NTF-{Guid.NewGuid():N}", IdempotencyKey = key, NotificationType = NotificationType.MerchantWalletLowBalance, Title = "Business balance is low", Body = $"Your available balance is {entry.BalanceAfter:0.00} ETB. Please add funds.", DataJson = JsonSerializer.Serialize(new Dictionary<string, string> { ["TargetPath"] = "/?view=wallet" }), Priority = NotificationPriority.High, Status = NotificationStatus.Pending, ScheduledAtUtc = now, RelatedEntityType = "MerchantWallet", RelatedEntityId = entry.MerchantId.ToString(), CreatedAtUtc = now };
+        foreach (var id in recipients) n.Recipients.Add(new NotificationRecipient { Id = Guid.NewGuid(), UserAccountId = id, RecipientType = NotificationRecipientType.User, Channel = NotificationChannel.InApp, Status = NotificationRecipientStatus.Pending, CreatedAtUtc = now });
+        await AddPushRecipientsAsync(n, now, ct); db.Notifications.Add(n); db.NotificationOutboxMessages.Add(new NotificationOutboxMessage { Id = Guid.NewGuid(), NotificationId = n.Id, Status = NotificationOutboxStatus.Pending, AvailableAtUtc = now, CreatedAtUtc = now }); Audit(n.Id, "NotificationCreated", null);
+    }
+    async Task AddPushRecipientsAsync(Notification notification, DateTime now, CancellationToken ct)
+    {
+        var userIds = notification.Recipients.Where(x => x.Channel == NotificationChannel.InApp && x.UserAccountId.HasValue).Select(x => x.UserAccountId!.Value).Distinct().ToArray();
+        if (userIds.Length == 0) return;
+        var optedIn = await db.NotificationPreferences.AsNoTracking().Where(x => userIds.Contains(x.UserAccountId) && x.NotificationType == notification.NotificationType && x.PushEnabled).Select(x => x.UserAccountId).ToListAsync(ct);
+        if (optedIn.Count == 0) return;
+        var devices = await db.PushDeviceRegistrations.AsNoTracking().Where(x => optedIn.Contains(x.UserAccountId) && x.IsActive).ToListAsync(ct);
+        foreach (var device in devices)
+            notification.Recipients.Add(new NotificationRecipient { Id = Guid.NewGuid(), UserAccountId = device.UserAccountId, RecipientType = NotificationRecipientType.User, Channel = NotificationChannel.Push, DestinationReference = device.ProtectedToken, MaskedDestination = $"{device.Platform} device", PushDeviceRegistrationId = device.Id, Status = NotificationRecipientStatus.Pending, CreatedAtUtc = now });
     }
     public async Task<(IReadOnlyList<NotificationListItem> Items, int Total)> ListAsync(Guid uid, int page, int size, string? status, string? type, DateTime? from, DateTime? to, CancellationToken ct) { page = Math.Max(1, page); size = Math.Clamp(size, 1, 100); var q = db.NotificationRecipients.AsNoTracking().Include(x => x.Notification).Where(x => x.UserAccountId == uid && x.Channel == NotificationChannel.InApp); if (Enum.TryParse<NotificationRecipientStatus>(status, true, out var s)) q = q.Where(x => x.Status == s); if (Enum.TryParse<NotificationType>(type, true, out var t)) q = q.Where(x => x.Notification.NotificationType == t); if (from.HasValue) q = q.Where(x => x.CreatedAtUtc >= from); if (to.HasValue) q = q.Where(x => x.CreatedAtUtc <= to); var total = await q.CountAsync(ct); var rows = await q.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * size).Take(size).ToListAsync(ct); return (rows.Select(Map).ToList(), total); }
     public async Task<NotificationListItem?> GetAsync(Guid uid, string id, CancellationToken ct) { var x = await db.NotificationRecipients.AsNoTracking().Include(x => x.Notification).SingleOrDefaultAsync(x => x.UserAccountId == uid && x.Channel == NotificationChannel.InApp && x.Notification.PublicNotificationId == id, ct); return x is null ? null : Map(x); }

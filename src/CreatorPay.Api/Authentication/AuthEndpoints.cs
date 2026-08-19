@@ -31,12 +31,11 @@ public static class AuthEndpoints
         pin.MapPost("/link-firebase", async (LinkFirebaseRequest r, HttpContext h, ICurrentUserService u, IAuthenticationService s, CancellationToken ct) => ToHttp(await s.LinkFirebaseAsync(u.UserAccountId!.Value, r, Context(h), ct))).RequireAuthorization("AuthenticatedUser").RequireRateLimiting("auth-sensitive");
         pin.MapPost("/enroll", async (PinRequest r, HttpContext h, ICurrentUserService u, IAuthenticationService s, CancellationToken ct) => ToHttp(await s.EnrollPinAsync(u.UserAccountId!.Value, r, Context(h), ct))).RequireAuthorization("AuthenticatedUser").RequireRateLimiting("auth-sensitive");
         pin.MapPost("/unlock", async (PinUnlockRequest r, HttpContext h, IAuthenticationService s, CancellationToken ct) => ToHttp(await s.UnlockWithPinAsync(r, Context(h), ct))).RequireRateLimiting("auth-sensitive");
-        pin.MapPost("/recovery-proof", async (PinRecoveryProofRequest r, HttpContext h, IAuthenticationService s, CancellationToken ct) => ToHttp(await s.AuthorizePinRecoveryAsync(r, Context(h), ct))).RequireRateLimiting("auth-sensitive");
-        pin.MapPost("/reset", async (PinResetRequest r, HttpContext h, IAuthenticationService s, CancellationToken ct) => ToHttp(await s.ResetPinAsync(r, Context(h), ct))).RequireRateLimiting("auth-sensitive");
+        pin.MapPost("/reset-with-password", async (PasswordPinResetRequest r, HttpContext h, IAuthenticationService s, CancellationToken ct) => ToHttp(await s.ResetPinWithPasswordAsync(r, Context(h), ct))).RequireRateLimiting("auth-sensitive");
         return endpoints;
     }
 
-    private sealed record PasswordResetHelpRequest(string PhoneNumber, DateOnly BirthDate);
+    private sealed record PasswordResetHelpRequest(string PhoneNumber);
 
     private static async Task<IResult> RequestPasswordReset(PasswordResetHelpRequest request, HttpContext h, ApplicationDbContext db, CancellationToken ct)
     {
@@ -45,7 +44,7 @@ public static class AuthEndpoints
         try { normalized = EthiopianMobileNumber.Normalize(request.PhoneNumber); }
         catch (ArgumentException) { normalized = string.Empty; }
         var user = normalized.Length == 0 ? null : await db.UserAccounts.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == normalized, ct);
-        var eligible = user is not null && user.Role != UserRole.PlatformAdmin && user.BirthDate == request.BirthDate && AuthenticationService.CanSignIn(user);
+        var eligible = user is not null && user.Role != UserRole.PlatformAdmin && AuthenticationService.CanSignIn(user);
         var reference = $"PWR-{now:yyyyMMdd}-{Guid.NewGuid():N}"[..25].ToUpperInvariant();
         db.LoginAudits.Add(new LoginAudit { Id = Guid.NewGuid(), UserAccountId = eligible ? user!.Id : null, NormalizedEmail = normalized, WasSuccessful = eligible, FailureReason = eligible ? "PasswordResetHelpRequested" : "PasswordResetHelpDetailsMismatch", IpAddress = h.Connection.RemoteIpAddress?.ToString(), UserAgent = h.Request.Headers.UserAgent.ToString(), CorrelationId = h.TraceIdentifier, AttemptedAtUtc = now, CreatedAtUtc = now });
         if (eligible)

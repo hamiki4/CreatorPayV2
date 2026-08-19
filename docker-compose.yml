@@ -31,7 +31,10 @@ services:
       FirebaseAuth__AuthorizedOrigin: ${FirebaseAuth__AuthorizedOrigin:-https://pilot.weymela.com}
       FirebaseAuth__CallbackPath: ${FirebaseAuth__CallbackPath:-/auth/firebase-action}
       FirebaseAuth__PinResetAuthorizationMinutes: ${FirebaseAuth__PinResetAuthorizationMinutes:-10}
-    volumes: [creatorpay-deposit-proofs:/app/data/deposit-proofs]
+      FirebaseMessaging__Enabled: ${FirebaseMessaging__Enabled:-false}
+      FirebaseMessaging__ProjectId: ${FirebaseMessaging__ProjectId:-}
+      FirebaseMessaging__ServiceAccountPath: ${FirebaseMessaging__ServiceAccountPath:-}
+    volumes: [creatorpay-deposit-proofs:/app/data/deposit-proofs, creatorpay-data-protection-keys:/app/data/data-protection-keys]
     ports: ["${API_PORT:-8080}:8080"]
     depends_on: { postgres: { condition: service_healthy } }
     networks: [backend, edge]
@@ -43,7 +46,11 @@ services:
       DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ConnectionStrings__CreatorPayDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:-CreatorPayV2Db};Username=${POSTGRES_USER:-creatorpay};Password=${POSTGRES_PASSWORD}
       BackgroundWorkers__HealthFilePath: /tmp/creatorpay-worker-ready
+      FirebaseMessaging__Enabled: ${FirebaseMessaging__Enabled:-false}
+      FirebaseMessaging__ProjectId: ${FirebaseMessaging__ProjectId:-}
+      FirebaseMessaging__ServiceAccountPath: ${FirebaseMessaging__ServiceAccountPath:-}
     depends_on: { postgres: { condition: service_healthy } }
+    volumes: [creatorpay-data-protection-keys:/app/data/data-protection-keys]
     networks: [backend]
   web:
     build:
@@ -55,10 +62,12 @@ services:
         VITE_FIREBASE_AUTH_DOMAIN: "${VITE_FIREBASE_AUTH_DOMAIN:-}"
         VITE_FIREBASE_PROJECT_ID: "${VITE_FIREBASE_PROJECT_ID:-}"
         VITE_FIREBASE_APP_ID: "${VITE_FIREBASE_APP_ID:-}"
+        VITE_FIREBASE_MESSAGING_SENDER_ID: "${VITE_FIREBASE_MESSAGING_SENDER_ID:-}"
+        VITE_FIREBASE_VAPID_PUBLIC_KEY: "${VITE_FIREBASE_VAPID_PUBLIC_KEY:-}"
     restart: unless-stopped
     ports: ["${WEB_PORT:-8081}:8080"]
     depends_on: { api: { condition: service_healthy } }
     networks: [edge]
     healthcheck: { test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz || exit 1"], interval: 15s, timeout: 5s, retries: 5 }
-volumes: { creatorpay-postgres-data: {}, creatorpay-deposit-proofs: {} }
+volumes: { creatorpay-postgres-data: {}, creatorpay-deposit-proofs: {}, creatorpay-data-protection-keys: {} }
 networks: { backend: { internal: true }, edge: {} }

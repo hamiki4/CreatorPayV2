@@ -69,7 +69,7 @@ test('signed Creator QR continuation is same-origin, route-limited, and Cashier-
 test('authenticated sessions expire after two minutes of real user inactivity',()=>{
   assert.match(sessionCompact,/INACTIVITY_TIMEOUT_MS=120_000/)
   for(const event of ['pointerdown','pointermove','touchstart','keydown','scroll','click','popstate'])assert.ok(session.includes(`'${event}'`)||session.includes(`"${event}"`))
-  assert.match(main,/installInactivityLogout/)
+  assert.match(main,/installSessionLifecycle/)
   assert.match(main,/handleUnauthorized\(response\.status\)/)
 })
 

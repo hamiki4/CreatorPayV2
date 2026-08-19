@@ -23,8 +23,7 @@ public interface IAuthenticationService
     Task<OperationResult> LinkFirebaseAsync(Guid userId, LinkFirebaseRequest request, RequestContext context, CancellationToken ct);
     Task<OperationResult> EnrollPinAsync(Guid userId, PinRequest request, RequestContext context, CancellationToken ct);
     Task<Result<TokenPair>> UnlockWithPinAsync(PinUnlockRequest request, RequestContext context, CancellationToken ct);
-    Task<Result<PinRecoveryAuthorization>> AuthorizePinRecoveryAsync(PinRecoveryProofRequest request, RequestContext context, CancellationToken ct);
-    Task<OperationResult> ResetPinAsync(PinResetRequest request, RequestContext context, CancellationToken ct);
+    Task<OperationResult> ResetPinWithPasswordAsync(PasswordPinResetRequest request, RequestContext context, CancellationToken ct);
 }
 public interface IAuthenticationStore
 {

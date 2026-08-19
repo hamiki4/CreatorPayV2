@@ -8,7 +8,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
-import { CreatorQrWorkspace, MerchantQrWorkspace } from "./QrWorkspace";
+import { MerchantQrWorkspace } from "./QrWorkspace";
 import { CommissionWorkspace } from "./CommissionWorkspace";
 import {
   AdminDepositWorkspace,
@@ -26,15 +26,25 @@ import { AdminPortal } from "./AdminPortal";
 import { CustomerWorkspace, ShopperOfferPage } from "./CustomerWorkspace";
 import { AuthWorkspace } from "./AuthWorkspace";
 import { PinEnrollmentGate } from "./PinExperience";
+import { PasswordInput } from "./PasswordInput";
 import { brand } from "./brand";
 import { MerchantWorkspace } from "./MerchantWorkspace";
 import {
   clearAuthState,
   handleUnauthorized,
-  installInactivityLogout,
   isWorkspacePathAllowed,
   workspaceRoute,
 } from "./authSession";
+import { installNativeBackNavigation, installSessionLifecycle } from "./mobileLifecycle";
+import { isNativePlatform } from "./runtimePlatform";
+import {
+  getAccessToken,
+  getRefreshToken,
+  hydrateSession,
+  setSessionTokens,
+} from "./sessionStore";
+import { canonicalOriginMigration } from "./canonicalOrigin";
+import { revokePushNotifications } from './pushNotifications'
 import { OnboardingStatus } from "./OnboardingStatus";
 import { ContactSupport, HelpCenter, HelpLink, LegalPage } from "./PublicPages";
 import { PilotExperience } from "./PilotExperience";
@@ -84,7 +94,7 @@ const strings = {
   },
 };
 const t = strings.en;
-const token = () => localStorage.getItem("creatorpay_access_token") ?? "";
+const token = getAccessToken;
 const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 function claims(): User {
   try {
@@ -103,7 +113,7 @@ function claims(): User {
   }
 }
 async function refreshAccess() {
-  const refreshToken = localStorage.getItem("creatorpay_refresh_token");
+  const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
   const response = await fetch(`${apiBase}/api/v1/auth/refresh`, {
     method: "POST",
@@ -112,8 +122,7 @@ async function refreshAccess() {
   });
   if (!response.ok) return false;
   const value = await response.json();
-  localStorage.setItem("creatorpay_access_token", value.accessToken);
-  localStorage.setItem("creatorpay_refresh_token", value.refreshToken);
+  await setSessionTokens(value.accessToken, value.refreshToken);
   return true;
 }
 async function api<T>(
@@ -144,7 +153,7 @@ async function api<T>(
   return response.status === 204 ? (undefined as T) : response.json();
 }
 async function signOut() {
-  const refreshToken = localStorage.getItem("creatorpay_refresh_token");
+  const refreshToken = getRefreshToken();
   try {
     if (refreshToken)
       await fetch(`${apiBase}/api/v1/auth/logout`, {
@@ -153,7 +162,8 @@ async function signOut() {
         body: JSON.stringify({ refreshToken }),
       });
   } finally {
-    clearAuthState();
+    await revokePushNotifications();
+    await clearAuthState();
     location.assign("/");
   }
 }
@@ -407,8 +417,6 @@ function CreateCashier({ done }: { done: () => void }) {
     [phoneNumber, setPhoneNumber] = useState(""),
     [temporaryPassword, setTemporaryPassword] = useState(""),
     [confirmation, setConfirmation] = useState(""),
-    [birthDay,setBirthDay]=useState(""),[birthMonth,setBirthMonth]=useState(""),[birthYear,setBirthYear]=useState(""),
-    [locationName, setLocationName] = useState(""),
     [error, setError] = useState("");
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -420,9 +428,6 @@ function CreateCashier({ done }: { done: () => void }) {
     const parts = name.trim().split(/\s+/),
       firstName = parts.shift() ?? "",
       lastName = parts.join(" ") || "-";
-    const d=Number(birthDay),m=Number(birthMonth),y=Number(birthYear),date=new Date(Date.UTC(y,m-1,d));
-    if(y<1900||y>new Date().getUTCFullYear()||date.getUTCFullYear()!==y||date.getUTCMonth()!==m-1||date.getUTCDate()!==d){setError("Enter a valid birth date.");return}
-    const birthDate=`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     try {
       await api("/api/v1/merchant/cashiers", {
         method: "POST",
@@ -432,8 +437,6 @@ function CreateCashier({ done }: { done: () => void }) {
           phoneNumber,
           temporaryPassword,
           confirmation,
-          birthDate,
-          locationName: locationName.trim() || null,
         }),
       });
       setTemporaryPassword("");
@@ -469,37 +472,8 @@ function CreateCashier({ done }: { done: () => void }) {
           onChange={(e) => setPhoneNumber(e.target.value)}
         />
       </label>
-      <label>
-        Temporary Password
-        <input
-          required
-          type="password"
-          minLength={8}
-          autoComplete="new-password"
-          value={temporaryPassword}
-          onChange={(e) => setTemporaryPassword(e.target.value)}
-        />
-      </label>
-      <label>
-        Confirm Temporary Password
-        <input
-          required
-          type="password"
-          minLength={8}
-          autoComplete="new-password"
-          value={confirmation}
-          onChange={(e) => setConfirmation(e.target.value)}
-        />
-      </label>
-      <fieldset className="birth-date"><legend>Birth Date</legend><label>Day<input required type="number" inputMode="numeric" min="1" max="31" value={birthDay} onChange={e=>setBirthDay(e.target.value)}/></label><label>Month<input required type="number" inputMode="numeric" min="1" max="12" value={birthMonth} onChange={e=>setBirthMonth(e.target.value)}/></label><label>Year<input required type="number" inputMode="numeric" min="1900" max={new Date().getUTCFullYear()} value={birthYear} onChange={e=>setBirthYear(e.target.value)}/></label></fieldset>
-      <label>
-        Location / Branch (Optional)
-        <input
-          value={locationName}
-          onChange={(e) => setLocationName(e.target.value)}
-          placeholder="Main Location"
-        />
-      </label>
+      <PasswordInput label="Temporary Password" required minLength={8} autoComplete="new-password" value={temporaryPassword} onChange={setTemporaryPassword} />
+      <PasswordInput label="Confirm Temporary Password" required minLength={8} autoComplete="new-password" value={confirmation} onChange={setConfirmation} />
       {error && <p className="error">{error}</p>}
       <button>Create Cashier</button>
     </form>
@@ -647,26 +621,8 @@ function AcceptInvitation() {
             <p>Location: {preview.locationName}</p>
           </div>
         )}
-        <label>
-          Create Password
-          <input
-            type="password"
-            required
-            minLength={8}
-            value={f.password}
-            onChange={(e) => setF({ ...f, password: e.target.value })}
-          />
-        </label>
-        <label>
-          Confirm Password
-          <input
-            type="password"
-            required
-            minLength={8}
-            value={f.confirmation}
-            onChange={(e) => setF({ ...f, confirmation: e.target.value })}
-          />
-        </label>
+        <PasswordInput label="Create Password" required minLength={8} value={f.password} onChange={password => setF({ ...f, password })} />
+        <PasswordInput label="Confirm Password" required minLength={8} value={f.confirmation} onChange={confirmation => setF({ ...f, confirmation })} />
         <button disabled={!preview}>Accept Invitation</button>
         {message && (
           <aside role="status">
@@ -777,27 +733,18 @@ function App({initialQrPayload}:{initialQrPayload?:string}={}) {
       <a className="skip" href="#workspace-content">
         Skip to content
       </a>
-      <header>
-        <div>
-          <p className="eyebrow">{brand.productName}</p>
-          <h1>{creator ? "Creator Dashboard" : "Business Dashboard"}</h1>
-        </div>
-        <div className="header-actions">
-          <HelpLink category={creator ? "Content Creators" : "Businesses"} />
-          <SignOutButton />
-        </div>
-      </header>
       <PilotExperience role={creator ? "Creator" : "Business Owner"} />
       <div id="workspace-content" tabIndex={-1}>
         {!active ? (
           <OnboardingStatus role={creator ? "Creator" : "MerchantAdmin"} />
         ) : creator ? (
-          <CreatorDashboard />
+          <CreatorDashboard onSignOut={()=>void signOut()} />
         ) : (
           <BusinessDashboard
             cashiers={<StaffArea kind="cashiers" />}
             wallet={<MerchantWalletWorkspace />}
             profile={<MerchantWorkspace />}
+            onSignOut={()=>void signOut()}
           />
         )}
       </div>
@@ -832,19 +779,9 @@ function Root() {
         <a className="skip" href="#workspace-content">
           Skip to content
         </a>
-        <header>
-          <div>
-            <p className="eyebrow">{brand.productName}</p>
-            <h1>Shopper Dashboard</h1>
-          </div>
-          <div className="header-actions">
-            <HelpLink category="Shoppers" />
-            <SignOutButton />
-          </div>
-        </header>
         <div id="workspace-content" tabIndex={-1}>
           {user.status === "Active" ? (
-            <CustomerWorkspace />
+            <CustomerWorkspace onSignOut={()=>void signOut()} />
           ) : (
             <OnboardingStatus role="Customer" />
           )}
@@ -870,19 +807,33 @@ function Root() {
   );
 }
 function SessionGuard({ children }: { children: ReactNode }) {
-  useEffect(() => (token() ? installInactivityLogout() : undefined), []);
+  useEffect(() => {
+    const removeBack = installNativeBackNavigation();
+    const removeSession = token()
+      ? installSessionLifecycle(async () => {
+          if (!token()) return false;
+          return refreshAccess();
+        })
+      : undefined;
+    return () => { removeBack?.(); removeSession?.(); };
+  }, []);
   return children;
 }
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <SessionGuard>
-        <Root />
-      </SessionGuard>
-    </ErrorBoundary>
-  </StrictMode>,
-);
-if ("serviceWorker" in navigator)
+
+function renderApplication() {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <SessionGuard>
+          <Root />
+        </SessionGuard>
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}
+
+function registerServiceWorker() {
+  if (isNativePlatform() || !("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     if (import.meta.env.DEV) {
       void Promise.all([
@@ -922,4 +873,22 @@ if ("serviceWorker" in navigator)
         });
       })
       .catch(() => {});
+  });
+}
+
+void canonicalOriginMigration.then(() => hydrateSession())
+  .then(() => {
+    renderApplication();
+    registerServiceWorker();
+  })
+  .catch((error) => {
+    console.error("Authentication storage could not be initialized.", error);
+    createRoot(document.getElementById("root")!).render(
+      <main className="auth">
+        <section className="panel" role="alert">
+          <h1>Weymela could not start</h1>
+          <p>Close and reopen the app. If this continues, contact support.</p>
+        </section>
+      </main>,
+    );
   });

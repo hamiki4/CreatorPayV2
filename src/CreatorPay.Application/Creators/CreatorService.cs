@@ -20,7 +20,6 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         if (error is not null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(error));
         var passwordErrors = passwordPolicy.Validate(request.Password);
         if (passwordErrors.Count > 0) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(string.Join(" ", passwordErrors)));
-        if (request.BirthDate is null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure("Birth date is required."));
         if (request.Confirmation is not null && request.Password != request.Confirmation) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure("Password confirmation does not match."));
         return RegisterValidatedAsync(request, ct);
     }
@@ -33,7 +32,7 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         if (await store.PhoneExistsAsync(normalizedPhone, null, innerCt)) return CreatorResult<CreatorRegistrationResponse>.Failure("Phone number is already registered.");
         var now = clock.UtcNow; var creatorId = Guid.NewGuid(); var userId = Guid.NewGuid(); var creatorCode = await store.AllocateCreatorCodeAsync(innerCt);
         var creator = new Creator { Id = creatorId, PublicCreatorId = $"CR-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), CreatorCode = creatorCode, FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), DisplayName = request.DisplayName.Trim(), PhoneNumber = FormatPhone(normalizedPhone), NormalizedPhoneNumber = normalizedPhone, Email = registrationEmail, PreferredLanguage = request.PreferredLanguage.Trim(), City = request.City.Trim(), Zone = request.Zone?.Trim(), Biography = request.Biography.Trim(), ContentCategories = request.ContentCategories.Trim(), GovernmentIdReference = request.GovernmentIdReference?.Trim(), TaxIdentificationNumber = request.TaxIdentificationNumber?.Trim(), PreferredPayoutChannel = request.PreferredPayoutChannel?.Trim(), PreferredPayoutAccountIdentifier = request.PreferredPayoutAccountIdentifier?.Trim(), TermsAcceptedAtUtc = now, Status = CreatorStatus.PendingApproval, CreatedAtUtc = now, CreatedBy = userId.ToString() };
-        var user = new UserAccount { Id = userId, Email = registrationEmail, NormalizedEmail = normalizedEmail, PhoneNumber = normalizedPhone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Creator, Status = AccountStatus.PendingApproval, CreatorId = creatorId, BirthDate = request.BirthDate, IsEmailVerified = false, IsPhoneVerified = false, CreatedAtUtc = now, CreatedBy = userId.ToString() };
+        var user = new UserAccount { Id = userId, Email = registrationEmail, NormalizedEmail = normalizedEmail, PhoneNumber = normalizedPhone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Creator, Status = AccountStatus.PendingApproval, CreatorId = creatorId, IsEmailVerified = false, IsPhoneVerified = false, CreatedAtUtc = now, CreatedBy = userId.ToString() };
         user.PasswordHash = passwords.Hash(user, request.Password); store.Add(creator); store.Add(user); AddSocialProfiles(creatorId, request.SocialProfiles!, now, userId);
         Audit(creatorId, userId, "Registration", null, now);
         await store.SaveAsync(innerCt);

@@ -12,11 +12,10 @@ public static class RewardEligibilityQueries
             relationship.Status == PartnershipStatus.Approved &&
             relationship.StartDateUtc.HasValue && relationship.StartDateUtc <= now &&
             relationship.EndDateUtc.HasValue && relationship.EndDateUtc > now &&
-            db.Merchants.Any(merchant => merchant.Id == relationship.MerchantId && merchant.Status == MerchantStatus.Active) &&
+            db.Merchants.Any(merchant => merchant.Id == relationship.MerchantId && (merchant.Status == MerchantStatus.Active || merchant.Status == MerchantStatus.LowBalance)) &&
             db.Creators.Any(creator => creator.Id == relationship.CreatorId && creator.Status == CreatorStatus.Active) &&
             db.UserAccounts.Any(account => account.MerchantId == relationship.MerchantId && account.Role == UserRole.MerchantAdmin && account.Status == AccountStatus.Active) &&
             db.UserAccounts.Any(account => account.CreatorId == relationship.CreatorId && account.Role == UserRole.Creator && account.Status == AccountStatus.Active) &&
-            db.MerchantLocations.Any(location => location.MerchantId == relationship.MerchantId && location.IsActive) &&
             (!db.PartnershipLocations.Any(location => location.MerchantCreatorPartnershipId == relationship.Id && location.IsActive) ||
              db.PartnershipLocations.Any(location => location.MerchantCreatorPartnershipId == relationship.Id && location.IsActive &&
                  db.MerchantLocations.Any(merchantLocation => merchantLocation.Id == location.MerchantLocationId && merchantLocation.IsActive))));
@@ -25,17 +24,15 @@ public static class RewardEligibilityQueries
     {
         var ids = merchantIds.Distinct().ToArray();
         if (ids.Length == 0) return [];
-        var minimum = await CurrentMinimumAsync(db, currencyCode, ct);
         return (await db.MerchantWallets.AsNoTracking()
-            .Where(wallet => ids.Contains(wallet.MerchantId) && wallet.CurrencyCode == currencyCode && wallet.AvailableBalance >= minimum)
+            .Where(wallet => ids.Contains(wallet.MerchantId) && wallet.CurrencyCode == currencyCode && wallet.AvailableBalance > 0)
             .Select(wallet => wallet.MerchantId).ToListAsync(ct)).ToHashSet();
     }
 
     public static async Task<bool> HasRequiredFundingAsync(ApplicationDbContext db, Guid merchantId, string currencyCode, decimal transactionAmount, CancellationToken ct)
     {
-        var minimum = await CurrentMinimumAsync(db, currencyCode, ct);
         return await db.MerchantWallets.AsNoTracking().AnyAsync(wallet => wallet.MerchantId == merchantId && wallet.CurrencyCode == currencyCode &&
-            wallet.AvailableBalance >= minimum && wallet.AvailableBalance >= transactionAmount, ct);
+            wallet.AvailableBalance >= transactionAmount && (transactionAmount > 0 || wallet.AvailableBalance > 0), ct);
     }
 
     public static async Task<decimal> CurrentMinimumAsync(ApplicationDbContext db, string currencyCode, CancellationToken ct) =>

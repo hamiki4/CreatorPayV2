@@ -1,9 +1,9 @@
 namespace CreatorPay.Application.Wallet;
 
-public sealed class WalletOptions { public const string SectionName = "MerchantWallet"; public decimal MinimumActivationBalance { get; set; } = 1000m; public decimal LowBalanceThreshold { get; set; } = 1500m; public string CurrencyCode { get; set; } = "ETB"; }
+public sealed class WalletOptions { public const string SectionName = "MerchantWallet"; public decimal MinimumActivationBalance { get; set; } = 1000m; public decimal LowBalanceThreshold { get; set; } = 1000m; public string CurrencyCode { get; set; } = "ETB"; }
 public sealed record SubmitDepositRequest(decimal Amount, string CurrencyCode, string ExternalReference, string? ProofMetadata);
 public sealed record RejectDepositRequest(string Reason);
-public sealed record WalletDto(Guid Id, string CurrencyCode, decimal AvailableBalance, decimal HeldBalance, string Status);
+public sealed record WalletDto(Guid Id, string CurrencyCode, decimal AvailableBalance, decimal HeldBalance, string Status, decimal MinimumRequiredBalance = 0m, bool AdvertisingEligible = true);
 public sealed record DepositDto(Guid Id, Guid MerchantId, string BusinessName, decimal Amount, string CurrencyCode, string Status, string ExternalReference, string? ProofMetadata, DateTime SubmittedAtUtc, DateTime? VerifiedAtUtc, string? FailureReason);
 public sealed record DepositProofDescriptor(string StorageKey, string FileName, string ContentType, long SizeBytes);
 public interface IDepositProofStorage

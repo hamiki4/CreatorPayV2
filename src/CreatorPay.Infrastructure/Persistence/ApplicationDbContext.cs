@@ -60,6 +60,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>(); public DbSet<NotificationOutboxMessage> NotificationOutboxMessages => Set<NotificationOutboxMessage>();
     public DbSet<NotificationDeliveryAttempt> NotificationDeliveryAttempts => Set<NotificationDeliveryAttempt>(); public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<NotificationDeadLetter> NotificationDeadLetters => Set<NotificationDeadLetter>(); public DbSet<NotificationAuditEvent> NotificationAuditEvents => Set<NotificationAuditEvent>();
+    public DbSet<PushDeviceRegistration> PushDeviceRegistrations => Set<PushDeviceRegistration>();
     public DbSet<BackgroundJobExecution> BackgroundJobExecutions => Set<BackgroundJobExecution>();
     public DbSet<FraudRule> FraudRules => Set<FraudRule>(); public DbSet<FraudRuleVersion> FraudRuleVersions => Set<FraudRuleVersion>(); public DbSet<FraudAlert> FraudAlerts => Set<FraudAlert>(); public DbSet<FraudEvidence> FraudEvidence => Set<FraudEvidence>(); public DbSet<FraudReviewHistory> FraudReviewHistories => Set<FraudReviewHistory>();
     public DbSet<Dispute> Disputes => Set<Dispute>(); public DbSet<DisputeEvidence> DisputeEvidence => Set<DisputeEvidence>(); public DbSet<DisputeStatusHistory> DisputeStatusHistories => Set<DisputeStatusHistory>(); public DbSet<DisputeDecision> DisputeDecisions => Set<DisputeDecision>();

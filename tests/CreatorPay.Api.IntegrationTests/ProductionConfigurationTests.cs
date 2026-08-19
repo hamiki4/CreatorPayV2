@@ -48,6 +48,14 @@ public sealed class ProductionConfigurationTests
     }
 
     [Fact]
+    public void PilotAcceptsExactCapacitorAndroidHttpsOrigin()
+    {
+        var values = ValidPilotValues();
+        values["Cors:AllowedOrigins:1"] = "https://localhost";
+        ProductionConfiguration.Validate(new ConfigurationBuilder().AddInMemoryCollection(values).Build(), new EnvironmentStub { EnvironmentName = "Pilot" });
+    }
+
+    [Fact]
     public void ProductionRejectsInsecureOrCredentialedPublicAppUrl()
     {
         var values=ValidPilotValues();values["PublicAppBaseUrl"]="http://user:password@pilot.example/redirect?target=elsewhere";

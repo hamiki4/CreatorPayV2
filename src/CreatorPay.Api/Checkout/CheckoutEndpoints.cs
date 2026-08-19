@@ -71,9 +71,8 @@ public static class CheckoutEndpoints
     }
     static async Task<IResult> ValidateCashierCreator(CashierCreatorValidationRequest r,ICurrentUserService u,ICheckoutService s,ApplicationDbContext db,CancellationToken ct) =>
         await Run(async()=>await s.ValidateOfferAsync(u.MerchantId!.Value,u.CashierId!.Value,await ActiveCashierLocation(u,db,ct),await CreatorPayload(r.CreatorCode,db,ct),ct));
-    static async Task<Guid> ActiveCashierLocation(ICurrentUserService u,ApplicationDbContext db,CancellationToken ct) =>
-        await db.CashierLocationAssignments.AsNoTracking().Where(x=>x.CashierId==u.CashierId&&x.IsActive).OrderByDescending(x=>x.IsPrimary).Select(x=>(Guid?)x.MerchantLocationId).FirstOrDefaultAsync(ct)
-        ?? throw new UnauthorizedAccessException("Cashier has no active Business location assignment.");
+    static Task<Guid?> ActiveCashierLocation(ICurrentUserService u,ApplicationDbContext db,CancellationToken ct) =>
+        db.CashierLocationAssignments.AsNoTracking().Where(x=>x.CashierId==u.CashierId&&x.IsActive).OrderByDescending(x=>x.IsPrimary).Select(x=>(Guid?)x.MerchantLocationId).FirstOrDefaultAsync(ct);
     static async Task<string> CreatorPayload(string creatorCode,ApplicationDbContext db,CancellationToken ct)
     {
         var code=(creatorCode??string.Empty).Trim();

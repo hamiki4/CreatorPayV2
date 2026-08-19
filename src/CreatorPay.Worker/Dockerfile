@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
 WORKDIR /src
 COPY . .
 RUN dotnet restore CreatorPay.slnx && dotnet publish src/CreatorPay.Worker/CreatorPay.Worker.csproj -c Release -o /app --no-restore

@@ -1,5 +1,14 @@
-export type TimedRelationship={status:string;expiresAtUtc?:string;endDateUtc?:string;promotionActive?:boolean}
+export type TimedRelationship={status:string;relationshipState?:string;activationRequired?:boolean;expiresAtUtc?:string;endDateUtc?:string;promotionActive?:boolean}
 export function relationshipState(item:TimedRelationship,now=Date.now()){
+  if(item.relationshipState==='Active'){
+    const expires=item.expiresAtUtc??item.endDateUtc,daysLeft=expires?Math.max(0,Math.ceil((new Date(expires).getTime()-now)/86_400_000)):null
+    return{label:'Active',daysLeft,tone:daysLeft!==null&&daysLeft<=3?'urgent':daysLeft!==null&&daysLeft<=7?'soon':'active'}
+  }
+  if(item.relationshipState==='Declined')return{label:'Declined',daysLeft:null,tone:'declined'}
+  if(item.relationshipState==='Blocked')return{label:'Blocked',daysLeft:null,tone:'deactivated'}
+  if(item.relationshipState==='Suspended'||item.relationshipState==='Revoked')return{label:'Deactivated',daysLeft:null,tone:'deactivated'}
+  if(item.relationshipState==='Pending')return{label:'Pending',daysLeft:null,tone:'pending'}
+  if(item.relationshipState==='ActivationRequired'||item.activationRequired===true)return{label:'Activation Required',daysLeft:null,tone:'pending'}
   if(item.status==='Revoked'||item.status==='Suspended'||item.status==='Blocked')return{label:'Deactivated',daysLeft:null,tone:'deactivated'}
   if(item.status==='Rejected')return{label:'Declined',daysLeft:null,tone:'declined'}
   if(item.status!=='Approved')return{label:'Pending',daysLeft:null,tone:'pending'}

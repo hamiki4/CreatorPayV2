@@ -24,6 +24,10 @@ public sealed class RoleAuthorizationTests : IClassFixture<WebApplicationFactory
         => Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/admin/dashboard/summary")).StatusCode);
 
     [Fact]
+    public async Task Push_device_registration_requires_authentication()
+        => Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/push-devices", new { platform = "web", token = "test-token" })).StatusCode);
+
+    [Fact]
     public async Task Wrong_role_returns_403()
     {
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token(UserRole.Creator, AccountStatus.Active));

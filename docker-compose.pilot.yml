@@ -7,6 +7,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Pilot
       PublicAppBaseUrl: ${PUBLIC_APP_BASE_URL:-https://pilot.weymela.com}
+      Cors__AllowedOrigins__1: https://localhost
       SmsOtp__HashSecret: ${SmsOtp__HashSecret:?Set a distinct OTP hash secret of at least 32 characters}
       SmsOtp__TestCode: ${SmsOtp__TestCode:?Set the controlled six-digit pilot OTP}
       SmsOtp__PilotRegistrationAutoVerifyEnabled: ${SmsOtp__PilotRegistrationAutoVerifyEnabled:-false}
@@ -25,14 +26,23 @@ services:
       FirebaseAuth__Enabled: "true"
       FirebaseAuth__ProjectId: weymela-pilot
       FirebaseAuth__ServiceAccountPath: /run/secrets/weymela-firebase-admin.json
+      FirebaseMessaging__Enabled: "true"
+      FirebaseMessaging__ProjectId: weymela-pilot
+      FirebaseMessaging__ServiceAccountPath: /run/secrets/weymela-pilot-fcm.json
       FirebaseAuth__AuthorizedOrigin: https://pilot.weymela.com
       FirebaseAuth__CallbackPath: /auth/firebase-action
       FirebaseAuth__PinResetAuthorizationMinutes: "10"
     volumes:
       - ${FIREBASE_ADMIN_HOST_PATH:-/etc/creatorpay/secrets/weymela-firebase-admin.json}:/run/secrets/weymela-firebase-admin.json:ro
+      - /etc/creatorpay/firebase/weymela-pilot-fcm.json:/run/secrets/weymela-pilot-fcm.json:ro
   worker:
     environment:
       DOTNET_ENVIRONMENT: Pilot
+      FirebaseMessaging__Enabled: "true"
+      FirebaseMessaging__ProjectId: weymela-pilot
+      FirebaseMessaging__ServiceAccountPath: /run/secrets/weymela-pilot-fcm.json
+    volumes:
+      - /etc/creatorpay/firebase/weymela-pilot-fcm.json:/run/secrets/weymela-pilot-fcm.json:ro
     healthcheck:
       test: ["CMD-SHELL", "test -f /tmp/creatorpay-worker-ready"]
       interval: 15s

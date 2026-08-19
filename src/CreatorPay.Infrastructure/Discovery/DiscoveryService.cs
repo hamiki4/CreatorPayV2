@@ -18,7 +18,10 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
     private readonly string currencyCode = checkoutOptions.Value.CurrencyCode;
     public async Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, CancellationToken ct)
     {
+        var now = DateTime.UtcNow;
+        var promotedMerchantIds = EligibleCampaigns(now).Select(x => x.MerchantId).Distinct();
         var merchants = db.Merchants.AsNoTracking().Where(x => x.Status == MerchantStatus.Active
+            && promotedMerchantIds.Contains(x.Id)
             && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active));
         var term = query?.Trim();
         if (!string.IsNullOrWhiteSpace(term)) merchants = merchants.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.LegalBusinessName, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%"));
@@ -36,7 +39,6 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
             .Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City }).SingleOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Business is unavailable.");
         var rewardsAvailable = (await FundedMerchantIds([merchantId], ct)).Contains(merchantId);
-        if (!rewardsAvailable) return new(merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.Category, merchant.City, false, []);
         var now = DateTime.UtcNow;
         var rows = await (from campaign in EligibleCampaigns(now)
             where campaign.MerchantId == merchantId

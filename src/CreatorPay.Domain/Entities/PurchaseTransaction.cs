@@ -10,7 +10,7 @@ public sealed class PurchaseTransaction : Entity
     public Guid? CheckoutSessionId { get; set; }
     public decimal CustomerCashbackAmount { get; set; }
     public Guid MerchantId { get; set; }
-    public Guid MerchantLocationId { get; set; }
+    public Guid? MerchantLocationId { get; set; }
     public Guid CashierId { get; set; }
     public Guid? CreatorQrCodeId { get; set; }
     public Guid MerchantCreatorPartnershipId { get; set; }

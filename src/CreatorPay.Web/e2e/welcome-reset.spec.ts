@@ -11,13 +11,13 @@ test('first visit welcomes users, registration routes return to Sign In, and ret
   await expect(page.getByText('Shop. Promote. Earn.')).toBeVisible()
 
   const registrations=[
-    ['Shopper Registration','Display Name'],
-    ['Content Creator Registration','Legal First Name'],
-    ['Business Owner Registration','Legal Business Name'],
+    ['Shopper Registration','Display Name','Create your account'],
+    ['Content Creator Registration','Legal First Name','Create your account'],
+    ['Business Owner Registration','Trading Name','Create business account'],
   ] as const
-  for(const [action,field] of registrations){
+  for(const [action,field,heading] of registrations){
     await page.getByRole('button',{name:action,exact:true}).click()
-    await expect(page.getByRole('heading',{name:'Create your account'})).toBeVisible()
+    await expect(page.getByRole('heading',{name:heading})).toBeVisible()
     await expect(page.getByLabel(field,{exact:true})).toBeVisible()
     const back=page.getByRole('button',{name:'Back to Sign In',exact:true})
     await expect(back).toBeVisible()

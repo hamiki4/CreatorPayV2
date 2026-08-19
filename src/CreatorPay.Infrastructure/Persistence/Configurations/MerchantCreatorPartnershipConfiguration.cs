@@ -16,7 +16,13 @@ public sealed class MerchantCreatorPartnershipConfiguration : IEntityTypeConfigu
         builder.Property(x => x.RejectionReason).HasMaxLength(1000); builder.Property(x => x.SuspensionReason).HasMaxLength(1000);
         builder.Property(x => x.IntroductoryMessage).HasMaxLength(2000);
         builder.Property<uint>("xmin").IsRowVersion();
-        builder.HasIndex(x => new { x.MerchantId, x.CreatorId }).IsUnique();
+        // Keep historical declined/revoked relationships for auditability, while the
+        // partial unique index prevents concurrent pending or approved relationships
+        // for the same advertising pair.
+        builder.HasIndex(x => new { x.MerchantId, x.CreatorId })
+            .HasDatabaseName("IX_merchant_creator_partnerships_active_or_pending_pair")
+            .IsUnique()
+            .HasFilter("\"Status\" IN ('Pending', 'Approved')");
         builder.HasIndex(x => new { x.MerchantId, x.Status }); builder.HasIndex(x => new { x.CreatorId, x.Status }); builder.HasIndex(x => x.EndDateUtc);
         builder.HasOne(x => x.Merchant).WithMany(x => x.CreatorPartnerships).HasForeignKey(x => x.MerchantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Creator).WithMany(x => x.MerchantPartnerships).HasForeignKey(x => x.CreatorId).OnDelete(DeleteBehavior.Restrict);

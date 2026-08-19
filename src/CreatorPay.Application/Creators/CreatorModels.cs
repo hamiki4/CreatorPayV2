@@ -7,7 +7,7 @@ public sealed record SocialProfileRequest([property: JsonConverter(typeof(JsonSt
 public sealed record RegisterCreatorRequest(string FirstName, string LastName, string DisplayName, string PhoneNumber, string? Email, string Password,
     string PreferredLanguage = "en", string City = "", string? Zone = null, string Biography = "", string ContentCategories = "", bool TermsAccepted = false,
     IReadOnlyList<SocialProfileRequest>? SocialProfiles = null, string? GovernmentIdReference = null, string? TaxIdentificationNumber = null,
-    string? PreferredPayoutChannel = null, string? PreferredPayoutAccountIdentifier = null, DateOnly? BirthDate = null, string? Confirmation = null);
+    string? PreferredPayoutChannel = null, string? PreferredPayoutAccountIdentifier = null, string? Confirmation = null);
 public sealed record VerifyCreatorRequest(string Token);
 public sealed record UpdateCreatorProfileRequest(string FirstName, string LastName, string DisplayName, string PhoneNumber, string Email, ProfileImageMetadata? ProfileImage,
     string PreferredLanguage = "en", string City = "", string? Zone = null, string Biography = "", string ContentCategories = "", IReadOnlyList<SocialProfileRequest>? SocialProfiles = null,

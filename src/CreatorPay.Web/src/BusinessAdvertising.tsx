@@ -23,6 +23,8 @@ export type BusinessRelationship = {
   activatedAtUtc?: string;
   expiresAtUtc?: string;
   promotionActive: boolean;
+  relationshipState?: string;
+  activationRequired?: boolean;
   initiatedBy: "Business" | "Creator" | "Unknown";
 };
 const status = (value: string) =>
@@ -87,6 +89,20 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
       setMessage("We couldn't send that invitation.");
     }
   }
+  async function reactivate(x: Creator, relationship: BusinessRelationship) {
+    try {
+      await api(`/api/v1/merchant/partnerships/${relationship.id}/reactivate`, {
+        method: "POST",
+        body: JSON.stringify({ reason: "Reactivated by Business" }),
+      });
+      setMessage(`${x.displayName} is active for advertising.`);
+      await load();
+      refresh();
+    } catch (error) {
+      console.error(error);
+      setMessage((error as Error).message);
+    }
+  }
   function stateFor(creator: Creator) {
     const relationship = relationships.find((x) => x.creatorId === creator.id);
     if (!relationship)
@@ -104,10 +120,12 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
         canInvite: false,
       };
     }
-    if (["Revoked", "Suspended", "Blocked"].includes(relationship.status))
-      return { label: "Deactivated", days: "—", canInvite: false };
+    if (["Revoked", "Suspended"].includes(relationship.status))
+      return { label: "Deactivated", days: "—", canInvite: false, canReactivate: true, relationship };
+    if (relationship.status === "Blocked")
+      return { label: "Blocked", days: "—", canInvite: false };
     if (relationship.status === "Rejected")
-      return { label: "Declined", days: "—", canInvite: false };
+      return { label: "Declined", days: "—", canInvite: true, requestAgain: true };
     return { label: "Unavailable", days: "—", canInvite: false };
   }
   return (
@@ -173,7 +191,12 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                 <span data-label="Action">
                   {state.canInvite && (
                     <button onClick={() => void invite(x)}>
-                      Invite to Advertise
+                      {state.label === "Declined" ? "Request Again" : "Invite to Advertise"}
+                    </button>
+                  )}
+                  {state.canReactivate && (
+                    <button type="button" onClick={() => void reactivate(x, state.relationship)}>
+                      Reactivate
                     </button>
                   )}
                 </span>
@@ -194,9 +217,16 @@ export function ActiveCreators({
   refresh: () => void;
 }) {
   const [message, setMessage] = useState(""),
-    visible = items.filter((x) =>
-      ["Approved", "Suspended", "Revoked"].includes(x.status),
-    );
+    [reconciledId, setReconciledId] = useState<string>(),
+    visible = items.filter((x) => relationshipState(x).label === "Active");
+  useEffect(() => {
+    const pending = items.find((x) => x.status === "Approved" && x.activationRequired && x.id !== reconciledId);
+    if (!pending) return;
+    setReconciledId(pending.id);
+    void api(`/api/v1/merchant/partnerships/${pending.id}/reconcile-readiness`, { method: "POST" })
+      .then(refresh)
+      .catch((error) => console.error("Partnership readiness reconciliation failed", error));
+  }, [items, reconciledId, refresh]);
   async function change(
     x: BusinessRelationship,
     action: "activate" | "deactivate" | "reactivate",
@@ -232,7 +262,7 @@ export function ActiveCreators({
   }
   return (
     <section className="creator-section">
-      <h2>Active Creators</h2>
+      <h2>Active Ads</h2>
       {message && <p role="status">{message}</p>}
       {visible.length === 0 ? (
         <p className="compact-empty">
@@ -267,20 +297,6 @@ export function ActiveCreators({
                       onClick={() => void change(x, "deactivate")}
                     >
                       Deactivate Ad
-                    </button>
-                  ) : state.label === "Deactivated" ? (
-                    <button
-                      className="compact-action"
-                      onClick={() => void change(x, "reactivate")}
-                    >
-                      Reactivate Ad
-                    </button>
-                  ) : state.label === "Activation Required" ? (
-                    <button
-                      className="compact-action"
-                      onClick={() => void change(x, "activate")}
-                    >
-                      Activate Ad
                     </button>
                   ) : null}
                 </span>
@@ -322,7 +338,7 @@ export function AdvertisingRequests({
       );
       setMessage(
         accept
-          ? `${x.creatorName} approved. Use Activate Ad to start advertising.`
+          ? `${x.creatorName} approved and is active when Business readiness requirements are satisfied.`
           : `Request from ${x.creatorName} declined.`,
       );
       refresh();

@@ -33,7 +33,6 @@ public sealed class MerchantBusinessTypeTests : IClassFixture<WebApplicationFact
             email = $"merchant-business-type-{suffix}@example.com",
             password = "StrongPassword!123",
             confirmation = "StrongPassword!123",
-            birthDate = "1990-01-02",
             businessAddress = "1 Demo Road",
             city = "Addis Ababa",
             region = "Addis Ababa",

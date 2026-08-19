@@ -21,6 +21,22 @@ public sealed class PostgreSqlContainerTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Merchant_constraint_and_push_device_migrations_apply_once_with_required_schema()
+    {
+        RequireDocker(); await using var db = Db(); await db.Database.MigrateAsync();
+        var applied = await db.Database.GetAppliedMigrationsAsync();
+        Assert.Equal(1, applied.Count(x => x == "20260806050000_AddMerchantBusinessTypeConstraint"));
+        Assert.Equal(1, applied.Count(x => x == "20260818005232_AddPushDeviceRegistrations"));
+        Assert.Equal(1, applied.Count(x => x == "20260818012853_AddPushDeviceInstallationIdentity"));
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        await using var connection = new NpgsqlConnection(container!.GetConnectionString()); await connection.OpenAsync();
+        async Task<bool> Exists(string sql) { await using var command = new NpgsqlCommand(sql, connection); return (bool)(await command.ExecuteScalarAsync())!; }
+        Assert.True(await Exists("SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'merchants'::regclass AND conname = 'CK_merchants_BusinessType_Valid')"));
+        Assert.True(await Exists("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'PushDeviceRegistrations' AND column_name = 'InstallationId')"));
+        Assert.True(await Exists("SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'PushDeviceRegistrations' AND indexdef LIKE '%UNIQUE%' AND indexdef LIKE '%\"UserAccountId\", \"Platform\", \"InstallationId\", \"IsActive\"%')"));
+    }
+
+    [DockerFact]
     public async Task PostgreSqlAdvisoryLockPreventsOverlappingJobExecution()
     {
         RequireDocker(); await using var first = new NpgsqlConnection(container!.GetConnectionString()); await using var second = new NpgsqlConnection(container.GetConnectionString()); await first.OpenAsync(); await second.OpenAsync();

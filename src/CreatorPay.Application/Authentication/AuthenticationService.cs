@@ -7,7 +7,7 @@ namespace CreatorPay.Application.Authentication;
 
 public sealed class AuthenticationService(IAuthenticationStore store, IPasswordHasher passwords, ITokenService tokens, IUtcClock clock,
     IPasswordResetNotifier notifier, PasswordPolicyValidator policy, IOptions<JwtOptions> jwt, IOptions<LockoutOptions> lockout,
-    IOptions<PasswordResetOptions> resetOptions, IFirebaseIdentityVerifier firebase, IOptions<FirebasePinOptions> firebasePin) : IAuthenticationService
+    IOptions<PasswordResetOptions> resetOptions, IFirebaseIdentityVerifier firebase) : IAuthenticationService
 {
     private const string InvalidEmailCredentials = "Invalid email or password.";
     private const string InvalidPhoneCredentials = "Invalid phone number or password.";
@@ -82,8 +82,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         var user = await store.FindUserAsync(userId, ct);
         if (user is null) return Result<PinStatus>.Failure("User not found.");
         var eligible = IsPinRole(user.Role);
-        return Result<PinStatus>.Success(new(eligible, user.BirthDate is not null,
-            user.PinHash is not null, user.PinLockedAtUtc is not null, user.PinFailedAttemptCount));
+        return Result<PinStatus>.Success(new(eligible, user.PinHash is not null, user.PinLockedAtUtc is not null, user.PinFailedAttemptCount));
     }
 
     public async Task<OperationResult> LinkFirebaseAsync(Guid userId, LinkFirebaseRequest request, RequestContext context, CancellationToken ct)
@@ -114,9 +113,6 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         if (user is null || !IsPinRole(user.Role)) return OperationResult.Failure("PIN enrollment is not available for this account.");
         if (user.PinHash is not null) return OperationResult.Failure("A PIN is already enrolled. Use Forgot PIN to replace it.");
         if (!ValidPin(request.Pin) || request.Pin != request.Confirmation) return OperationResult.Failure("PIN must contain exactly 5 numeric digits and match confirmation.");
-        if (user.BirthDate is null && request.BirthDate is null) return OperationResult.Failure("Birth date is required before creating a PIN.");
-        if (request.BirthDate is not null && !ValidBirthDate(request.BirthDate.Value)) return OperationResult.Failure("Enter a valid birth date.");
-        user.BirthDate ??= request.BirthDate;
         var now = clock.UtcNow; user.PinHash = passwords.Hash(user, PinCredential(request.Pin)); user.PinVersion = 1;
         user.PinEnrolledAtUtc = now; user.PinChangedAtUtc = now; user.UpdatedAtUtc = now;
         Audit(user.Id, user.NormalizedPhoneNumber ?? user.NormalizedEmail, true, "PinEnrolled", context, now);
@@ -147,31 +143,34 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         return Result<TokenPair>.Success(pair);
     }, ct);
 
-    public async Task<Result<PinRecoveryAuthorization>> AuthorizePinRecoveryAsync(PinRecoveryProofRequest request, RequestContext context, CancellationToken ct)
+    public Task<OperationResult> ResetPinWithPasswordAsync(PasswordPinResetRequest request, RequestContext context, CancellationToken ct) => store.InTransactionAsync(async innerCt =>
     {
+        var now = clock.UtcNow;
         string normalized;
-        try { normalized = EthiopianMobileNumber.Normalize(request.PhoneNumber); } catch (ArgumentException) { return Result<PinRecoveryAuthorization>.Failure("The account details do not match."); }
-        var user = await store.FindUserByPhoneAsync(normalized, ct);
-        if (user is null || !IsPinRole(user.Role) || user.BirthDate is null || user.BirthDate != request.BirthDate)
-            return Result<PinRecoveryAuthorization>.Failure("The account details do not match.");
-        var raw = tokens.CreateOpaqueToken(); var now = clock.UtcNow; var expires = now.AddMinutes(firebasePin.Value.PinResetAuthorizationMinutes);
-        store.AddPinReset(new PinResetAuthorization { Id = Guid.NewGuid(), UserAccountId = user.Id, FirebaseUid = "birth-date", TokenHash = tokens.HashToken(raw), ExpiresAtUtc = expires, RequestedByIp = context.IpAddress, CreatedAtUtc = now });
-        Audit(user.Id, normalized, true, "PinBirthDateRecoveryAuthorized", context, now);
-        await store.SaveAsync(ct); return Result<PinRecoveryAuthorization>.Success(new(raw, expires));
-    }
-
-    public Task<OperationResult> ResetPinAsync(PinResetRequest request, RequestContext context, CancellationToken ct) => store.InTransactionAsync(async innerCt =>
-    {
-        if (!ValidPin(request.NewPin) || request.NewPin != request.Confirmation) return OperationResult.Failure("PIN must contain exactly 5 numeric digits and match confirmation.");
-        var now = clock.UtcNow; var authorization = await store.FindPinResetAsync(tokens.HashToken(request.ResetAuthorization), innerCt);
-        if (authorization is null || authorization.UsedAtUtc is not null || authorization.ExpiresAtUtc <= now) return OperationResult.Failure("Invalid or expired PIN reset authorization.");
-        var user = await store.FindUserAsync(authorization.UserAccountId, innerCt);
-        if (user is null || authorization.FirebaseUid != "birth-date" || !IsPinRole(user.Role)) return OperationResult.Failure("Invalid or expired PIN reset authorization.");
-        authorization.UsedAtUtc = now; authorization.UsedByIp = context.IpAddress;
-        user.PinHash = passwords.Hash(user, PinCredential(request.NewPin)); user.PinVersion++; user.PinChangedAtUtc = now;
-        user.PinEnrolledAtUtc ??= now; user.PinFailedAttemptCount = 0; user.PinLockedAtUtc = null; user.PinRetryNotBeforeUtc = null; user.UpdatedAtUtc = now;
+        try { normalized = EthiopianMobileNumber.Normalize(request.PhoneNumber); } catch (ArgumentException) { normalized = string.Empty; }
+        var user = normalized.Length == 0 ? null : await store.FindUserByPhoneAsync(normalized, innerCt);
+        var verified = user is not null && IsPinRole(user.Role) && CanSignIn(user) &&
+            (user.LockoutEndUtc is null || user.LockoutEndUtc <= now) &&
+            passwords.Verify(user, user.PasswordHash, request.Password) != PasswordVerification.Failed;
+        if (!verified)
+        {
+            if (user is not null && IsPinRole(user.Role))
+            {
+                user.FailedLoginCount++; user.LastFailedLoginAtUtc = now;
+                if (user.FailedLoginCount >= lockout.Value.MaxFailedAttempts) user.LockoutEndUtc = now.AddMinutes(lockout.Value.LockoutMinutes);
+            }
+            Audit(user?.Id, normalized, false, "PinPasswordRecoveryRejected", context, now);
+            await store.SaveAsync(innerCt); return OperationResult.Failure("Invalid phone number or password.");
+        }
+        if (!ValidPin(request.NewPin) || request.NewPin != request.Confirmation)
+            return OperationResult.Failure("PIN must contain exactly 5 numeric digits and match confirmation.");
+        user!.PinHash = passwords.Hash(user, PinCredential(request.NewPin)); user.PinVersion++;
+        user.PinChangedAtUtc = now; user.PinEnrolledAtUtc ??= now; user.PinFailedAttemptCount = 0;
+        user.PinLockedAtUtc = null; user.PinRetryNotBeforeUtc = null; user.FailedLoginCount = 0;
+        user.LastFailedLoginAtUtc = null; user.LockoutEndUtc = null; user.UpdatedAtUtc = now;
         await store.RevokeAllAsync(user.Id, now, "PIN reset", context.IpAddress, innerCt);
-        Audit(user.Id, user.NormalizedPhoneNumber ?? user.NormalizedEmail, true, "PinReset", context, now); await store.SaveAsync(innerCt); return OperationResult.Success();
+        Audit(user.Id, normalized, true, "PinPasswordRecoveryCompleted", context, now);
+        await store.SaveAsync(innerCt); return OperationResult.Success();
     }, ct);
     private TokenPair IssuePair(UserAccount user, string family, RequestContext context, DateTime now)
     {
@@ -188,10 +187,8 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     private static bool IsPinRole(UserRole role) => role is UserRole.Customer or UserRole.Creator or UserRole.MerchantAdmin or UserRole.Cashier;
     private static bool ValidPin(string pin) => pin.Length == 5 && pin.All(char.IsAsciiDigit);
     private static string PinCredential(string pin) => $"weymela-pin-v1:{pin}";
-    private static bool ValidBirthDate(DateOnly value) => value <= DateOnly.FromDateTime(DateTime.UtcNow) && value >= new DateOnly(1900, 1, 1);
     private static string NormalizeLogin(string identifier) { var value=identifier.Trim().ToUpperInvariant(); return value.Contains('@')?value:$"{value}@CASHIER.WEYMELA.LOCAL"; }
 }
-
 public sealed class FirebasePinOptions
 {
     public const string SectionName = "FirebaseAuth";

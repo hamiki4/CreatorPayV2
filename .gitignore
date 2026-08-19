@@ -30,11 +30,16 @@ backups/
 *.backup
 *.bak
 **/*firebase*admin*.json
+**/google-services.json
+.nuget/
 **/*service-account*.json
 **/*service_account*.json
 *.pem
 *.key
 *.pfx
+*.jks
+*.keystore
+**/key.properties
 uploads/
 **/deposit-proofs/
 *.log

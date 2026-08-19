@@ -3162,7 +3162,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatorId", "Status");
 
                     b.HasIndex("MerchantId", "CreatorId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_merchant_creator_partnerships_active_or_pending_pair")
+                        .HasFilter("\"Status\" IN ('Pending', 'Approved')");
 
                     b.HasIndex("MerchantId", "Status");
 
@@ -4144,6 +4146,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("NotificationId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("PushDeviceRegistrationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("ReadAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -4164,7 +4169,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("NotificationId");
+                    b.HasIndex("NotificationId", "PushDeviceRegistrationId")
+                        .IsUnique()
+                        .HasFilter("\"PushDeviceRegistrationId\" IS NOT NULL");
 
                     b.HasIndex("UserAccountId", "Status", "CreatedAtUtc");
 
@@ -5340,7 +5347,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("MerchantLocalDate")
                         .HasColumnType("date");
 
-                    b.Property<Guid>("MerchantLocationId")
+                    b.Property<Guid?>("MerchantLocationId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("PublicTransactionId")
@@ -5392,6 +5399,77 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.HasIndex("MerchantId", "CreatorId", "CustomerPhoneHash", "MerchantLocalDate");
 
                     b.ToTable("PurchaseTransactions");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PushDeviceRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("FailureAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("InstallationId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ProtectedToken")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserAccountId", "IsActive");
+
+                    b.HasIndex("UserAccountId", "Platform", "InstallationId", "IsActive")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\" = true");
+
+                    b.ToTable("PushDeviceRegistrations", (string)null);
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.RefreshToken", b =>
@@ -7125,6 +7203,15 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("CommissionSnapshot");
+                });
+
+            modelBuilder.Entity("CreatorPay.Domain.Entities.PushDeviceRegistration", b =>
+                {
+                    b.HasOne("CreatorPay.Domain.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("CreatorPay.Domain.Entities.RefreshToken", b =>

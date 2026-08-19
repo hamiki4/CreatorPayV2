@@ -7,6 +7,7 @@ using CreatorPay.Application.Qr;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
+using CreatorPay.Infrastructure.Eligibility;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -28,6 +29,7 @@ public sealed class CampaignService(ApplicationDbContext db, IUtcClock clock, IO
 
     public async Task<CampaignApprovalDto> ApproveAsync(Guid merchantId, Guid actor, Guid id, ApproveCampaignRequest request, CancellationToken ct)
     {
+        await BusinessAdvertisingEligibility.EnsureEligibleAsync(db, merchantId, options.CurrencyCode, ct);
         var campaign = await FindMerchant(id, merchantId, ct);
         if (await HasOpenCampaign(campaign.MerchantCreatorPartnershipId, campaign.Id, ct)) throw new InvalidOperationException("This partnership already has an open campaign.");
         var version = await db.CommissionRuleVersions.Include(x => x.Rule).SingleOrDefaultAsync(x => x.Id == request.CommissionRuleVersionId && x.IsActive && x.Rule.IsActive, ct) ?? throw new InvalidOperationException("An active commission rule version is required.");
@@ -89,10 +91,7 @@ public sealed class CampaignService(ApplicationDbContext db, IUtcClock clock, IO
     }
     private async Task<bool> IsFundingEligible(Guid merchantId, CancellationToken ct)
     {
-        var minimum = await db.PlatformFinancialSettings.Where(x => x.CurrencyCode == options.CurrencyCode).Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? options.MinimumActivationBalance;
-        return await db.Merchants.AnyAsync(x => x.Id == merchantId && x.Status == MerchantStatus.Active, ct)
-            && await db.MerchantWallets.AnyAsync(x => x.MerchantId == merchantId && x.CurrencyCode == options.CurrencyCode && x.AvailableBalance >= minimum, ct)
-            && await db.MerchantLocations.AnyAsync(x => x.MerchantId == merchantId && x.IsActive, ct);
+        return (await BusinessAdvertisingEligibility.EvaluateAsync(db, merchantId, options.CurrencyCode, ct)).Eligible;
     }
     private Task<bool> HasOpenCampaign(Guid partnershipId, Guid? excluding, CancellationToken ct) => db.CreatorMerchantCampaigns.AnyAsync(x => x.MerchantCreatorPartnershipId == partnershipId && x.Id != excluding && (x.Status == CampaignStatus.ApprovedAwaitingStart || x.Status == CampaignStatus.Scheduled || x.Status == CampaignStatus.Active), ct);
     private async Task<CreatorMerchantCampaign> FindMerchant(Guid id, Guid merchantId, CancellationToken ct, bool qr = false) { IQueryable<CreatorMerchantCampaign> q = db.CreatorMerchantCampaigns; if (qr) q = q.Include(x => x.QrCode); return await q.SingleOrDefaultAsync(x => x.Id == id && x.MerchantId == merchantId, ct) ?? throw new KeyNotFoundException("Campaign not found."); }

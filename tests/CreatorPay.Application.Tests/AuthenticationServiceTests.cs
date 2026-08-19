@@ -85,7 +85,7 @@ public sealed class AuthenticationServiceTests
     [InlineData(UserRole.Cashier)]
     public async Task Normal_roles_enroll_and_unlock_pin_without_firebase(UserRole role)
     {
-        var user=User(role,AccountStatus.Active); user.BirthDate=new(1990,1,2); var service=Service(new FakeStore(user));
+        var user=User(role,AccountStatus.Active); var service=Service(new FakeStore(user));
         Assert.True((await service.EnrollPinAsync(user.Id,new("12345","12345"),Context(),default)).Succeeded);
         var result=await service.UnlockWithPinAsync(new(user.PhoneNumber!,"12345"),Context(),default);
         Assert.True(result.Succeeded); Assert.Null(user.FirebaseUid); Assert.NotEqual("12345",user.PinHash);
@@ -94,24 +94,23 @@ public sealed class AuthenticationServiceTests
     [Fact]
     public async Task Tenth_incorrect_pin_persists_lock_and_recovery_resets_it()
     {
-        var user=User(UserRole.Customer,AccountStatus.Active); user.BirthDate=new(1990,1,2); user.PinHash="weymela-pin-v1:12345";
-        var service=Service(new FakeStore(user),new FakeFirebase(new("uid",user.Email,true)));
+        var user=User(UserRole.Customer,AccountStatus.Active); user.PinHash="weymela-pin-v1:12345";
+        var service=Service(new FakeStore(user));
         Result<TokenPair>? result=null;
         for(var i=0;i<10;i++){user.PinRetryNotBeforeUtc=null;result=await service.UnlockWithPinAsync(new(user.PhoneNumber!,"99999"),Context(),default);}
         Assert.Equal("Too many incorrect attempts. Use Forgot PIN to reset your PIN.",result!.Error); Assert.Equal(10,user.PinFailedAttemptCount); Assert.NotNull(user.PinLockedAtUtc);
-        var proof=await service.AuthorizePinRecoveryAsync(new(user.PhoneNumber!,new(1990,1,2)),Context(),default); Assert.True(proof.Succeeded);
-        Assert.True((await service.ResetPinAsync(new(proof.Value!.ResetAuthorization,"54321","54321"),Context(),default)).Succeeded);
+        Assert.True((await service.ResetPinWithPasswordAsync(new(user.PhoneNumber!,"Correct1!","54321","54321"),Context(),default)).Succeeded);
         Assert.Equal(0,user.PinFailedAttemptCount); Assert.Null(user.PinLockedAtUtc);
         Assert.False((await service.UnlockWithPinAsync(new(user.PhoneNumber!,"12345"),Context(),default)).Succeeded);
         user.PinRetryNotBeforeUtc=null; Assert.True((await service.UnlockWithPinAsync(new(user.PhoneNumber!,"54321"),Context(),default)).Succeeded);
     }
 
     [Fact]
-    public async Task Wrong_birth_date_cannot_authorize_pin_recovery()
+    public async Task Wrong_password_cannot_reset_pin()
     {
-        var user=User(UserRole.Customer,AccountStatus.Active);user.BirthDate=new(1990,1,2);
-        var result=await Service(new FakeStore(user)).AuthorizePinRecoveryAsync(new(user.PhoneNumber!,new(1990,1,3)),Context(),default);
-        Assert.False(result.Succeeded);Assert.Equal("The account details do not match.",result.Error);
+        var user=User(UserRole.Customer,AccountStatus.Active);
+        var result=await Service(new FakeStore(user)).ResetPinWithPasswordAsync(new(user.PhoneNumber!,"wrong","54321","54321"),Context(),default);
+        Assert.False(result.Succeeded);Assert.Equal("Invalid phone number or password.",result.Error);
     }
 
     [Fact]
@@ -149,7 +148,7 @@ public sealed class AuthenticationServiceTests
     private static readonly DateTime Now = new(2026, 8, 5, 12, 0, 0, DateTimeKind.Utc);
     private static UserAccount User(UserRole role, AccountStatus status) => new() { Id = Guid.NewGuid(), Email = $"{role}@example.com", NormalizedEmail = $"{role}@example.com".ToUpperInvariant(), PhoneNumber = $"+2519{Math.Abs((int)role):D8}"[..13], NormalizedPhoneNumber = $"+2519{Math.Abs((int)role):D8}"[..13], PasswordHash = "Correct1!", Role = role, Status = status };
     private static RequestContext Context() => new("127.0.0.1", "tests", "correlation");
-    private static AuthenticationService Service(FakeStore store,IFirebaseIdentityVerifier? firebase=null) => new(store, new FakePasswords(), new FakeTokens(), new FakeClock(), new FakeNotifier(), new PasswordPolicyValidator(Options.Create(new PasswordOptions())), Options.Create(new JwtOptions()), Options.Create(new LockoutOptions()), Options.Create(new PasswordResetOptions()), firebase??new FakeFirebase(null), Options.Create(new FirebasePinOptions()));
+    private static AuthenticationService Service(FakeStore store,IFirebaseIdentityVerifier? firebase=null) => new(store, new FakePasswords(), new FakeTokens(), new FakeClock(), new FakeNotifier(), new PasswordPolicyValidator(Options.Create(new PasswordOptions())), Options.Create(new JwtOptions()), Options.Create(new LockoutOptions()), Options.Create(new PasswordResetOptions()), firebase??new FakeFirebase(null));
 
     private sealed class FakePasswords : IPasswordHasher { public string Hash(UserAccount user, string password) => password; public PasswordVerification Verify(UserAccount user, string hash, string password) => hash == password ? PasswordVerification.Success : PasswordVerification.Failed; }
     private sealed class FakeTokens : ITokenService { public (string Token, DateTime ExpiresAtUtc) CreateAccessToken(UserAccount user) => ($"access-{user.Role}-{Guid.NewGuid():N}", Now.AddMinutes(15)); public string CreateOpaqueToken() => $"opaque-{Guid.NewGuid():N}"; public string HashToken(string token) => $"hash-{token}"; }

@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace CreatorPay.Api.Testing;
 
 public sealed record E2eSeedRequest(string Password);
-public sealed record E2eLockedPinUserRequest(string PhoneNumber, string Password, string Pin, DateOnly BirthDate);
+public sealed record E2eLockedPinUserRequest(string PhoneNumber, string Password, string Pin);
 
 public static class E2eSeedEndpoints
 {
@@ -29,7 +29,7 @@ public static class E2eSeedEndpoints
         if (await db.UserAccounts.AnyAsync(x => x.NormalizedPhoneNumber == phone, ct)) return Results.Conflict();
         var now = DateTime.UtcNow;
         var customer = new Customer { Id = Guid.NewGuid(), PublicCustomerId = $"CUS-PIN-{Guid.NewGuid():N}"[..20], DisplayName = "Locked PIN E2E", PhoneNumber = phone, NormalizedPhoneNumber = phone, CreatedAtUtc = now };
-        var user = new UserAccount { Id = Guid.NewGuid(), PhoneNumber = phone, NormalizedPhoneNumber = phone, Role = UserRole.Customer, Status = AccountStatus.Active, CustomerId = customer.Id, BirthDate = request.BirthDate, PinVersion = 1, PinEnrolledAtUtc = now, PinChangedAtUtc = now, PinFailedAttemptCount = 10, PinLockedAtUtc = now, CreatedAtUtc = now };
+        var user = new UserAccount { Id = Guid.NewGuid(), PhoneNumber = phone, NormalizedPhoneNumber = phone, Role = UserRole.Customer, Status = AccountStatus.Active, CustomerId = customer.Id, PinVersion = 1, PinEnrolledAtUtc = now, PinChangedAtUtc = now, PinFailedAttemptCount = 10, PinLockedAtUtc = now, CreatedAtUtc = now };
         user.PasswordHash = passwords.Hash(user, request.Password);
         user.PinHash = passwords.Hash(user, $"weymela-pin-v1:{request.Pin}");
         db.AddRange(customer, user, new CustomerWallet { Id = Guid.NewGuid(), CustomerId = customer.Id, CurrencyCode = "ETB", CreatedAtUtc = now });
@@ -109,7 +109,7 @@ public static class E2eSeedEndpoints
         return Results.Ok(new{shopperEmail=user.Email,shopperPhone=user.PhoneNumber,cashierEmail=cashier.Email,cashierPhone=cashier.PhoneNumber,ownerEmail=ownerUser.Email,ownerPhone=ownerUser.PhoneNumber,creatorEmail=activeCreatorUser.Email,creatorPhone=activeCreatorUser.PhoneNumber,creatorCode=active.CreatorCode,noCampaignCreatorCode=noOffer.CreatorCode,confirmationShopperEmails,confirmationShopperPhones,adminEmail=adminUser.Email,creatorQrPayload=qrUrls.Create(creatorQrPublicId,1,creatorQrToken),noCampaignQrPayload=qrUrls.Create(noOfferQrPublicId,1,noOfferQrToken),locationId=location.Id,expiredCheckoutQr=$"creatorpay:checkout:{expiredCheckout.PublicCheckoutId}:{expiredRaw}",creatorName=active.DisplayName,activeOfferCode=offer.CampaignCode,expiredOfferCode=expired.CampaignCode,offerQrId,offerQrPayload=$"creatorpay:offer:{offer.QrCode.PublicQrId}:{qrTokens.CreateToken(offer.QrCode.PublicQrId,1)}",expiredOfferQrPayload=$"creatorpay:offer:{expired.QrCode!.PublicQrId}:{qrTokens.CreateToken(expired.QrCode.PublicQrId,1)}"});
     }
 
-    private static Merchant Merchant(Guid id,string name,MerchantStatus status,DateTime now)=>new(){Id=id,PublicMerchantId=$"MER-{id.ToString("N")[^16..]}",LegalBusinessName=name,TradingName=name,BusinessType="Synthetic",PrimaryContactName="E2E",PhoneNumber=$"+2519{id.ToString("N")[^8..]}",NormalizedPhoneNumber=$"+2519{id.ToString("N")[^8..]}",Email=$"{id:N}@e2e.invalid",TermsAcceptedAtUtc=now,PublicDescription="Synthetic browser-test Offer.",BusinessAddress="Synthetic",City="Addis Ababa",Region="Addis Ababa",Country="ET",TimeZone="Africa/Addis_Ababa",Status=status,CreatedAtUtc=now};
+    private static Merchant Merchant(Guid id,string name,MerchantStatus status,DateTime now)=>new(){Id=id,PublicMerchantId=$"MER-{id.ToString("N")[^16..]}",LegalBusinessName=name,TradingName=name,BusinessType="Other",PrimaryContactName="E2E",PhoneNumber=$"+2519{id.ToString("N")[^8..]}",NormalizedPhoneNumber=$"+2519{id.ToString("N")[^8..]}",Email=$"{id:N}@e2e.invalid",TermsAcceptedAtUtc=now,PublicDescription="Synthetic browser-test Offer.",BusinessAddress="Synthetic",City="Addis Ababa",Region="Addis Ababa",Country="ET",TimeZone="Africa/Addis_Ababa",Status=status,CreatedAtUtc=now};
     private static Creator Creator(Guid id,string name,CreatorStatus status,DateTime now)=>new(){Id=id,PublicCreatorId=$"CRE-{id.ToString("N")[^16..]}",FirstName="E2E",LastName="Creator",DisplayName=name,PhoneNumber=$"+2519{id.ToString("N")[^8..]}",NormalizedPhoneNumber=$"+2519{id.ToString("N")[^8..]}",Email=$"{id:N}@e2e.invalid",City="Addis Ababa",Biography="Synthetic",ContentCategories="Testing",TermsAcceptedAtUtc=now,Status=status,CreatedAtUtc=now};
     private static CreatorMerchantCampaign Campaign(Guid id,string publicId,Guid creator,Guid merchant,Guid partnership,Guid version,string code,DateTime start,int days,Guid actor,IQrTokenService qrTokens){var x=new CreatorMerchantCampaign{Id=id,PublicCampaignId=publicId,CreatorId=creator,MerchantId=merchant,MerchantCreatorPartnershipId=partnership,CreatedAtUtc=start};x.Approve(days,null,version,actor,code,"E2E Active Offer\nSynthetic public description",start);var publicQrId=$"CQR-{code}";var token=qrTokens.CreateToken(publicQrId,1);x.QrCode=new(){Id=Guid.NewGuid(),CampaignId=id,PublicQrId=publicQrId,TokenHash=qrTokens.Hash(token),IssuedAtUtc=start,CreatedAtUtc=start};x.Start(start);x.QrCode.Activate(start,x.ExpiresAtUtc!.Value);return x;}
 }

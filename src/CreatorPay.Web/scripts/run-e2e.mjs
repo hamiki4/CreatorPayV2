@@ -225,6 +225,7 @@ try {
       E2E_CREATOR_CODE: seed.creatorCode,
       E2E_NO_CAMPAIGN_CREATOR_CODE: seed.noCampaignCreatorCode,
       E2E_ADMIN_EMAIL: seed.adminEmail,
+      E2E_ADMIN_PASSWORD: password,
       E2E_CREATOR_QR_PAYLOAD: seed.creatorQrPayload,
       E2E_NO_CAMPAIGN_QR_PAYLOAD: seed.noCampaignQrPayload,
       E2E_CONFIRMATION_EMAILS: JSON.stringify(seed.confirmationShopperEmails),

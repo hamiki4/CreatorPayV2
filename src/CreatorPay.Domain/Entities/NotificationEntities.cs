@@ -33,7 +33,23 @@ public sealed class NotificationRecipient : Entity
     public DateTime? FailedAtUtc { get; set; }
     public string? FailureReason { get; set; }
     public string LanguageCode { get; set; } = "en";
+    // A push recipient is deliberately bound to one device.  The token itself is
+    // never copied into delivery attempts or audit events.
+    public Guid? PushDeviceRegistrationId { get; set; }
     public Notification Notification { get; set; } = null!;
+}
+public sealed class PushDeviceRegistration : Entity
+{
+    public Guid UserAccountId { get; set; }
+    public string Platform { get; set; } = "";
+    public string InstallationId { get; set; } = "";
+    public string ProtectedToken { get; set; } = "";
+    public string TokenHash { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+    public DateTime LastSeenAtUtc { get; set; }
+    public DateTime? RevokedAtUtc { get; set; }
+    public string? FailureCode { get; set; }
+    public DateTime? FailureAtUtc { get; set; }
 }
 public sealed class NotificationTemplate : Entity
 {

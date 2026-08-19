@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using CreatorPay.Infrastructure.Persistence;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Infrastructure.Authentication;
@@ -49,6 +50,7 @@ public static class DependencyInjection
         services.Configure<LockoutOptions>(configuration.GetSection(LockoutOptions.SectionName));
         services.Configure<PasswordResetOptions>(configuration.GetSection(PasswordResetOptions.SectionName));
         services.Configure<FirebaseAuthOptions>(configuration.GetSection(FirebaseAuthOptions.SectionName));
+        services.Configure<FirebaseMessagingOptions>(configuration.GetSection(FirebaseMessagingOptions.SectionName));
         services.Configure<FirebasePinOptions>(configuration.GetSection(FirebasePinOptions.SectionName));
         services.Configure<SmsOtpOptions>(configuration.GetSection(SmsOtpOptions.SectionName));
         services.Configure<CreatorVerificationOptions>(configuration.GetSection(CreatorVerificationOptions.SectionName));
@@ -78,10 +80,13 @@ public static class DependencyInjection
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
         services.Configure<ObservabilityOptions>(configuration.GetSection(ObservabilityOptions.SectionName));
         services.Configure<FeatureFlagOptions>(configuration.GetSection(FeatureFlagOptions.SectionName));
+        services.AddDataProtection().SetApplicationName("Weymela.PushNotifications").PersistKeysToFileSystem(new DirectoryInfo(configuration["DataProtection:KeyRingPath"] ?? "/app/data/data-protection-keys"));
         services.AddSingleton<INotificationTemplateRenderer, SafeNotificationTemplateRenderer>();
         services.AddSingleton<DevelopmentNotificationProvider>();
         services.AddSingleton<IEmailNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<ISmsNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>());
-        services.AddSingleton<IPushNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<IInAppNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>());
+        if (configuration.GetValue<bool>($"{FirebaseMessagingOptions.SectionName}:Enabled")) services.AddSingleton<IPushNotificationProvider, FirebaseMessagingProvider>();
+        else services.AddSingleton<IPushNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>());
+        services.AddSingleton<IInAppNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>());
         services.AddSingleton<INotificationDispatcher, NotificationDispatcher>(); services.AddScoped<INotificationService, NotificationService>(); services.AddScoped<INotificationOutboxProcessor, NotificationOutboxProcessor>();
         services.AddScoped<IRiskOperationsService, RiskOperationsService>();
         services.Configure<CampaignOptions>(configuration.GetSection(CampaignOptions.SectionName)); services.AddScoped<ICampaignService, CampaignService>();

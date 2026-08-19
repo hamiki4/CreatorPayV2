@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using CreatorPay.Api.Authentication;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Notifications;
@@ -6,6 +8,7 @@ using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace CreatorPay.Api.Notifications;
 
@@ -21,7 +24,29 @@ public static class NotificationEndpoints
         users.MapPost("/notifications/read-all", async (ICurrentUserService u, INotificationService s, CancellationToken ct) => Results.Ok(new { count = await s.MarkAllReadAsync(u.UserAccountId!.Value, ct) }));
         users.MapGet("/notification-preferences", async (ICurrentUserService u, INotificationService s, CancellationToken ct) => Results.Ok(await s.GetPreferencesAsync(u.UserAccountId!.Value, ct)));
         users.MapPut("/notification-preferences", async (UpdateNotificationPreference[] p, ICurrentUserService u, INotificationService s, CancellationToken ct) => { await s.UpdatePreferencesAsync(u.UserAccountId!.Value, p, ct); return Results.NoContent(); });
+        users.MapPost("/push-devices", RegisterPushDevice);
+        users.MapDelete("/push-devices/{tokenHash}", RevokePushDevice);
         MapAdmin(app); return app;
+    }
+    static async Task<IResult> RegisterPushDevice(PushDeviceRequest request, ICurrentUserService user, ApplicationDbContext db, IDataProtectionProvider protection, CancellationToken ct)
+    {
+        if (request.Platform is not ("web" or "android") || string.IsNullOrWhiteSpace(request.Token) || request.Token.Length > 2048 || string.IsNullOrWhiteSpace(request.InstallationId) || request.InstallationId.Length > 128) return Results.BadRequest(new { message = "A valid platform, installation and device token are required." });
+        var accountId = user.UserAccountId!.Value; var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Token))).ToLowerInvariant(); var now = DateTime.UtcNow;
+        var installationRows = await db.PushDeviceRegistrations.Where(x => x.Platform == request.Platform && x.InstallationId == request.InstallationId).ToListAsync(ct);
+        if (installationRows.Any(x => x.UserAccountId != accountId)) return Results.Conflict(new { message = "This installation is already registered to another account." });
+        var tokenOwner = await db.PushDeviceRegistrations.SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
+        if (tokenOwner is not null && tokenOwner.UserAccountId != accountId) return Results.Conflict(new { message = "This device token is already registered to another account." });
+        var active = installationRows.SingleOrDefault(x => x.IsActive);
+        if (active is not null && active.TokenHash == hash) { active.LastSeenAtUtc = now; await db.SaveChangesAsync(ct); return Results.NoContent(); }
+        if (active is not null) { active.IsActive = false; active.RevokedAtUtc = now; }
+        var protectedToken = protection.CreateProtector("Weymela.PushDeviceToken.v1").Protect(request.Token);
+        if (tokenOwner is not null) { tokenOwner.Platform = request.Platform; tokenOwner.InstallationId = request.InstallationId; tokenOwner.ProtectedToken = protectedToken; tokenOwner.IsActive = true; tokenOwner.RevokedAtUtc = null; tokenOwner.FailureCode = null; tokenOwner.FailureAtUtc = null; tokenOwner.LastSeenAtUtc = now; }
+        else db.PushDeviceRegistrations.Add(new PushDeviceRegistration { Id = Guid.NewGuid(), UserAccountId = accountId, Platform = request.Platform, InstallationId = request.InstallationId, TokenHash = hash, ProtectedToken = protectedToken, IsActive = true, CreatedAtUtc = now, LastSeenAtUtc = now });
+        await db.SaveChangesAsync(ct); return Results.NoContent();
+    }
+    static async Task<IResult> RevokePushDevice(string tokenHash, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct)
+    {
+        if (tokenHash.Length != 64) return Results.NotFound(); var device = await db.PushDeviceRegistrations.SingleOrDefaultAsync(x => x.TokenHash == tokenHash && x.UserAccountId == user.UserAccountId, ct); if (device is null) return Results.NotFound(); device.IsActive = false; device.RevokedAtUtc = DateTime.UtcNow; await db.SaveChangesAsync(ct); return Results.NoContent();
     }
     static void MapAdmin(IEndpointRouteBuilder app)
     {
@@ -45,4 +70,5 @@ public static class NotificationEndpoints
     static async Task<IResult> RetryOutbox(Guid id, Guid actor, ApplicationDbContext db, CancellationToken ct) { var x = await db.NotificationOutboxMessages.FindAsync([id], ct); if (x is null) return Results.NotFound(); x.Status = NotificationOutboxStatus.Pending; x.AvailableAtUtc = DateTime.UtcNow; x.LockedAtUtc = null; x.LockedBy = null; x.LastError = null; db.NotificationAuditEvents.Add(Audit(x.NotificationId, actor, "MessageManuallyRetried")); await db.SaveChangesAsync(ct); return Results.Accepted(); }
     static NotificationAuditEvent Audit(Guid id, Guid? actor, string type) => new() { Id = Guid.NewGuid(), NotificationId = id, ActorUserId = actor, EventType = type, CreatedAtUtc = DateTime.UtcNow };
     public sealed record TemplateStatus(bool IsActive);
+    public sealed record PushDeviceRequest(string Platform, string Token, string InstallationId);
 }
