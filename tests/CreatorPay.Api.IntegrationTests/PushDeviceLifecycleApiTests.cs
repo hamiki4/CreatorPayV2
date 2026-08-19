@@ -21,14 +21,17 @@ public sealed class PushDeviceLifecycleApiTests : IAsyncLifetime
     readonly PostgreSqlContainer database = new PostgreSqlBuilder("postgres:17-alpine").WithDatabase("creatorpay_push_tests").WithUsername("creatorpay").WithPassword("test-only-password").Build();
     WebApplicationFactory<Program>? factory;
     int userNumber;
+    readonly string keyRingPath = Path.Combine(Path.GetTempPath(), $"creatorpay-push-device-{Guid.NewGuid():N}");
     public async Task InitializeAsync()
     {
         await database.StartAsync();
+        Directory.CreateDirectory(keyRingPath);
         var values = new Dictionary<string, string?> { ["ConnectionStrings:CreatorPayDatabase"] = database.GetConnectionString(), ["Authentication:Jwt:Issuer"] = "CreatorPay", ["Authentication:Jwt:Audience"] = "CreatorPay.Web", ["Authentication:Jwt:SigningKey"] = "development-only-replace-this-signing-key-000000", ["CustomerVerification:HmacSecret"] = new string('h', 32), ["CustomerVerification:EncryptionKey"] = new string('e', 32), ["SmsOtp:SmsProvider"] = "PilotTest", ["SmsOtp:HashSecret"] = new string('o', 32), ["SmsOtp:TestCode"] = "654321", ["Support:Email"] = "tests@example.invalid", ["Storage:Provider"] = "MetadataOnly" };
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => { builder.UseEnvironment("Test"); foreach (var pair in values) builder.UseSetting(pair.Key, pair.Value); builder.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(values)); });
+        factory = factory!.WithWebHostBuilder(builder => builder.UseSetting("DataProtection:KeyRingPath", keyRingPath));
         await using var db = Db(); await db.Database.MigrateAsync();
     }
-    public async Task DisposeAsync() { if (factory is not null) await factory.DisposeAsync(); await database.DisposeAsync(); }
+    public async Task DisposeAsync() { if (factory is not null) await factory.DisposeAsync(); await database.DisposeAsync(); if (Directory.Exists(keyRingPath)) Directory.Delete(keyRingPath, true); }
 
     [DockerFact]
     public async Task Authenticated_registration_persists_protected_owned_active_device()
