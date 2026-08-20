@@ -26,7 +26,7 @@ export function CreatorDashboard({onSignOut}:{onSignOut:()=>void}){
       <article><span>Next Payout Date</span><strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong></article>
     </div>{error&&<p className="friendly-error">{error}</p>}<div className="creator-start"><h2>Start advertising</h2><p>Find a Business, request permission to promote, and start earning money!</p><button onClick={()=>setTab('find')}>Find Businesses</button></div></>}
     {tab==='find'&&<FindBusinesses onRequested={()=>void load()}/>}
-    {tab==='ads'&&<ActiveAds items={requests} loading={loading} refresh={()=>void load()}/>}
+    {tab==='ads'&&<ActiveAds items={requests} loading={loading}/>}
     {tab==='requests'&&<CreatorRequests items={requests} refresh={()=>void load()}/>}
     {tab==='sales'&&<CreatorConfirmedSales/>}
     {tab==='payout'&&<section className="creator-section"><h2>Payout</h2><div className="summary-grid"><article className="summary-card"><span>Payout Amount</span><strong>{money(earnings?.currentPayoutAmount??0,earnings?.currencyCode)}</strong></article><article className="summary-card"><span>Next Payout Date</span><strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong></article></div></section>}

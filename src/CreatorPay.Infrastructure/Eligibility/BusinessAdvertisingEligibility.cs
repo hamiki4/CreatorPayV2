@@ -14,6 +14,27 @@ public static class BusinessAdvertisingEligibility
         return (active && available >= minimum, available, minimum);
     }
 
+    public static async Task<HashSet<Guid>> EligibleMerchantIdsAsync(ApplicationDbContext db, IEnumerable<Guid> merchantIds, string currencyCode, CancellationToken ct)
+    {
+        var ids = merchantIds.Distinct().ToArray();
+        if (ids.Length == 0) return [];
+
+        var minimum = await RewardEligibilityQueries.CurrentMinimumAsync(db, currencyCode, ct);
+        var activeMerchantIds = await db.Merchants.AsNoTracking()
+            .Where(x => ids.Contains(x.Id) && x.Status == MerchantStatus.Active)
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+        if (activeMerchantIds.Count == 0) return [];
+
+        var walletBalances = await db.MerchantWallets.AsNoTracking()
+            .Where(x => activeMerchantIds.Contains(x.MerchantId) && x.CurrencyCode == currencyCode)
+            .Select(x => new { x.MerchantId, x.AvailableBalance })
+            .ToListAsync(ct);
+        var byMerchant = walletBalances.ToDictionary(x => x.MerchantId, x => x.AvailableBalance);
+
+        return activeMerchantIds.Where(id => (byMerchant.TryGetValue(id, out var available) ? available : 0m) >= minimum).ToHashSet();
+    }
+
     public static async Task EnsureEligibleAsync(ApplicationDbContext db, Guid merchantId, string currencyCode, CancellationToken ct)
     {
         var result = await EvaluateAsync(db, merchantId, currencyCode, ct);

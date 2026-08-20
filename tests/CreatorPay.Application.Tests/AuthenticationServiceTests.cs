@@ -40,22 +40,30 @@ public sealed class AuthenticationServiceTests
     }
 
     [Theory]
-    [InlineData(AccountStatus.Suspended)]
-    [InlineData(AccountStatus.Rejected)]
-    [InlineData(AccountStatus.Closed)]
-    [InlineData(AccountStatus.Draft)]
-    public async Task Ineligible_account_receives_generic_invalid_credentials(AccountStatus status)
+    [InlineData(AccountStatus.Suspended, "AccountSuspended", "Your account is suspended. Please contact Weymela support.")]
+    [InlineData(AccountStatus.Closed, "AccountDeactivated", "Your account is deactivated. Please contact Weymela support.")]
+    [InlineData(AccountStatus.Rejected, "AccountDeactivated", "Your account is deactivated. Please contact Weymela support.")]
+    public async Task Restricted_account_with_correct_credentials_receives_specific_message(AccountStatus status, string code, string message)
     {
-        var user = User(UserRole.Creator, status); var result = await Service(new FakeStore(user)).LoginAsync(new(user.Email, "Correct1!"), Context(), default);
-        Assert.False(result.Succeeded); Assert.Equal("Invalid email or password.", result.Error);
+        var user = User(UserRole.Creator, status);
+        var result = await Service(new FakeStore(user)).LoginAsync(new(user.Email, "Correct1!"), Context(), default);
+        Assert.False(result.Succeeded); Assert.Equal(message, result.Error); Assert.Equal(code, result.Code);
     }
 
     [Fact]
-    public async Task Locked_account_receives_generic_invalid_credentials()
+    public async Task Draft_account_with_correct_credentials_still_receives_generic_invalid_credentials()
+    {
+        var user = User(UserRole.Creator, AccountStatus.Draft);
+        var result = await Service(new FakeStore(user)).LoginAsync(new(user.Email, "Correct1!"), Context(), default);
+        Assert.False(result.Succeeded); Assert.Equal("Invalid email or password.", result.Error); Assert.Null(result.Code);
+    }
+
+    [Fact]
+    public async Task Locked_account_receives_specific_message()
     {
         var user = User(UserRole.Customer, AccountStatus.Active); user.LockoutEndUtc = Now.AddMinutes(5);
         var result = await Service(new FakeStore(user)).LoginAsync(new(user.Email, "Correct1!"), Context(), default);
-        Assert.False(result.Succeeded); Assert.Equal("Invalid email or password.", result.Error);
+        Assert.False(result.Succeeded); Assert.Equal("Your account is locked. Please contact Weymela support.", result.Error); Assert.Equal("AccountLocked", result.Code);
     }
 
     [Fact]
@@ -89,6 +97,24 @@ public sealed class AuthenticationServiceTests
         Assert.True((await service.EnrollPinAsync(user.Id, new("12345", "12345"), Context(), default)).Succeeded);
         var result = await service.UnlockWithPinAsync(new(user.PhoneNumber!, "12345"), Context(), default);
         Assert.True(result.Succeeded); Assert.Null(user.FirebaseUid); Assert.NotEqual("12345", user.PinHash);
+    }
+
+    [Theory]
+    [InlineData(AccountStatus.Suspended, "AccountSuspended")]
+    [InlineData(AccountStatus.Closed, "AccountDeactivated")]
+    public async Task Pin_login_respects_restricted_account_status(AccountStatus status, string code)
+    {
+        var user = User(UserRole.Customer, status); user.PinHash = "weymela-pin-v1:12345";
+        var result = await Service(new FakeStore(user)).UnlockWithPinAsync(new(user.PhoneNumber!, "12345"), Context(), default);
+        Assert.False(result.Succeeded); Assert.Equal(code, result.Code);
+    }
+
+    [Fact]
+    public async Task Pin_login_respects_locked_account_status()
+    {
+        var user = User(UserRole.Customer, AccountStatus.Active); user.PinHash = "weymela-pin-v1:12345"; user.LockoutEndUtc = Now.AddMinutes(5);
+        var result = await Service(new FakeStore(user)).UnlockWithPinAsync(new(user.PhoneNumber!, "12345"), Context(), default);
+        Assert.False(result.Succeeded); Assert.Equal("AccountLocked", result.Code);
     }
 
     [Fact]

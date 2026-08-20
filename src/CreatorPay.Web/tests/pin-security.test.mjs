@@ -20,6 +20,17 @@ test("PIN UI enforces five digits and exposes recovery", () => {
   assert.match(pin, /Confirm your account password/);
 });
 
+test("restricted account login messages are driven by structured status codes", () => {
+  for (const code of ["AccountDeactivated", "AccountSuspended", "AccountLocked"]) {
+    assert.match(auth, new RegExp(code));
+  }
+  assert.match(auth, /authErrorMessage/);
+  assert.ok(client.includes("class ApiError extends Error"));
+  assert.ok(client.includes("readonly status:number=0"));
+  assert.ok(client.includes("readonly title?:string"));
+  assert.doesNotMatch(pin, /AccountDeactivated|AccountSuspended|AccountLocked/);
+});
+
 test("PIN enrollment and recovery no longer use Firebase, email, SMS, or OTP", () => {
   assert.doesNotMatch(pin, /Birth Date|birthDate|birthDay|birthMonth|birthYear/);
   assert.match(pin, /phoneNumber,password,newPin:pin,confirmation/);

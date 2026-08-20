@@ -3,7 +3,7 @@ import {getAccessToken,getRefreshToken,setSessionTokens} from './sessionStore'
 const apiBase=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'')
 const token=getAccessToken
 
-export class ApiError extends Error{constructor(message:string,readonly technical:string){super(message)}}
+export class ApiError extends Error{constructor(message:string,readonly technical:string,readonly status:number=0,readonly title?:string){super(message)}}
 
 let refreshInFlight:Promise<boolean>|undefined
 async function refreshAccessToken(){
@@ -30,7 +30,8 @@ export async function api<T>(path:string,init?:RequestInit,retry=true):Promise<T
     const body=await response.json().catch(error=>{throw new ApiError('This section is temporarily unavailable.',`Invalid JSON from ${path}: ${String(error)}`)})
     if(!response.ok){
       const detail=body&&typeof body==='object'&&'detail'in body&&typeof body.detail==='string'?body.detail:null
-      throw new ApiError(response.status>=500?'This section is temporarily unavailable.':detail??'We could not complete that request.',`${detail??'Request failed'} (${response.status}) at ${path}`)
+      const title=body&&typeof body==='object'&&'title'in body&&typeof body.title==='string'?body.title:null
+      throw new ApiError(response.status>=500?'This section is temporarily unavailable.':detail??'We could not complete that request.',`${detail??'Request failed'} (${response.status}) at ${path}`,response.status,title??undefined)
     }
     return body as T
   }catch(error){

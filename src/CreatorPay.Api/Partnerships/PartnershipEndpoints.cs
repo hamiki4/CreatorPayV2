@@ -27,9 +27,9 @@ public static class PartnershipEndpoints
     public static IEndpointRouteBuilder MapPartnershipEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var creator = endpoints.MapGroup("/api/v1/creator").WithTags("Creator partnerships").RequireAuthorization("CreatorOnly");
-        creator.MapGet("/merchants/search", SearchMerchants);
-        creator.MapPost("/partnerships/requests", RequestPartnership);
-        creator.MapGet("/partnerships", CreatorPartnerships);
+        creator.MapGet("/merchants/search", (string? q, ICurrentUserService user, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct) => SearchMerchants(q, user, db, campaignOptions, ct));
+        creator.MapPost("/partnerships/requests", (CreatePartnershipRequest request, ICurrentUserService user, ApplicationDbContext db, INotificationService notifications, HttpContext http, IOptions<CampaignOptions> campaignOptions, CancellationToken ct) => RequestPartnership(request, user, db, notifications, http, campaignOptions, ct));
+        creator.MapGet("/partnerships", (string? status, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct) => CreatorPartnerships(status, u, db, campaignOptions, ct));
         creator.MapGet("/partnerships/{id:guid}", CreatorPartnership);
         creator.MapPost("/partnerships/{id:guid}/withdraw", (Guid id, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct) => CreatorRevoke(id, u, db, h, ct, "PartnershipWithdrawn"));
         creator.MapPost("/partnerships/{id:guid}/stop-promoting", (Guid id, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct) => CreatorRevoke(id, u, db, h, ct, "CreatorStoppedPromoting"));
@@ -38,7 +38,7 @@ public static class PartnershipEndpoints
 
         var merchant = endpoints.MapGroup("/api/v1/merchant").WithTags("Merchant partnerships").RequireAuthorization("MerchantAdminOnly");
         merchant.MapGet("/creators/search", SearchCreators);
-        merchant.MapGet("/partnerships", MerchantPartnerships);
+        merchant.MapGet("/partnerships", (string? status, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct) => MerchantPartnerships(status, u, db, campaignOptions, ct));
         merchant.MapGet("/dashboard-metrics", MerchantDashboardMetrics);
         merchant.MapGet("/partnerships/{id:guid}", MerchantPartnership);
         merchant.MapPost("/partnerships", MerchantAdd);
@@ -60,22 +60,26 @@ public static class PartnershipEndpoints
         return endpoints;
     }
 
-    private static async Task<IResult> SearchMerchants(string? q, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct)
+    private static async Task<IResult> SearchMerchants(string? q, ICurrentUserService user, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct)
     {
         var creatorId = user.CreatorId!.Value; q = q?.Trim();
         var blocked = db.MerchantCreatorPartnerships.Where(x => x.CreatorId == creatorId && x.Status == PartnershipStatus.Blocked).Select(x => x.MerchantId);
-        var active = db.CreatorMerchantCampaigns.Where(x => x.CreatorId == creatorId && x.Status == CampaignStatus.Active && x.StartsAtUtc <= DateTime.UtcNow && x.ExpiresAtUtc > DateTime.UtcNow).Select(x => x.MerchantId);
-        var query = db.Merchants.AsNoTracking().Where(x => x.Status == MerchantStatus.Active && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active) && !blocked.Contains(x.Id) && !active.Contains(x.Id));
+        var current = db.MerchantCreatorPartnerships.Where(x => x.CreatorId == creatorId && (x.Status == PartnershipStatus.Pending || x.Status == PartnershipStatus.Approved)).Select(x => x.MerchantId);
+        var query = db.Merchants.AsNoTracking().Where(x => x.Status == MerchantStatus.Active && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active) && !blocked.Contains(x.Id) && !current.Contains(x.Id));
         if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => EF.Functions.ILike(x.TradingName, $"%{q}%") || EF.Functions.ILike(x.LegalBusinessName, $"%{q}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{q}%") || EF.Functions.ILike(x.City, $"%{q}%") || EF.Functions.ILike(x.BusinessType, $"%{q}%"));
-        return Results.Ok(await query.OrderBy(x => x.TradingName).Take(50).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.LegalBusinessName, x.City, x.BusinessType }).ToListAsync(ct));
+        var rows = await query.OrderBy(x => x.TradingName).Take(50).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.LegalBusinessName, x.City, x.BusinessType }).ToListAsync(ct);
+        var eligible = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.Id), campaignOptions.Value.CurrencyCode, ct);
+        return Results.Ok(rows.Where(x => eligible.Contains(x.Id)).ToList());
     }
 
-    private static async Task<IResult> RequestPartnership(CreatePartnershipRequest request, ICurrentUserService user, ApplicationDbContext db, INotificationService notifications, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> RequestPartnership(CreatePartnershipRequest request, ICurrentUserService user, ApplicationDbContext db, INotificationService notifications, HttpContext http, IOptions<CampaignOptions> campaignOptions, CancellationToken ct)
     {
         var now = DateTime.UtcNow; var creatorId = user.CreatorId!.Value;
         var creator = await db.Creators.FindAsync([creatorId], ct); var merchant = await db.Merchants.FindAsync([request.MerchantId], ct);
         if (creator?.Status != CreatorStatus.Active) return Problem(403, "Creator is not active.");
         if (merchant?.Status != MerchantStatus.Active) return Problem(400, "Merchant is not eligible to receive requests.");
+        var eligibility = await BusinessAdvertisingEligibility.EvaluateAsync(db, request.MerchantId, campaignOptions.Value.CurrencyCode, ct);
+        if (!eligibility.Eligible) return Problem(409, $"Advertising is restricted until the available wallet balance reaches {eligibility.Minimum:0.00} {campaignOptions.Value.CurrencyCode}.");
         var existing = await db.MerchantCreatorPartnerships.Where(x => x.CreatorId == creatorId && x.MerchantId == request.MerchantId).Select(x => x.Status).ToListAsync(ct);
         if (existing.Contains(PartnershipStatus.Blocked)) return Problem(409, "This relationship is blocked.");
         if (existing.Any(x => x is PartnershipStatus.Pending or PartnershipStatus.Approved)) return Problem(409, "A pending or active relationship with this merchant already exists.");
@@ -86,8 +90,8 @@ public static class PartnershipEndpoints
         return Results.Created($"/api/v1/creator/partnerships/{p.Id}", Item(p, merchant, creator));
     }
 
-    private static async Task<IResult> CreatorPartnerships(string? status, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct)
-    { var query = Query(db).Where(x => x.CreatorId == u.CreatorId); if (Enum.TryParse<PartnershipStatus>(status, true, out var s)) query = query.Where(x => x.Status == s); return Results.Ok(await ItemsWithInitiator(query, db, ct)); }
+    private static async Task<IResult> CreatorPartnerships(string? status, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct)
+    { var query = Query(db).Where(x => x.CreatorId == u.CreatorId); if (Enum.TryParse<PartnershipStatus>(status, true, out var s)) query = query.Where(x => x.Status == s); return Results.Ok(await ItemsWithInitiator(query, db, campaignOptions.Value.CurrencyCode, ct)); }
     private static async Task<IResult> CreatorPartnership(Guid id, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => await Query(db).FirstOrDefaultAsync(x => x.Id == id && x.CreatorId == u.CreatorId, ct) is { } p ? Results.Ok(Item(p)) : NotFound();
 
     private static async Task<IResult> SearchCreators(string? q, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct)
@@ -110,8 +114,8 @@ public static class PartnershipEndpoints
             FollowerCount = x.SocialProfiles.OrderByDescending(s => s.IsPrimary).Select(s => (long?)s.FollowerCount).FirstOrDefault()
         }).ToListAsync(ct));
     }
-    private static async Task<IResult> MerchantPartnerships(string? status, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct)
-    { var query = Query(db).Where(x => x.MerchantId == u.MerchantId); if (Enum.TryParse<PartnershipStatus>(status, true, out var s)) query = query.Where(x => x.Status == s); return Results.Ok(await ItemsWithInitiator(query, db, ct)); }
+    private static async Task<IResult> MerchantPartnerships(string? status, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct)
+    { var query = Query(db).Where(x => x.MerchantId == u.MerchantId); if (Enum.TryParse<PartnershipStatus>(status, true, out var s)) query = query.Where(x => x.Status == s); return Results.Ok(await ItemsWithInitiator(query, db, campaignOptions.Value.CurrencyCode, ct)); }
     private static async Task<IResult> MerchantDashboardMetrics(ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) { var now = DateTime.UtcNow; var start = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc); var sales = await db.PurchaseTransactions.CountAsync(x => x.MerchantId == u.MerchantId && x.TransactionDateUtc >= start && (x.Status == TransactionStatus.Confirmed || x.Status == TransactionStatus.Settled), ct); return Results.Ok(new { confirmedSales = sales, period = "This Month", periodStartedAtUtc = start }); }
     private static async Task<IResult> MerchantPartnership(Guid id, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => await Query(db).FirstOrDefaultAsync(x => x.Id == id && x.MerchantId == u.MerchantId, ct) is { } p ? Results.Ok(Item(p)) : NotFound();
 
@@ -251,8 +255,8 @@ public static class PartnershipEndpoints
     }
 
     private static IQueryable<MerchantCreatorPartnership> Query(ApplicationDbContext db) => db.MerchantCreatorPartnerships.AsNoTracking().Include(x => x.Merchant).Include(x => x.Creator).Include(x => x.Locations).ThenInclude(x => x.MerchantLocation).OrderByDescending(x => x.RequestedAtUtc);
-    private static async Task<IReadOnlyList<PartnershipListItem>> ItemsWithInitiator(IQueryable<MerchantCreatorPartnership> query, ApplicationDbContext db, CancellationToken ct)
-    { var items = await query.ToListAsync(ct); var requesterIds = items.Select(x => x.RequestedByUserId).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray(); var businessRequesters = await db.UserAccounts.AsNoTracking().Where(x => requesterIds.Contains(x.Id) && x.MerchantId != null).Select(x => x.Id).ToListAsync(ct); var now = DateTime.UtcNow; var ids = items.Select(x => x.Id).ToArray(); var active = (await db.CreatorMerchantCampaigns.AsNoTracking().Where(x => ids.Contains(x.MerchantCreatorPartnershipId) && x.Status == CampaignStatus.Active && x.StartsAtUtc <= now && x.ExpiresAtUtc > now).Select(x => x.MerchantCreatorPartnershipId).Distinct().ToListAsync(ct)).ToHashSet(); return items.Select(x => { var promotionActive = active.Contains(x.Id) && x.IsTransactionEligibleAt(now); return Item(x) with { InitiatedBy = x.RequestedByUserId.HasValue && businessRequesters.Contains(x.RequestedByUserId.Value) ? "Business" : "Creator", PromotionActive = promotionActive, RelationshipState = promotionActive ? "Active" : State(x.Status), ActivationRequired = x.Status == PartnershipStatus.Approved && !promotionActive }; }).ToList(); }
+    private static async Task<IReadOnlyList<PartnershipListItem>> ItemsWithInitiator(IQueryable<MerchantCreatorPartnership> query, ApplicationDbContext db, string currencyCode, CancellationToken ct)
+    { var items = await query.ToListAsync(ct); var requesterIds = items.Select(x => x.RequestedByUserId).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray(); var businessRequesters = await db.UserAccounts.AsNoTracking().Where(x => requesterIds.Contains(x.Id) && x.MerchantId != null).Select(x => x.Id).ToListAsync(ct); var now = DateTime.UtcNow; var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, items.Select(x => x.MerchantId), currencyCode, ct); var ids = items.Select(x => x.Id).ToArray(); var active = (await db.CreatorMerchantCampaigns.AsNoTracking().Where(x => ids.Contains(x.MerchantCreatorPartnershipId) && x.Status == CampaignStatus.Active && x.StartsAtUtc <= now && x.ExpiresAtUtc > now).Select(x => x.MerchantCreatorPartnershipId).Distinct().ToListAsync(ct)).ToHashSet(); return items.Select(x => { var promotionActive = active.Contains(x.Id) && x.IsTransactionEligibleAt(now) && eligibleMerchantIds.Contains(x.MerchantId); return Item(x) with { InitiatedBy = x.RequestedByUserId.HasValue && businessRequesters.Contains(x.RequestedByUserId.Value) ? "Business" : "Creator", PromotionActive = promotionActive, RelationshipState = promotionActive ? "Active" : State(x.Status), ActivationRequired = x.Status == PartnershipStatus.Approved && !promotionActive }; }).ToList(); }
     private static string State(PartnershipStatus status) => status switch { PartnershipStatus.Pending => "Pending", PartnershipStatus.Rejected => "Declined", PartnershipStatus.Approved => "ActivationRequired", PartnershipStatus.Suspended => "Suspended", PartnershipStatus.Revoked => "Revoked", PartnershipStatus.Blocked => "Blocked", _ => "NoRelationship" };
     private static PartnershipListItem Item(MerchantCreatorPartnership p) => Item(p, p.Merchant, p.Creator);
     private static PartnershipListItem Item(MerchantCreatorPartnership p, Merchant m, Creator c) => new(p.Id, p.MerchantId, m.TradingName, p.CreatorId, c.DisplayName, p.Status, p.RequestedAtUtc, p.StartDateUtc, p.EndDateUtc, p.IntroductoryMessage, p.Locations.Where(x => x.IsActive).Select(x => new LocationItem(x.MerchantLocationId, x.MerchantLocation?.Name ?? "Location", x.MerchantLocation?.IsActive ?? true)).ToList(), ActivatedAtUtc: p.ApprovedAtUtc, ExpiresAtUtc: p.EndDateUtc);

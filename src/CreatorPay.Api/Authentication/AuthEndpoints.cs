@@ -84,8 +84,10 @@ public static class AuthEndpoints
         return "Weymela User";
     }
     private static RequestContext Context(HttpContext h) => new(h.Connection.RemoteIpAddress?.ToString(), h.Request.Headers.UserAgent.ToString(), h.TraceIdentifier);
-    private static IResult ToHttp<T>(Result<T> result) => result.Succeeded ? Results.Ok(result.Value) : Problem(result.Error!);
-    private static IResult ToHttp(OperationResult result) => result.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(result.Error!);
+    private static IResult ToHttp<T>(Result<T> result) => result.Succeeded ? Results.Ok(result.Value) : Problem(result.Error!, result.Code);
+    private static IResult ToHttp(OperationResult result) => result.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(result.Error!, result.Code);
     private static IResult ToHttp(PhoneOtpResult result) => result.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(result.Error!);
-    private static IResult Problem(string detail) => Results.Problem(detail, statusCode: StatusCodes.Status400BadRequest, title: "Authentication request failed");
+    private static IResult Problem(string detail, string? code = null) => code is null
+        ? Results.Problem(detail, statusCode: StatusCodes.Status400BadRequest, title: "Authentication request failed")
+        : Results.Problem(detail, statusCode: StatusCodes.Status403Forbidden, title: code);
 }

@@ -34,24 +34,6 @@ public sealed class PilotRuntimeTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.PostAsJsonAsync("/api/v1/cashier/checkouts/offer", new { })).StatusCode);
     }
 
-    [Fact]
-    public async Task Pilot_maximum_purchase_is_enforced_before_financial_posting()
-    {
-        await using var factory = Factory("Test", new Dictionary<string, string?>
-        {
-            ["Pilot:Enabled"] = "true",
-            ["Pilot:MaximumPurchaseAmount"] = "50"
-        });
-        using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token());
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/cashier/checkouts/offer") { Content = JsonContent.Create(new { qrPayload = "creatorpay:offer:test:test", merchantLocationId = Guid.NewGuid(), shopperPhoneNumber = "0911000001", purchaseAmount = 51m }) };
-        request.Headers.Add("Idempotency-Key", "pilot-limit-test");
-        using var response = await client.SendAsync(request);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.True(response.StatusCode == HttpStatusCode.Conflict, $"{response.StatusCode}: {body}");
-        Assert.True(body.Contains("Pilot maximum purchase amount exceeded", StringComparison.Ordinal), body);
-    }
-
     private static WebApplicationFactory<Program> Factory(string environment, Dictionary<string, string?> overrides)
     {
         var values = new Dictionary<string, string?>

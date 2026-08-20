@@ -23,14 +23,14 @@ public static class AuthenticationClaimTypes
     public const string EmailVerified = "email_verified";
     public const string PhoneVerified = "phone_verified";
 }
-public sealed record OperationResult(bool Succeeded, string? Error = null)
+public sealed record OperationResult(bool Succeeded, string? Error = null, string? Code = null)
 {
     public static OperationResult Success() => new(true);
-    public static OperationResult Failure(string error) => new(false, error);
+    public static OperationResult Failure(string error, string? code = null) => new(false, error, code);
 }
-public sealed record Result<T>(T? Value, string? Error = null)
+public sealed record Result<T>(T? Value, string? Error = null, string? Code = null)
 {
     public bool Succeeded => Error is null;
     public static Result<T> Success(T value) => new(value);
-    public static Result<T> Failure(string error) => new(default, error);
+    public static Result<T> Failure(string error, string? code = null) => new(default, error, code);
 }

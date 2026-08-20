@@ -28,8 +28,8 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         var selectedCategory = category?.Trim();
         if (!string.IsNullOrWhiteSpace(selectedCategory)) merchants = merchants.Where(x => x.Category != null && EF.Functions.ILike(x.Category, selectedCategory));
         var rows = await merchants.OrderBy(x => x.TradingName).Take(50).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City }).ToListAsync(ct);
-        var funded = await FundedMerchantIds(rows.Select(x => x.Id).ToArray(), ct);
-        return rows.Select(x => new ShopperBusinessDto(x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, funded.Contains(x.Id))).ToArray();
+        var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.Id), currencyCode, ct);
+        return rows.Where(x => eligibleMerchantIds.Contains(x.Id)).Select(x => new ShopperBusinessDto(x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, true)).ToArray();
     }
 
     public async Task<ShopperBusinessDetailDto> GetShopperBusinessAsync(Guid merchantId, CancellationToken ct)
@@ -38,8 +38,9 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
             && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active))
             .Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City }).SingleOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Business is unavailable.");
-        var rewardsAvailable = (await FundedMerchantIds([merchantId], ct)).Contains(merchantId);
         var now = DateTime.UtcNow;
+        var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [merchantId], currencyCode, ct);
+        if (!eligibleMerchantIds.Contains(merchantId)) throw new KeyNotFoundException("Business is unavailable.");
         var rows = await (from campaign in EligibleCampaigns(now)
                           where campaign.MerchantId == merchantId
                           join partnership in db.MerchantCreatorPartnerships.AsNoTracking() on campaign.MerchantCreatorPartnershipId equals partnership.Id
@@ -75,8 +76,8 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         if (!string.IsNullOrWhiteSpace(term)) relationships = relationships.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.DisplayName, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{term}%"));
         var campaignRows = await relationships.OrderBy(x => x.TradingName).ThenBy(x => x.DisplayName).Take(200).ToListAsync(ct);
         var rows = campaignRows.GroupBy(x => x.RelationshipId).Select(x => x.OrderByDescending(y => y.ExpiresAtUtc).First()).Take(100).ToList();
-        var funded = await FundedMerchantIds(rows.Select(x => x.MerchantId).Distinct().ToArray(), ct);
-        return rows.Select(x => new ShopperAdvertisingRowDto(x.RelationshipId, x.MerchantId, x.PublicMerchantId, x.TradingName, x.City, x.CreatorId, x.PublicCreatorId, x.CreatorCode, x.DisplayName, "Active", Math.Max(1, (int)Math.Ceiling((new[] { x.EndDateUtc, x.ExpiresAtUtc }.Where(v => v.HasValue).Min()!.Value - now).TotalDays)), funded.Contains(x.MerchantId))).ToArray();
+        var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.MerchantId).Distinct(), currencyCode, ct);
+        return rows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x => new ShopperAdvertisingRowDto(x.RelationshipId, x.MerchantId, x.PublicMerchantId, x.TradingName, x.City, x.CreatorId, x.PublicCreatorId, x.CreatorCode, x.DisplayName, "Active", Math.Max(1, (int)Math.Ceiling((new[] { x.EndDateUtc, x.ExpiresAtUtc }.Where(v => v.HasValue).Min()!.Value - now).TotalDays)), true)).ToArray();
     }
 
     public async Task<ShopperCreatorQrDto> GetShopperCreatorQrAsync(Guid relationshipId, CancellationToken ct)
@@ -89,7 +90,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
                          where relationship.Id == relationshipId && qr.IsActive && !qr.RevokedAtUtc.HasValue
                          select new { relationship.Id, MerchantId = merchant.Id, merchant.TradingName, creator.DisplayName, qr.PublicQrId, qr.Version }).SingleOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Advertising relationship is unavailable.");
-        if (!(await FundedMerchantIds([row.MerchantId], ct)).Contains(row.MerchantId)) throw new KeyNotFoundException("Weymela rewards are temporarily unavailable at this Business.");
+        if (!(await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [row.MerchantId], currencyCode, ct)).Contains(row.MerchantId)) throw new KeyNotFoundException("Weymela rewards are temporarily unavailable at this Business.");
         var token = qrTokens.CreateToken(row.PublicQrId, row.Version);
         return new(row.Id, row.TradingName, row.DisplayName, qrUrls.Create(row.PublicQrId, row.Version, token));
     }
@@ -98,7 +99,9 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         if (page < 1) throw new ArgumentOutOfRangeException(nameof(page));
         if (pageSize is < 1 or > 50) throw new ArgumentOutOfRangeException(nameof(pageSize));
         var now = DateTime.UtcNow;
-        var eligibleCreatorIds = EligibleCampaigns(now).Select(x => x.CreatorId).Distinct();
+        var campaignRows = await EligibleCampaigns(now).Select(x => new { x.CreatorId, x.MerchantId }).ToListAsync(ct);
+        var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, campaignRows.Select(x => x.MerchantId), currencyCode, ct);
+        var eligibleCreatorIds = campaignRows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x => x.CreatorId).Distinct().ToArray();
         var creators = db.Creators.AsNoTracking().Where(x => x.Status == CreatorStatus.Active && eligibleCreatorIds.Contains(x.Id));
         var term = query?.Trim();
         if (!string.IsNullOrWhiteSpace(term)) creators = creators.Where(x => EF.Functions.ILike(x.DisplayName, $"%{term}%"));
@@ -106,8 +109,8 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         var rows = await creators.OrderBy(x => x.DisplayName).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(x => new { x.Id, x.PublicCreatorId, x.DisplayName }).ToListAsync(ct);
         var ids = rows.Select(x => x.Id).ToArray();
-        var counts = await EligibleCampaigns(now).Where(x => ids.Contains(x.CreatorId)).GroupBy(x => x.CreatorId)
-            .Select(x => new { CreatorId = x.Key, Count = x.Count() }).ToDictionaryAsync(x => x.CreatorId, x => x.Count, ct);
+        var counts = campaignRows.Where(x => eligibleMerchantIds.Contains(x.MerchantId) && ids.Contains(x.CreatorId))
+            .GroupBy(x => x.CreatorId).ToDictionary(x => x.Key, x => x.Count());
         return new(rows.Select(x => new PublicCreatorCardDto(x.PublicCreatorId, x.DisplayName, null, counts[x.Id])).ToArray(), page, pageSize, total);
     }
 
@@ -119,10 +122,11 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         var offerData = await (from campaign in EligibleCampaigns(now)
                                where campaign.CreatorId == creator.Id
                                join merchant in db.Merchants.AsNoTracking() on campaign.MerchantId equals merchant.Id
-                               orderby campaign.ExpiresAtUtc
-                               select new { campaign.Id, campaign.PublicCampaignId, campaign.CampaignCode, campaign.CreatorId, merchant.TradingName, merchant.PublicDescription, campaign.Conditions, ExpiresAtUtc = campaign.ExpiresAtUtc!.Value }).ToListAsync(ct);
-        if (offerData.Count == 0) throw new KeyNotFoundException("Creator is unavailable.");
-        var offers = offerData.Select(x => new OfferRow(x.Id, x.PublicCampaignId, x.CampaignCode, x.CreatorId, creator.PublicCreatorId, creator.DisplayName, x.TradingName, x.PublicDescription, x.Conditions, x.ExpiresAtUtc)).ToArray();
+                               select new { campaign.Id, campaign.MerchantId, campaign.PublicCampaignId, campaign.CampaignCode, campaign.CreatorId, merchant.TradingName, merchant.PublicDescription, campaign.Conditions, ExpiresAtUtc = campaign.ExpiresAtUtc!.Value }).OrderBy(x => x.ExpiresAtUtc).ToListAsync(ct);
+        var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, offerData.Select(x => x.MerchantId), currencyCode, ct);
+        var filtered = offerData.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).ToList();
+        if (filtered.Count == 0) throw new KeyNotFoundException("Creator is unavailable.");
+        var offers = filtered.Select(x => new OfferRow(x.Id, x.PublicCampaignId, x.CampaignCode, x.CreatorId, creator.PublicCreatorId, creator.DisplayName, x.TradingName, x.PublicDescription, x.Conditions, x.ExpiresAtUtc)).ToArray();
         var links = await db.CreatorSocialProfiles.AsNoTracking().Where(x => x.CreatorId == creator.Id && x.ProfileUrl != null)
             .Select(x => new { x.Platform, x.ProfileUrl }).ToListAsync(ct);
         return new(creator.PublicCreatorId, creator.DisplayName, null,
@@ -136,20 +140,24 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
                           where campaign.CampaignCode == offerCode || campaign.PublicCampaignId == offerCode
                           join creator in db.Creators.AsNoTracking() on campaign.CreatorId equals creator.Id
                           join merchant in db.Merchants.AsNoTracking() on campaign.MerchantId equals merchant.Id
-                          select new { campaign.Id, campaign.PublicCampaignId, campaign.CampaignCode, campaign.CreatorId, creator.PublicCreatorId, creator.DisplayName, merchant.TradingName, merchant.PublicDescription, campaign.Conditions, ExpiresAtUtc = campaign.ExpiresAtUtc!.Value }).SingleOrDefaultAsync(ct)
+                          select new { campaign.Id, campaign.MerchantId, campaign.PublicCampaignId, campaign.CampaignCode, campaign.CreatorId, creator.PublicCreatorId, creator.DisplayName, merchant.TradingName, merchant.PublicDescription, campaign.Conditions, ExpiresAtUtc = campaign.ExpiresAtUtc!.Value }).SingleOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("This Offer has ended or is unavailable.");
+        var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [data.MerchantId], currencyCode, ct);
+        if (!eligibleMerchantIds.Contains(data.MerchantId)) throw new KeyNotFoundException("This Offer has ended or is unavailable.");
         return MapOffer(new(data.Id, data.PublicCampaignId, data.CampaignCode, data.CreatorId, data.PublicCreatorId, data.DisplayName, data.TradingName, data.PublicDescription, data.Conditions, data.ExpiresAtUtc));
     }
 
     public async Task<PublicOfferDto> ResolveOfferQrAsync(string publicQrId, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        var code = await (from qr in db.CampaignQrCodes.AsNoTracking()
-                          join offer in EligibleCampaigns(now) on qr.CampaignId equals offer.Id
-                          where qr.PublicQrId == publicQrId && qr.Status == CampaignQrStatus.Active && qr.ExpiresAtUtc > now
-                          select offer.CampaignCode).SingleOrDefaultAsync(ct);
-        if (code is null) throw new KeyNotFoundException("This Offer QR has ended or is unavailable.");
-        return await GetOfferAsync(code, ct);
+        var row = await (from qr in db.CampaignQrCodes.AsNoTracking()
+                         join offer in EligibleCampaigns(now) on qr.CampaignId equals offer.Id
+                         where qr.PublicQrId == publicQrId && qr.Status == CampaignQrStatus.Active && qr.ExpiresAtUtc > now
+                         select new { offer.CampaignCode, offer.MerchantId }).SingleOrDefaultAsync(ct);
+        if (row is null) throw new KeyNotFoundException("This Offer QR has ended or is unavailable.");
+        var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [row.MerchantId], currencyCode, ct);
+        if (!eligibleMerchantIds.Contains(row.MerchantId)) throw new KeyNotFoundException("This Offer QR has ended or is unavailable.");
+        return await GetOfferAsync(row.CampaignCode, ct);
     }
 
     private IQueryable<CreatorMerchantCampaign> EligibleCampaigns(DateTime now) =>
@@ -199,6 +207,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         if (!string.IsNullOrWhiteSpace(q)) merchants = merchants.Where(x => x.TradingName.ToLower().Contains(q.Trim().ToLower()));
         var ids = await merchants.Select(x => x.Id).ToListAsync(ct);
         if (!string.IsNullOrWhiteSpace(zone)) ids = ids.Intersect(await db.MerchantPromotionProfiles.Where(x => x.ZoneCode == zone).Select(x => x.MerchantId).ToListAsync(ct)).ToList();
+        ids = (await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, ids, currencyCode, ct)).ToList();
         var result = new List<MerchantDiscoveryDto>();
         foreach (var id in ids) result.Add(await GetMerchantAsync(id, ct));
         return result;
@@ -208,6 +217,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
     {
         var now = DateTime.UtcNow;
         var merchant = await db.Merchants.SingleOrDefaultAsync(x => x.Id == id && x.Status == MerchantStatus.Active, ct) ?? throw new KeyNotFoundException();
+        if (!(await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [id], currencyCode, ct)).Contains(id)) throw new KeyNotFoundException();
         var profile = await db.MerchantPromotionProfiles.SingleOrDefaultAsync(x => x.MerchantId == id, ct);
         var trialEligible = !await db.MerchantTrialCredits.AnyAsync(x => x.MerchantId == id && x.Status != TrialCreditStatus.Active, ct);
         var hasWalletFunding = await db.MerchantWallets.AnyAsync(x => x.MerchantId == id && x.AvailableBalance > 0, ct);

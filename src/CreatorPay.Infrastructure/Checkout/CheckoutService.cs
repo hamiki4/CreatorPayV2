@@ -18,11 +18,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 namespace CreatorPay.Infrastructure.Checkout;
 
-public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IPasswordHasher passwords, PasswordPolicyValidator policy, ICommissionEngine commissions, ICreatorEarningsService earnings, INotificationService notifications, IPhoneNumberNormalizer phoneNumbers, IQrTokenService qrTokens, IOptions<CheckoutOptions> configured, IOptions<WalletOptions> walletConfigured, IOptions<PilotOptions> pilotConfigured, IPhoneOtpService phoneOtp) : ICheckoutService
+public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IPasswordHasher passwords, PasswordPolicyValidator policy, ICommissionEngine commissions, ICreatorEarningsService earnings, INotificationService notifications, IPhoneNumberNormalizer phoneNumbers, IQrTokenService qrTokens, IOptions<CheckoutOptions> configured, IOptions<WalletOptions> walletConfigured, IPhoneOtpService phoneOtp) : ICheckoutService
 {
     readonly CheckoutOptions options = configured.Value;
     readonly WalletOptions walletOptions = walletConfigured.Value;
-    readonly PilotOptions pilotOptions = pilotConfigured.Value;
     public async Task<CheckoutDto> CreateFromOfferAsync(Guid customer, string key, CreateOfferCheckoutRequest r, CancellationToken ct) { var code = r.OfferCode?.Trim(); if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Offer code is required."); var id = await db.CreatorMerchantCampaigns.Where(x => x.CampaignCode == code || x.PublicCampaignId == code).Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct) ?? throw new KeyNotFoundException("Offer not found."); return await CreateAsync(customer, key, new(id), ct); }
     public async Task<Guid> RegisterCustomerAsync(RegisterCustomerRequest r, CancellationToken ct)
     {
@@ -44,7 +43,6 @@ public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IP
     public async Task<OfferCheckoutResult> SubmitOfferAsync(Guid merchant, Guid cashier, Guid actor, string key, SubmitOfferCheckoutRequest r, CancellationToken ct)
     {
         Key(key);
-        if (pilotOptions.Enabled && r.PurchaseAmount > pilotOptions.MaximumPurchaseAmount) throw new InvalidOperationException("Pilot maximum purchase amount exceeded.");
         if (r.PurchaseAmount <= 0) throw new ArgumentException("Purchase amount must be positive.");
         var phone = EthiopianMobileNumber.Normalize(r.ShopperPhoneNumber);
         var masked = MaskShopperPhone(phone);
@@ -70,17 +68,6 @@ public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IP
         var customer = await db.Customers.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == phone && x.Status == CustomerStatus.Active, ct);
         if (customer is null) return new("ShopperRegistrationRequired", "shopper_not_registered", "Shopper must register with this same phone number before cashback can be issued.", masked, null);
         var preview = await commissions.PreviewAsync(new(r.PurchaseAmount, merchant, campaign.CreatorId, campaign.MerchantCreatorPartnershipId, campaign.Id, options.CurrencyCode, now), false, ct);
-        if (pilotOptions.Enabled)
-        {
-            if (preview.Calculation.TotalCommissionAmount > pilotOptions.MaximumCommissionAmount) throw new InvalidOperationException("Pilot maximum commission amount exceeded.");
-            var today = now.Date;
-            var merchantSpend = await db.PurchaseTransactions.Where(x => x.TransactionDateUtc >= today && x.MerchantId == merchant).SumAsync(x => (decimal?)x.PurchaseAmount, ct) ?? 0;
-            var creatorEarned = await db.CreatorEarnings.Where(x => x.CreatorId == campaign.CreatorId && x.CreatedAtUtc >= today).SumAsync(x => (decimal?)x.Amount, ct) ?? 0;
-            var shopperCashback = await db.CustomerCashbackEntries.Where(x => x.CustomerId == customer.Id && x.CreatedAtUtc >= today && x.EntryType == CustomerCashbackEntryType.Earned).SumAsync(x => (decimal?)x.Amount, ct) ?? 0;
-            if (merchantSpend + r.PurchaseAmount > pilotOptions.DailyMerchantSpendingLimit) throw new InvalidOperationException("Pilot daily Business spending limit exceeded.");
-            if (creatorEarned + preview.Calculation.CreatorCommissionAmount > pilotOptions.CreatorEarningLimit) throw new InvalidOperationException("Pilot Creator earning limit exceeded.");
-            if (shopperCashback + preview.Calculation.CustomerCashbackAmount > pilotOptions.ShopperCashbackLimit) throw new InvalidOperationException("Pilot Shopper cashback limit exceeded.");
-        }
         if (!await HasRequiredFunding(merchant, preview.Calculation.TotalCommissionAmount, ct))
             throw new InvalidOperationException("Business has insufficient funds.");
 
@@ -162,15 +149,9 @@ public sealed class CheckoutService(ApplicationDbContext db, IUtcClock clock, IP
     {
         var campaign = await db.CreatorMerchantCampaigns.Include(x => x.Partnership).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new KeyNotFoundException("Campaign not found.");
         var relationshipEligible = await RewardEligibilityQueries.EligibleRelationships(db, now).AnyAsync(x => x.Id == campaign.MerchantCreatorPartnershipId, ct);
-        // A wallet record is required to identify the funding source, but its
-        // current balance is checked against the actual commission below.
-        // Zero balance must reach that check so callers receive the genuine
-        // insufficient-funds result rather than a generic eligibility error.
-        var hasWalletFunding = await db.MerchantWallets.AnyAsync(x => x.MerchantId == campaign.MerchantId && x.CurrencyCode == options.CurrencyCode, ct);
         var restrictions = db.PartnershipLocations.Where(x => x.MerchantCreatorPartnershipId == campaign.MerchantCreatorPartnershipId && x.IsActive);
         var eligibleLocation = !await restrictions.AnyAsync(ct) || await restrictions.AnyAsync(x => db.MerchantLocations.Any(l => l.Id == x.MerchantLocationId && l.IsActive), ct);
         if (!relationshipEligible) throw new InvalidOperationException("Business, Creator, QR, or advertising relationship is no longer active.");
-        if (!hasWalletFunding) throw new InvalidOperationException("Business account requires funding.");
         if (campaign.Status != CampaignStatus.Active || campaign.StartsAtUtc > now || campaign.ExpiresAtUtc <= now || !eligibleLocation) throw new InvalidOperationException("Advertising promotion is not eligible for checkout.");
         return campaign;
     }

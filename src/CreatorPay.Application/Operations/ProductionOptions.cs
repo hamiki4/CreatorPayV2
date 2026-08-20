@@ -37,10 +37,5 @@ public sealed class PilotOptions
     public bool ManualWalletFundingOnly { get; set; } = true;
     public int MaximumBusinesses { get; set; } = 10;
     public int MaximumCreators { get; set; } = 25;
-    public decimal MaximumPurchaseAmount { get; set; } = 5000m;
-    public decimal MaximumCommissionAmount { get; set; } = 500m;
-    public decimal DailyMerchantSpendingLimit { get; set; } = 10000m;
-    public decimal ShopperCashbackLimit { get; set; } = 500m;
-    public decimal CreatorEarningLimit { get; set; } = 1000m;
     public int PayoutHoldDays { get; set; } = 7;
 }

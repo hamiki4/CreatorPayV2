@@ -103,11 +103,6 @@ public sealed class ProductionConfigurationTests
         ["Pilot:ManualWalletFundingOnly"] = "true",
         ["Pilot:MaximumBusinesses"] = "10",
         ["Pilot:MaximumCreators"] = "25",
-        ["Pilot:MaximumPurchaseAmount"] = "5000",
-        ["Pilot:MaximumCommissionAmount"] = "500",
-        ["Pilot:DailyMerchantSpendingLimit"] = "10000",
-        ["Pilot:ShopperCashbackLimit"] = "500",
-        ["Pilot:CreatorEarningLimit"] = "1000",
         ["Pilot:PayoutHoldDays"] = "7"
     };
 

@@ -52,12 +52,15 @@ test('pilot deposits use image proof and Business controls advertising state',()
   assert.doesNotMatch(creatorAds,/Deactivate Ad/)
 })
 test('Creator Ads preserves historical performance without exposing Shopper or purchase details',()=>{
-  for(const label of ['Ads','Business','Status','Days Left','Confirmed Sales','Creator Earned','TOTAL'])assert.match(creatorAds,new RegExp(label))
+  const activeAds=creatorAds.slice(creatorAds.indexOf('export function ActiveAds'))
+  for(const label of ['Ads','Business','Status','Date Activated','Days Left'])assert.match(activeAds,new RegExp(label))
   assert.match(creatorAds,/export function CreatorConfirmedSales/)
   assert.doesNotMatch(creatorAds,/Confirmed Transactions|Search Business/)
   for(const status of ['Active','Deactivated','Expired'])assert.match(creatorAds,new RegExp(status))
   assert.match(creatorAds,/\/api\/v1\/creator\/ads\/performance/)
   assert.doesNotMatch(creatorAds,/purchaseAmount|shopper|phone|customer/i)
+  assert.doesNotMatch(activeAds,/Confirmed Sales|Creator Earned|creator-ads-total|No confirmed advertising activity yet/)
+  assert.match(activeAds,/No active advertising relationships yet\./)
   assert.match(creatorDashboard,/\['ads','Active Ads'\]/)
   for(const label of ['Payout Amount','Pending Requests','Next Payout Date'])assert.match(creatorDashboard,new RegExp(label))
   assert.doesNotMatch(creatorDashboard,/Reserved Payout/)
@@ -110,8 +113,14 @@ test('accessibility and mobile safeguards remain present',()=>{
   assert.match(styles,/\.admin-sidebar nav a:focus-visible/)
 })
 test('Business onboarding uses concise verification wording',()=>{
-  assert.match(onboarding,/role==='MerchantAdmin'\?[^:]+Verified/)
-  assert.doesNotMatch(onboarding,/role==='MerchantAdmin'[^}]+Email \{data\.isEmailVerified/s)
+  assert.ok(onboarding.includes("role === 'MerchantAdmin'"))
+  assert.ok(onboarding.includes('Your account is under review. You will be notified after the Platform Admin approves your account.'))
+  assert.doesNotMatch(onboarding,/Email \{data\.isEmailVerified|Phone \{data\.isPhoneVerified/i)
+})
+test('Creator onboarding stays generic and does not expose verification steps',()=>{
+  assert.ok(onboarding.includes("role === 'Creator'"))
+  assert.ok(onboarding.includes('Your creator account is under review. You will be able to access the approved creator tools after activation.'))
+  assert.doesNotMatch(onboarding,/email verified|phone verified|Verify your email|Verify your phone|isEmailVerified|isPhoneVerified/i)
 })
 test('Welcome mode changes reset every controlled authentication flow',()=>{
   for(const reset of ['setLogin(loginBlank())','setShopper(shopperBlank())','setCreator(creatorBlank())','setBusiness(businessBlank())','setMessage("")','setForgot(false)','setResetStage("request")','setResetReference("")'])assert.ok(auth.includes(reset))
@@ -132,6 +141,25 @@ test('Creator and Business discovery show relationship status without duplicate 
   assert.match(creatorAds,/canRequest\s*&&/)
   assert.match(businessAds,/canInvite\s*&&/)
   assert.match(styles,/\.discovery-row/)
+})
+test('current partnership history collapses to the newest Creator-business pair before action rendering',()=>{
+  const currentPartnerships=(items,keyOf)=>{const current=new Map();for(const item of items){const key=keyOf(item);if(!key)continue;const requestedAt=Date.parse(item.requestedAtUtc);const existing=current.get(key);if(!existing||requestedAt>existing.requestedAt)current.set(key,{item,requestedAt})}return [...current.values()].sort((a,b)=>b.requestedAt-a.requestedAt).map(x=>x.item)}
+  const history=[
+    {id:'declined',merchantId:'m1',creatorId:'c1',requestedAtUtc:'2026-01-01T00:00:00Z',status:'Rejected'},
+    {id:'active',merchantId:'m1',creatorId:'c1',requestedAtUtc:'2026-02-01T00:00:00Z',status:'Approved'},
+    {id:'pending',merchantId:'m2',creatorId:'c2',requestedAtUtc:'2026-03-01T00:00:00Z',status:'Pending'},
+    {id:'declined-only',merchantId:'m3',creatorId:'c3',requestedAtUtc:'2026-04-01T00:00:00Z',status:'Rejected'}
+  ]
+  assert.deepEqual(currentPartnerships(history,x=>x.merchantId).map(x=>x.id),['declined-only','pending','active'])
+  const creatorVisible=currentPartnerships(history,x=>x.merchantId).filter(x=>x.status==='Pending'||x.status==='Rejected')
+  assert.deepEqual(creatorVisible.map(x=>x.id),['declined-only','pending'])
+  const businessVisible=currentPartnerships(history,x=>x.creatorId).filter(x=>x.status!=='Approved'&&x.status!=='Suspended'&&x.status!=='Revoked')
+  assert.deepEqual(businessVisible.map(x=>x.id),['declined-only','pending'])
+  assert.match(creatorAds,/currentPartnerships\(requests,x=>x.merchantId\)/)
+  assert.match(creatorAds,/currentPartnerships\(items,x=>x.merchantId\)/)
+  assert.match(businessAds,/currentPartnerships\(relationships, \(x\) => x.creatorId\)/)
+  assert.match(businessAds,/currentPartnerships\(items, \(x\) => x.creatorId\)/)
+  assert.doesNotMatch(creatorAds,/Request Again.*A pending or active relationship/)
 })
 test('Creator dashboard presents the permanent four-digit Creator ID',()=>{
   assert.match(creatorDashboard,/\/api\/v1\/creators\/me/)

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "./apiClient";
 import { daysLeftText, relationshipState } from "./relationshipTime";
+import { currentPartnerships } from "./partnershipState";
 import { rankMatches, useTypeahead } from "./typeahead";
 type Creator = {
   id: string;
@@ -103,8 +104,9 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
       setMessage((error as Error).message);
     }
   }
+  const currentRelationships = currentPartnerships(relationships, (x) => x.creatorId);
   function stateFor(creator: Creator) {
-    const relationship = relationships.find((x) => x.creatorId === creator.id);
+    const relationship = currentRelationships.find((x) => x.creatorId === creator.id);
     if (!relationship)
       return { label: "No relationship", days: "—", canInvite: true };
     if (relationship.status === "Pending")
@@ -322,7 +324,7 @@ export function AdvertisingRequests({
   refresh: () => void;
 }) {
   const [message, setMessage] = useState("");
-  const requests = items.filter(
+  const requests = currentPartnerships(items, (x) => x.creatorId).filter(
     (x) => !["Approved", "Suspended", "Revoked"].includes(x.status),
   );
   async function decide(x: BusinessRelationship, accept: boolean) {

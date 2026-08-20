@@ -76,7 +76,6 @@ public static class ProductionConfiguration
             if (!pilot.HealthMonitoringEnabled) errors.Add("Pilot:HealthMonitoringEnabled must be true");
             if (!pilot.ManualWalletFundingOnly) errors.Add("Pilot:ManualWalletFundingOnly must be true");
             if (pilot.MaximumBusinesses <= 0 || pilot.MaximumCreators <= 0) errors.Add("Pilot participant limits must be positive");
-            if (pilot.MaximumPurchaseAmount <= 0 || pilot.MaximumCommissionAmount <= 0 || pilot.DailyMerchantSpendingLimit <= 0 || pilot.ShopperCashbackLimit <= 0 || pilot.CreatorEarningLimit <= 0) errors.Add("Pilot financial limits must be positive");
             if (pilot.PayoutHoldDays < 1) errors.Add("Pilot:PayoutHoldDays must be at least one day");
             if (flags.AutomaticPayouts) errors.Add("FeatureFlags:AutomaticPayouts must be false in Pilot");
             if (flags.ExternalPaymentProvider) errors.Add("FeatureFlags:ExternalPaymentProvider must be false in Pilot unless separately reviewed");

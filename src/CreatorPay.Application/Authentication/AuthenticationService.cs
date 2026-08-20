@@ -18,13 +18,24 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         else { try { user = await store.FindUserByPhoneAsync(EthiopianMobileNumber.Normalize(identifier), ct); } catch (ArgumentException) { user = null; } }
         var email = user?.NormalizedPhoneNumber ?? NormalizeLogin(identifier);
         if (user is null) { Audit(null, email, false, "InvalidCredentials", context, now); await store.SaveAsync(ct); return Result<TokenPair>.Failure(invalidCredentials); }
-        var eligible = CanSignIn(user) && (user.LockoutEndUtc is null || user.LockoutEndUtc <= now);
         var verification = passwords.Verify(user, user.PasswordHash, request.Password);
-        if (!eligible || verification == PasswordVerification.Failed)
+        if (verification == PasswordVerification.Failed)
         {
             user.FailedLoginCount++; user.LastFailedLoginAtUtc = now;
             if (user.FailedLoginCount >= lockout.Value.MaxFailedAttempts) user.LockoutEndUtc = now.AddMinutes(lockout.Value.LockoutMinutes);
             Audit(user.Id, email, false, user.LockoutEndUtc > now ? "LockedOrIneligible" : "InvalidCredentials", context, now);
+            await store.SaveAsync(ct); return Result<TokenPair>.Failure(invalidCredentials);
+        }
+        var restriction = GetRestriction(user, now);
+        if (restriction is not null)
+        {
+            Audit(user.Id, email, false, restriction.Code, context, now);
+            await store.SaveAsync(ct);
+            return Result<TokenPair>.Failure(restriction.Message, restriction.Code);
+        }
+        if (!CanSignIn(user))
+        {
+            Audit(user.Id, email, false, "InvalidCredentials", context, now);
             await store.SaveAsync(ct); return Result<TokenPair>.Failure(invalidCredentials);
         }
         if (verification == PasswordVerification.SuccessRehashNeeded) user.PasswordHash = passwords.Hash(user, request.Password);
@@ -124,7 +135,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         var now = clock.UtcNow; string normalized;
         try { normalized = EthiopianMobileNumber.Normalize(request.PhoneNumber); } catch (ArgumentException) { normalized = string.Empty; }
         var user = normalized.Length == 0 ? null : await store.FindUserByPhoneAsync(normalized, innerCt);
-        if (user is null || !IsPinRole(user.Role) || user.PinHash is null || !CanSignIn(user))
+        if (user is null || !IsPinRole(user.Role) || user.PinHash is null)
         { Audit(user?.Id, normalized, false, "PinInvalid", context, now); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure("Invalid phone number or PIN."); }
         if (user.PinLockedAtUtc is not null)
         { Audit(user.Id, normalized, false, "PinLocked", context, now); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure(PinLockedMessage); }
@@ -136,6 +147,19 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
             if (user.PinFailedAttemptCount >= 10) { user.PinFailedAttemptCount = 10; user.PinLockedAtUtc = now; user.PinRetryNotBeforeUtc = null; }
             Audit(user.Id, normalized, false, user.PinLockedAtUtc is null ? "PinInvalid" : "PinLockedAtTenFailures", context, now);
             await store.SaveAsync(innerCt); return Result<TokenPair>.Failure(user.PinLockedAtUtc is null ? "Invalid phone number or PIN." : PinLockedMessage);
+        }
+        var restriction = GetRestriction(user, now);
+        if (restriction is not null)
+        {
+            Audit(user.Id, normalized, false, restriction.Code, context, now);
+            await store.SaveAsync(innerCt);
+            return Result<TokenPair>.Failure(restriction.Message, restriction.Code);
+        }
+        if (!CanSignIn(user))
+        {
+            Audit(user.Id, normalized, false, "PinInvalid", context, now);
+            await store.SaveAsync(innerCt);
+            return Result<TokenPair>.Failure("Invalid phone number or PIN.");
         }
         user.PinRetryNotBeforeUtc = null; user.LastLoginAtUtc = now;
         var pair = IssuePair(user, Guid.NewGuid().ToString("N"), context, now);
@@ -182,11 +206,20 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     private static CurrentUser ToCurrent(UserAccount u) => new(u.Id, u.Email, u.PhoneNumber, u.Role, u.Status, u.CreatorId, u.MerchantId, u.SupervisorId, u.CashierId, u.IsEmailVerified, u.IsPhoneVerified);
     public static bool CanSignIn(UserAccount user) => user.Status == AccountStatus.Active ||
         user.Status is AccountStatus.PendingVerification or AccountStatus.PendingApproval && IsPinRole(user.Role);
+    private static RestrictedAccount? GetRestriction(UserAccount user, DateTime now) => user.LockoutEndUtc is not null && user.LockoutEndUtc > now
+        ? new("AccountLocked", "Your account is locked. Please contact Weymela support.")
+        : user.Status switch
+        {
+            AccountStatus.Suspended => new("AccountSuspended", "Your account is suspended. Please contact Weymela support."),
+            AccountStatus.Closed or AccountStatus.Rejected => new("AccountDeactivated", "Your account is deactivated. Please contact Weymela support."),
+            _ => null
+        };
     private static string Normalize(string email) => email.Trim().ToUpperInvariant();
     private const string PinLockedMessage = "Too many incorrect attempts. Use Forgot PIN to reset your PIN.";
     private static bool IsPinRole(UserRole role) => role is UserRole.Customer or UserRole.Creator or UserRole.MerchantAdmin or UserRole.Cashier;
     private static bool ValidPin(string pin) => pin.Length == 5 && pin.All(char.IsAsciiDigit);
     private static string PinCredential(string pin) => $"weymela-pin-v1:{pin}";
+    private sealed record RestrictedAccount(string Code, string Message);
     private static string NormalizeLogin(string identifier) { var value = identifier.Trim().ToUpperInvariant(); return value.Contains('@') ? value : $"{value}@CASHIER.WEYMELA.LOCAL"; }
 }
 public sealed class FirebasePinOptions
