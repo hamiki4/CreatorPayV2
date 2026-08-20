@@ -39,6 +39,9 @@ jobs:
         with: { name: test-results, path: "**/tests.trx" }
   secrets:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
