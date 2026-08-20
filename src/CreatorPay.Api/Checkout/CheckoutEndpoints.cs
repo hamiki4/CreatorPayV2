@@ -47,22 +47,18 @@ public static class CheckoutEndpoints
         return e;
     }
     static string Key(HttpRequest r) => r.Headers["Idempotency-Key"].ToString();
-    static async Task<IResult> SubmitCashierOffer(CashierOfferCheckoutRequest r, HttpRequest h, ICurrentUserService u, ICheckoutService s, ApplicationDbContext db, IOptions<PilotOptions> pilot, CancellationToken ct)
+    static async Task<IResult> SubmitCashierOffer(CashierOfferCheckoutRequest r, HttpRequest h, ICurrentUserService u, ICheckoutService s, ApplicationDbContext db, CancellationToken ct)
     {
-        if (pilot.Value.Enabled && r.PurchaseAmount > pilot.Value.MaximumPurchaseAmount) return Results.Problem(statusCode: 409, detail: "Pilot maximum purchase amount exceeded.");
         var locationId = await db.CashierLocationAssignments.AsNoTracking().Where(x => x.CashierId == u.CashierId && x.IsActive).OrderByDescending(x => x.IsPrimary).Select(x => (Guid?)x.MerchantLocationId).FirstOrDefaultAsync(ct);
-        if (!locationId.HasValue) return Results.Problem(statusCode: 403, detail: "Cashier has no active Business location assignment.");
-        return await Run(() => s.SubmitOfferAsync(u.MerchantId!.Value, u.CashierId!.Value, u.UserAccountId!.Value, Key(h), new(r.QrPayload, locationId.Value, r.ShopperPhoneNumber, r.PurchaseAmount), ct));
+        return await Run(() => s.SubmitOfferAsync(u.MerchantId!.Value, u.CashierId!.Value, u.UserAccountId!.Value, Key(h), new(r.QrPayload, locationId, r.ShopperPhoneNumber, r.PurchaseAmount), ct));
     }
     static async Task<IResult> ValidateCashierOffer(CashierQrValidationRequest r, ICurrentUserService u, ICheckoutService s, ApplicationDbContext db, CancellationToken ct)
     {
         var locationId = await db.CashierLocationAssignments.AsNoTracking().Where(x => x.CashierId == u.CashierId && x.IsActive).OrderByDescending(x => x.IsPrimary).Select(x => (Guid?)x.MerchantLocationId).FirstOrDefaultAsync(ct);
-        if (!locationId.HasValue) return Results.Problem(statusCode: 403, detail: "Cashier has no active Business location assignment.");
-        return await Run(() => s.ValidateOfferAsync(u.MerchantId!.Value, u.CashierId!.Value, locationId.Value, r.QrPayload, ct));
+        return await Run(() => s.ValidateOfferAsync(u.MerchantId!.Value, u.CashierId!.Value, locationId, r.QrPayload, ct));
     }
-    static async Task<IResult> SubmitCashierCreator(CashierCreatorCheckoutRequest r, HttpRequest h, ICurrentUserService u, ICheckoutService s, ApplicationDbContext db, IOptions<PilotOptions> pilot, CancellationToken ct)
+    static async Task<IResult> SubmitCashierCreator(CashierCreatorCheckoutRequest r, HttpRequest h, ICurrentUserService u, ICheckoutService s, ApplicationDbContext db, CancellationToken ct)
     {
-        if (pilot.Value.Enabled && r.PurchaseAmount > pilot.Value.MaximumPurchaseAmount) return Results.Problem(statusCode: 409, detail: "Pilot maximum purchase amount exceeded.");
         return await Run(async () =>
         {
             var payload = await CreatorPayload(r.CreatorCode, db, ct);

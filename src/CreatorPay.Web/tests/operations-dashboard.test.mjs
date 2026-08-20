@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
+import {repoPath} from './repoPath.mjs'
 
 test('admin operations exposes the simplified secure pilot navigation',async()=>{
   const source=await readFile(new URL('../src/AdminPortal.tsx',import.meta.url),'utf8')
@@ -16,7 +17,7 @@ test('admin operations exposes the simplified secure pilot navigation',async()=>
   assert.match(commission,/Save Settings/)
   assert.match(commission,/percentages must total 100%/)
   for(const scheduleControl of ['Creator Payout — Weekly','Shopper Payout — Monthly','Cutoff Day','Cutoff Time','Payout Day','Schedule Effective From']) assert.match(commission,new RegExp(scheduleControl))
-  const api=await readFile(new URL('../../CreatorPay.Api/Admin/AdminEndpoints.cs',import.meta.url),'utf8')
+  const api=await readFile(repoPath(import.meta.url,'src/CreatorPay.Api/Admin/AdminEndpoints.cs'),'utf8')
   for(const signal of ['failedCheckouts','pendingPayouts','openFraudAlerts','systemHealth','FinancialSummary','fundingStatus']) assert.match(api,new RegExp(signal))
   for(const cashierField of ['cashierName','businessName','publicBusinessId','assignedLocation']) assert.match(source,new RegExp(cashierField))
   assert.match(source,/Disable Cashier/)

@@ -170,12 +170,68 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.Equal(1000m, walletBody.GetProperty("minimumRequiredBalance").GetDecimal());
         Assert.Equal(HttpStatusCode.Conflict, (await Get(merchant, "/api/v1/merchant/creators/search?q=Underfunded")).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(merchant, "/api/v1/merchant/partnerships/invitations", new { creatorId = creator.CreatorId, introductoryMessage = "blocked" })).StatusCode);
+        var seededCreator = Client(Guid.Parse("30000000-0000-0000-0000-000000000004"), Guid.Parse("30000000-0000-0000-0000-000000000001"));
+        var shopper = CustomerClient(Guid.Parse("10000000-0000-0000-0000-000000000002"), Guid.Parse("10000000-0000-0000-0000-000000000001"));
+        var creatorRows = await (await Get(seededCreator, "/api/v1/creator/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var activeRow = Assert.Single(creatorRows!.EnumerateArray(), x => x.GetProperty("merchantName").GetString() == "Active E2E Business");
+        Assert.False(activeRow.GetProperty("promotionActive").GetBoolean());
+        Assert.Equal("ActivationRequired", activeRow.GetProperty("relationshipState").GetString());
+        var shopperRows = await (await Get(shopper, "/api/v1/customer/discovery/advertising")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(shopperRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+        var shopperBusinesses = await (await Get(shopper, "/api/v1/customer/discovery/businesses?q=Addis")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(shopperBusinesses!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
             (await db.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance = 1000m;
             await db.SaveChangesAsync();
         }
+        creatorRows = await (await Get(seededCreator, "/api/v1/creator/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        activeRow = Assert.Single(creatorRows!.EnumerateArray(), x => x.GetProperty("merchantName").GetString() == "Active E2E Business");
+        Assert.True(activeRow.GetProperty("promotionActive").GetBoolean());
+        Assert.Equal("Active", activeRow.GetProperty("relationshipState").GetString());
+        shopperRows = await (await Get(shopper, "/api/v1/customer/discovery/advertising")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains(shopperRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+        shopperBusinesses = await (await Get(shopper, "/api/v1/customer/discovery/businesses?q=Addis")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains(shopperBusinesses!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+    }
+
+    [DockerFact]
+    public async Task Creator_find_businesses_hides_underfunded_businesses_and_reveals_them_again_after_restocking()
+    {
+        var creator = await AddCreator("Search Visibility Creator");
+        using var client = Client(creator.UserId, creator.CreatorId);
+        await using (var db = Db())
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
+            (await db.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance = 1000m;
+            await db.SaveChangesAsync();
+        }
+        var funded = await Get(client, "/api/v1/creator/merchants/search?q=Active E2E");
+        Assert.Equal(HttpStatusCode.OK, funded.StatusCode);
+        var fundedRows = await funded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains(fundedRows!.EnumerateArray(), x => x.GetProperty("id").GetGuid() == MerchantId);
+
+        await using (var db = Db())
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 350 WHERE \"MerchantId\" = {MerchantId}");
+            (await db.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance = 1000m;
+            await db.SaveChangesAsync();
+        }
+        var underfunded = await Get(client, "/api/v1/creator/merchants/search?q=Active E2E");
+        Assert.Equal(HttpStatusCode.OK, underfunded.StatusCode);
+        var underfundedRows = await underfunded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(underfundedRows!.EnumerateArray(), x => x.GetProperty("id").GetGuid() == MerchantId);
+
+        await using (var db = Db())
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 1000 WHERE \"MerchantId\" = {MerchantId}");
+            await db.SaveChangesAsync();
+        }
+        var restored = await Get(client, "/api/v1/creator/merchants/search?q=Active E2E");
+        Assert.Equal(HttpStatusCode.OK, restored.StatusCode);
+        var restoredRows = await restored.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains(restoredRows!.EnumerateArray(), x => x.GetProperty("id").GetGuid() == MerchantId);
     }
 
     [DockerFact]
@@ -286,6 +342,13 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var client = factory!.CreateClient(); var role = merchantId.HasValue ? UserRole.MerchantAdmin : UserRole.Creator;
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()), new(ClaimTypes.Role, role.ToString()), new(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()), new("test_token", "true") };
         if (creatorId.HasValue) claims.Add(new("creator_id", creatorId.Value.ToString())); if (merchantId.HasValue) claims.Add(new("merchant_id", merchantId.Value.ToString()));
+        var token = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken("CreatorPay", "CreatorPay.Web", claims, expires: DateTime.UtcNow.AddMinutes(10), signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)), SecurityAlgorithms.HmacSha256)));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token); return client;
+    }
+    private HttpClient CustomerClient(Guid userId, Guid customerId)
+    {
+        var client = factory!.CreateClient();
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()), new(ClaimTypes.Role, UserRole.Customer.ToString()), new(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()), new("test_token", "true"), new("customer_id", customerId.ToString()) };
         var token = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken("CreatorPay", "CreatorPay.Web", claims, expires: DateTime.UtcNow.AddMinutes(10), signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)), SecurityAlgorithms.HmacSha256)));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token); return client;
     }

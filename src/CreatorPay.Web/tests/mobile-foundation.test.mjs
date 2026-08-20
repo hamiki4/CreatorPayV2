@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import test from 'node:test'
+import {repoPath} from './repoPath.mjs'
 
 const read=(path)=>readFileSync(new URL(`../${path}`,import.meta.url),'utf8')
 
@@ -57,7 +58,7 @@ test('mobile modes select exact non-secret PILOT and Production API URLs',()=>{
 })
 
 test('PILOT alone allows the exact Android WebView origin',()=>{
-  const pilot=readFileSync(new URL('../../../docker-compose.pilot.yml',import.meta.url),'utf8')
+  const pilot=readFileSync(repoPath(import.meta.url,'docker-compose.pilot.yml'),'utf8')
   assert.ok(pilot.includes('Cors__AllowedOrigins__1: https://localhost'))
   assert.ok(!pilot.includes('Cors__AllowedOrigins__1: *'))
 })

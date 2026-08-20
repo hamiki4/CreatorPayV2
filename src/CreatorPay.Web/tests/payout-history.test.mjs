@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import test from 'node:test'
+import {repoPath} from './repoPath.mjs'
 
-const api=readFileSync(new URL('../../CreatorPay.Api/Earnings/EarningsEndpoints.cs',import.meta.url),'utf8')
+const api=readFileSync(repoPath(import.meta.url,'src/CreatorPay.Api/Earnings/EarningsEndpoints.cs'),'utf8')
 const ui=readFileSync(new URL('../src/EarningsWorkspace.tsx',import.meta.url),'utf8')
 
 test('PlatformAdmin payout history uses persisted creator and shopper records with filters and paging',()=>{

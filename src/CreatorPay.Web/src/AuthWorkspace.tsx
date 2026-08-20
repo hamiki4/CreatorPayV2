@@ -6,6 +6,7 @@ import { ForgotPin, pinUnlock } from './PinExperience'
 import {getTrustedPhone,setSessionTokens,setTrustedPhone} from './sessionStore'
 import {NATIVE_BACK_EVENT} from './mobileLifecycle'
 import { PasswordInput } from './PasswordInput'
+import { ApiError } from "./apiClient";
 
 const base = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 type Mode = "welcome" | "login" | "pin" | "signup" | "customer" | "creator" | "merchant";
@@ -38,6 +39,19 @@ const text = {
   failed: "Registration failed. Please try again.",
   invalid: "Invalid phone number or password.",
 };
+const authRestrictionMessages = {
+  AccountDeactivated: "Your account is deactivated. Please contact Weymela support.",
+  AccountSuspended: "Your account is suspended. Please contact Weymela support.",
+  AccountLocked: "Your account is locked. Please contact Weymela support.",
+} as const;
+function authErrorMessage(status: number, body: unknown, fallback: string) {
+  if (status === 403 && body && typeof body === "object" && "title" in body) {
+    const title = String((body as { title?: unknown }).title ?? "");
+    if (title in authRestrictionMessages) return authRestrictionMessages[title as keyof typeof authRestrictionMessages];
+  }
+  if (body && typeof body === "object" && "detail" in body && typeof (body as { detail?: unknown }).detail === "string") return (body as { detail: string }).detail;
+  return fallback;
+}
 export const authText = () => text;
 export const publicPasswordRules = [
   (v: string) => v.length >= 8,
@@ -196,11 +210,7 @@ export function AuthWorkspace() {
         }),
         v = await r.json().catch(() => ({}));
       if (!r.ok) {
-        setMessage(
-          r.status >= 500
-            ? "Sign in is temporarily unavailable."
-            : (v.detail ?? text.invalid),
-        );
+        setMessage(r.status >= 500 ? "Sign in is temporarily unavailable." : authErrorMessage(r.status, v, text.invalid));
         return;
       }
       const x = v as Tokens;
@@ -215,7 +225,7 @@ export function AuthWorkspace() {
       setBusy(false);
     }
   }
-  async function unlockPin(e:FormEvent){e.preventDefault();setBusy(true);setMessage("");try{const x=await pinUnlock(trustedPhone,pinValue);await setSessionTokens(x.accessToken,x.refreshToken);location.assign(workspaceRoute(x.user.role))}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}
+  async function unlockPin(e:FormEvent){e.preventDefault();setBusy(true);setMessage("");try{const x=await pinUnlock(trustedPhone,pinValue);await setSessionTokens(x.accessToken,x.refreshToken);location.assign(workspaceRoute(x.user.role))}catch(error){setMessage(error instanceof ApiError&&error.title&&error.title in authRestrictionMessages?authRestrictionMessages[error.title as keyof typeof authRestrictionMessages]:(error as Error).message)}finally{setBusy(false)}}
   if(mode==="pin") return <main className="auth pin-auth"><section className="panel pin-panel"><p className="pin-brand">WEYMELA</p>{forgotPin?<ForgotPin phoneNumber={trustedPhone} onBack={()=>setForgotPin(false)}/>:<form onSubmit={unlockPin}><h1>Enter your 5-digit PIN</h1><label className="pin-entry"><span className="sr-only">5-digit PIN</span><input inputMode="numeric" autoComplete="current-password" pattern="[0-9]{5}" maxLength={5} required autoFocus value={pinValue} onChange={e=>setPinValue(e.target.value.replace(/\D/g,"").slice(0,5))}/><span className="pin-cells" aria-hidden="true">{Array.from({length:5},(_,i)=><i key={i}>{pinValue[i]?"•":""}</i>)}</span></label><button disabled={busy}>Sign In</button><button type="button" className="quiet" onClick={()=>setForgotPin(true)}>Forgot PIN</button><button type="button" className="quiet" onClick={()=>changeMode("signup")}>Sign Up to Weymela</button>{message&&<p role="alert">{message}</p>}</form>}</section></main>;
   const field = (
     state: Record<string, unknown>,
