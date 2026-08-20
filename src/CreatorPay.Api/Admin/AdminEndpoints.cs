@@ -280,82 +280,82 @@ public static class AdminEndpoints
             switch (request.Role)
             {
                 case UserRole.PlatformAdmin:
-                {
-                    if (string.IsNullOrWhiteSpace(email)) return Results.Problem(detail: "Email is required for PlatformAdmin.", statusCode: StatusCodes.Status400BadRequest);
-                    var account = new UserAccount { Id = Guid.NewGuid(), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.PlatformAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                    account.PasswordHash = passwords.Hash(account, request.Password);
-                    db.Add(account);
-                    createdAccounts.Add(account.Id);
-                    break;
-                }
-                case UserRole.Customer:
-                {
-                    if (string.IsNullOrWhiteSpace(request.DisplayName)) return Results.Problem(detail: "Display name is required.", statusCode: StatusCodes.Status400BadRequest);
-                    if (phone is null) return Results.Problem(detail: "Phone number is required.", statusCode: StatusCodes.Status400BadRequest);
-                    var customer = new Customer { Id = Guid.NewGuid(), PublicCustomerId = $"CUS-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), DisplayName = request.DisplayName.Trim(), PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Status = CustomerStatus.Active, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                    db.Add(customer);
-                    var account = new UserAccount { Id = Guid.NewGuid(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Customer, Status = AccountStatus.Active, CustomerId = customer.Id, IsEmailVerified = true, IsPhoneVerified = true, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                    account.PasswordHash = passwords.Hash(account, request.Password);
-                    db.Add(account);
-                    createdAccounts.Add(account.Id);
-                    break;
-                }
-                case UserRole.Creator:
-                {
-                    if (string.IsNullOrWhiteSpace(request.FirstName) || string.IsNullOrWhiteSpace(request.LastName) || string.IsNullOrWhiteSpace(request.DisplayName)) return Results.Problem(detail: "First name, last name, and display name are required.", statusCode: StatusCodes.Status400BadRequest);
-                    if (phone is null) return Results.Problem(detail: "Phone number is required.", statusCode: StatusCodes.Status400BadRequest);
-                    var creatorId = Guid.NewGuid();
-                    var creatorCode = Random.Shared.Next(1000, 9999).ToString();
-                    while (await db.Creators.AnyAsync(x => x.CreatorCode == creatorCode, ct)) creatorCode = Random.Shared.Next(1000, 9999).ToString();
-                    var creator = new Creator { Id = creatorId, PublicCreatorId = $"CRE-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), CreatorCode = creatorCode, FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), DisplayName = request.DisplayName.Trim(), PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Email = email ?? string.Empty, PreferredLanguage = CleanValue(request.PreferredLanguage, "en"), City = CleanValue(request.City, "Addis Ababa"), Zone = CleanOptional(request.Zone), Biography = CleanValue(request.Biography, string.Empty), ContentCategories = CleanValue(request.ContentCategories, string.Empty), TermsAcceptedAtUtc = now, Status = CreatorStatus.PendingApproval, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                    db.Add(creator);
-                    creator.Approve(now, actor);
-                    var account = new UserAccount { Id = Guid.NewGuid(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Creator, Status = AccountStatus.Active, CreatorId = creator.Id, IsEmailVerified = true, IsPhoneVerified = true, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                    account.PasswordHash = passwords.Hash(account, request.Password);
-                    db.Add(account);
-                    createdAccounts.Add(account.Id);
-                    break;
-                }
-                case UserRole.MerchantAdmin:
-                {
-                    if (merchantId is null)
                     {
-                        var merchantError = ValidateBusinessFields(request);
-                        if (merchantError is not null) return Results.Problem(detail: merchantError, statusCode: StatusCodes.Status400BadRequest);
-                        if (phone is null) return Results.Problem(detail: "Phone number is required.", statusCode: StatusCodes.Status400BadRequest);
-                        var merchant = new Merchant { Id = Guid.NewGuid(), PublicMerchantId = $"ME-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), LegalBusinessName = CleanValue(request.LegalBusinessName, request.TradingName ?? string.Empty), TradingName = CleanValue(request.TradingName, "Business"), BusinessType = CleanValue(request.BusinessType, "Other"), PrimaryContactName = CleanValue(request.PrimaryContactName, email ?? "Platform Admin"), PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Email = email, BusinessAddress = CleanValue(request.BusinessAddress, "Not provided"), City = CleanValue(request.City, "Addis Ababa"), Region = CleanValue(request.Region, "Not provided"), Country = CleanValue(request.Country, "Ethiopia"), TimeZone = CleanValue(request.TimeZone, "Africa/Addis_Ababa"), PreferredLanguage = CleanValue(request.PreferredLanguage, "en"), TermsAcceptedAtUtc = now, Status = MerchantStatus.PendingReview, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                        db.Add(merchant);
-                        merchant.Approve(now, actor);
-                        merchantId = merchant.Id;
+                        if (string.IsNullOrWhiteSpace(email)) return Results.Problem(detail: "Email is required for PlatformAdmin.", statusCode: StatusCodes.Status400BadRequest);
+                        var account = new UserAccount { Id = Guid.NewGuid(), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.PlatformAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        account.PasswordHash = passwords.Hash(account, request.Password);
+                        db.Add(account);
+                        createdAccounts.Add(account.Id);
+                        break;
                     }
-                    else
+                case UserRole.Customer:
                     {
+                        if (string.IsNullOrWhiteSpace(request.DisplayName)) return Results.Problem(detail: "Display name is required.", statusCode: StatusCodes.Status400BadRequest);
+                        if (phone is null) return Results.Problem(detail: "Phone number is required.", statusCode: StatusCodes.Status400BadRequest);
+                        var customer = new Customer { Id = Guid.NewGuid(), PublicCustomerId = $"CUS-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), DisplayName = request.DisplayName.Trim(), PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Status = CustomerStatus.Active, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        db.Add(customer);
+                        var account = new UserAccount { Id = Guid.NewGuid(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Customer, Status = AccountStatus.Active, CustomerId = customer.Id, IsEmailVerified = true, IsPhoneVerified = true, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        account.PasswordHash = passwords.Hash(account, request.Password);
+                        db.Add(account);
+                        createdAccounts.Add(account.Id);
+                        break;
+                    }
+                case UserRole.Creator:
+                    {
+                        if (string.IsNullOrWhiteSpace(request.FirstName) || string.IsNullOrWhiteSpace(request.LastName) || string.IsNullOrWhiteSpace(request.DisplayName)) return Results.Problem(detail: "First name, last name, and display name are required.", statusCode: StatusCodes.Status400BadRequest);
+                        if (phone is null) return Results.Problem(detail: "Phone number is required.", statusCode: StatusCodes.Status400BadRequest);
+                        var creatorId = Guid.NewGuid();
+                        var creatorCode = Random.Shared.Next(1000, 9999).ToString();
+                        while (await db.Creators.AnyAsync(x => x.CreatorCode == creatorCode, ct)) creatorCode = Random.Shared.Next(1000, 9999).ToString();
+                        var creator = new Creator { Id = creatorId, PublicCreatorId = $"CRE-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), CreatorCode = creatorCode, FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), DisplayName = request.DisplayName.Trim(), PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Email = email ?? string.Empty, PreferredLanguage = CleanValue(request.PreferredLanguage, "en"), City = CleanValue(request.City, "Addis Ababa"), Zone = CleanOptional(request.Zone), Biography = CleanValue(request.Biography, string.Empty), ContentCategories = CleanValue(request.ContentCategories, string.Empty), TermsAcceptedAtUtc = now, Status = CreatorStatus.PendingApproval, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        db.Add(creator);
+                        creator.Approve(now, actor);
+                        var account = new UserAccount { Id = Guid.NewGuid(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Creator, Status = AccountStatus.Active, CreatorId = creator.Id, IsEmailVerified = true, IsPhoneVerified = true, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        account.PasswordHash = passwords.Hash(account, request.Password);
+                        db.Add(account);
+                        createdAccounts.Add(account.Id);
+                        break;
+                    }
+                case UserRole.MerchantAdmin:
+                    {
+                        if (merchantId is null)
+                        {
+                            var merchantError = ValidateBusinessFields(request);
+                            if (merchantError is not null) return Results.Problem(detail: merchantError, statusCode: StatusCodes.Status400BadRequest);
+                            if (phone is null) return Results.Problem(detail: "Phone number is required.", statusCode: StatusCodes.Status400BadRequest);
+                            var merchant = new Merchant { Id = Guid.NewGuid(), PublicMerchantId = $"ME-{Guid.NewGuid():N}"[..15].ToUpperInvariant(), LegalBusinessName = CleanValue(request.LegalBusinessName, request.TradingName ?? string.Empty), TradingName = CleanValue(request.TradingName, "Business"), BusinessType = CleanValue(request.BusinessType, "Other"), PrimaryContactName = CleanValue(request.PrimaryContactName, email ?? "Platform Admin"), PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Email = email, BusinessAddress = CleanValue(request.BusinessAddress, "Not provided"), City = CleanValue(request.City, "Addis Ababa"), Region = CleanValue(request.Region, "Not provided"), Country = CleanValue(request.Country, "Ethiopia"), TimeZone = CleanValue(request.TimeZone, "Africa/Addis_Ababa"), PreferredLanguage = CleanValue(request.PreferredLanguage, "en"), TermsAcceptedAtUtc = now, Status = MerchantStatus.PendingReview, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                            db.Add(merchant);
+                            merchant.Approve(now, actor);
+                            merchantId = merchant.Id;
+                        }
+                        else
+                        {
+                            var merchant = await db.Merchants.SingleOrDefaultAsync(x => x.Id == merchantId, ct);
+                            if (merchant is null) return Results.Problem(detail: "Business not found.", statusCode: StatusCodes.Status404NotFound);
+                            if (merchant.Status is not (MerchantStatus.Active or MerchantStatus.LowBalance or MerchantStatus.LowBalanceRestricted or MerchantStatus.ApprovedUnfunded)) return Results.Problem(detail: "Business must be active before assigning a PlatformAdmin-created account.", statusCode: StatusCodes.Status409Conflict);
+                        }
+                        var owner = new UserAccount { Id = Guid.NewGuid(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.MerchantAdmin, Status = AccountStatus.Active, MerchantId = merchantId, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        owner.PasswordHash = passwords.Hash(owner, request.Password);
+                        db.Add(owner);
+                        createdAccounts.Add(owner.Id);
+                        break;
+                    }
+                case UserRole.Cashier:
+                    {
+                        if (merchantId is null) return Results.Problem(detail: "Business is required for a Cashier.", statusCode: StatusCodes.Status400BadRequest);
                         var merchant = await db.Merchants.SingleOrDefaultAsync(x => x.Id == merchantId, ct);
                         if (merchant is null) return Results.Problem(detail: "Business not found.", statusCode: StatusCodes.Status404NotFound);
-                        if (merchant.Status is not (MerchantStatus.Active or MerchantStatus.LowBalance or MerchantStatus.LowBalanceRestricted or MerchantStatus.ApprovedUnfunded)) return Results.Problem(detail: "Business must be active before assigning a PlatformAdmin-created account.", statusCode: StatusCodes.Status409Conflict);
+                        if (merchant.Status is not (MerchantStatus.Active or MerchantStatus.LowBalance or MerchantStatus.LowBalanceRestricted or MerchantStatus.ApprovedUnfunded)) return Results.Problem(detail: "Business must be active before assigning a Cashier.", statusCode: StatusCodes.Status409Conflict);
+                        if (string.IsNullOrWhiteSpace(request.FirstName) || string.IsNullOrWhiteSpace(request.LastName)) return Results.Problem(detail: "First name and last name are required.", statusCode: StatusCodes.Status400BadRequest);
+                        if (phone is null) return Results.Problem(detail: "Phone number is required.", statusCode: StatusCodes.Status400BadRequest);
+                        var cashier = new Cashier { Id = Guid.NewGuid(), MerchantId = merchant.Id, FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, IsActive = true, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        db.Add(cashier);
+                        var account = new UserAccount { Id = Guid.NewGuid(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Cashier, Status = AccountStatus.Active, MerchantId = merchant.Id, CashierId = cashier.Id, IsEmailVerified = true, IsPhoneVerified = true, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        account.PasswordHash = passwords.Hash(account, request.Password);
+                        db.Add(account);
+                        createdAccounts.Add(account.Id);
+                        break;
                     }
-                    var owner = new UserAccount { Id = Guid.NewGuid(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.MerchantAdmin, Status = AccountStatus.Active, MerchantId = merchantId, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                    owner.PasswordHash = passwords.Hash(owner, request.Password);
-                    db.Add(owner);
-                    createdAccounts.Add(owner.Id);
-                    break;
-                }
-                case UserRole.Cashier:
-                {
-                    if (merchantId is null) return Results.Problem(detail: "Business is required for a Cashier.", statusCode: StatusCodes.Status400BadRequest);
-                    var merchant = await db.Merchants.SingleOrDefaultAsync(x => x.Id == merchantId, ct);
-                    if (merchant is null) return Results.Problem(detail: "Business not found.", statusCode: StatusCodes.Status404NotFound);
-                    if (merchant.Status is not (MerchantStatus.Active or MerchantStatus.LowBalance or MerchantStatus.LowBalanceRestricted or MerchantStatus.ApprovedUnfunded)) return Results.Problem(detail: "Business must be active before assigning a Cashier.", statusCode: StatusCodes.Status409Conflict);
-                    if (string.IsNullOrWhiteSpace(request.FirstName) || string.IsNullOrWhiteSpace(request.LastName)) return Results.Problem(detail: "First name and last name are required.", statusCode: StatusCodes.Status400BadRequest);
-                    if (phone is null) return Results.Problem(detail: "Phone number is required.", statusCode: StatusCodes.Status400BadRequest);
-                    var cashier = new Cashier { Id = Guid.NewGuid(), MerchantId = merchant.Id, FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, IsActive = true, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                    db.Add(cashier);
-                    var account = new UserAccount { Id = Guid.NewGuid(), Email = email ?? string.Empty, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = normalizedPhone, Role = UserRole.Cashier, Status = AccountStatus.Active, MerchantId = merchant.Id, CashierId = cashier.Id, IsEmailVerified = true, IsPhoneVerified = true, CreatedAtUtc = now, CreatedBy = actor.ToString() };
-                    account.PasswordHash = passwords.Hash(account, request.Password);
-                    db.Add(account);
-                    createdAccounts.Add(account.Id);
-                    break;
-                }
                 default:
                     return Results.Problem(detail: "Unsupported account role.", statusCode: StatusCodes.Status400BadRequest);
             }
