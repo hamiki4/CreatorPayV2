@@ -18,24 +18,24 @@ type LegalSection = [string, ReactNode]
 const legal = {
   terms: {
     title: 'Terms of Service',
-    eyebrow: 'Pilot draft · Version 1.0',
-    intro: 'This pilot draft requires qualified legal review before production launch.',
+    eyebrow: 'Version 1.0',
+    intro: 'These terms govern your use of Weymela.',
     effectiveDate: 'August 6, 2026',
     sections: [
-      ['Platform role', 'Weymela connects pilot participants and records eligible activity; it is not the seller of a Business’s goods.'],
+      ['Platform role', 'Weymela connects users and records eligible activity; it is not the seller of a Business’s goods.'],
       ['Acceptable use', 'Do not commit fraud, misrepresent advertising, alter QR codes, scrape private data, or share passwords and one-time codes.'],
-      ['Business funding', 'Businesses must maintain sufficient pilot funds for eligible transactions.'],
+      ['Business funding', 'Businesses must maintain sufficient funds for eligible transactions.'],
       ['Records', 'Authenticated transaction and financial ledgers remain the operational record.'],
       ['Contact', 'Questions may be submitted through Contact Support.'],
     ] as LegalSection[],
   },
   privacy: {
     title: 'Privacy Policy',
-    eyebrow: 'Pilot draft · Version 1.0',
-    intro: 'This pilot draft requires qualified legal review before production launch.',
+    eyebrow: 'Version 1.0',
+    intro: 'This privacy policy explains how Weymela handles personal data.',
     effectiveDate: 'August 6, 2026',
     sections: [
-      ['Information collected', 'We collect registration, profile, contact, support, consent, transaction, and security information needed to operate the pilot.'],
+      ['Information collected', 'We collect registration, profile, contact, support, consent, transaction, and security information needed to operate Weymela.'],
       ['Phone numbers', 'Phone numbers support verification, checkout matching, duplicate-use controls, and account recovery.'],
       ['Data sharing', 'Data is shared only as needed with relevant participants, authorized staff, service providers, or where legally required.'],
       ['Security', 'We use role-based access, masking, protected secrets, audit records, validation, and monitoring.'],
@@ -239,7 +239,6 @@ export function LegalPage({ kind }: { kind: keyof typeof legal }) {
             <strong>Effective date:</strong> {page.effectiveDate}
           </p>
         )}
-        <aside>This pilot draft requires qualified legal review before production launch.</aside>
         {page.sections.map(([heading, body]) => (
           <section key={heading}>
             <h2>{heading}</h2>
