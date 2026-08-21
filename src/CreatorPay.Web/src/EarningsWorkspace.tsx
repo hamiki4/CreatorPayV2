@@ -212,7 +212,7 @@ export function AdminPayoutWorkspace() {
           className={tab === "shoppers" ? "active" : ""}
           onClick={() => setTab("shoppers")}
         >
-          Shoppers
+          Customers
         </button>
         <button
           className={tab === "revenue" ? "active" : ""}
@@ -228,7 +228,7 @@ export function AdminPayoutWorkspace() {
       )}
       {tab !== "revenue" && cycle && (
         <>
-          <h3>Current {tab === "creators" ? "Creator" : "Shopper"} Cycle</h3>
+          <h3>Current {tab === "creators" ? "Creator" : "Customer"} Cycle</h3>
           <div className="summary-grid payout-cycle-summary">
             <article>
               <span>Cycle Start</span>
@@ -267,7 +267,7 @@ export function AdminPayoutWorkspace() {
             <label>
               {tab === "creators"
                 ? "Search Creator Name or Creator ID"
-                : "Search Shopper Name"}
+                : "Search Customer Name"}
               <input
                 type="search"
                 value={search}
@@ -295,7 +295,7 @@ export function AdminPayoutWorkspace() {
               <thead>
                 <tr>
                   <th>
-                    {tab === "creators" ? "Creator Name" : "Shopper Name"}
+                    {tab === "creators" ? "Creator Name" : "Customer Name"}
                   </th>
                   {tab === "creators" && <th>Creator ID</th>}
                   <th>
@@ -346,7 +346,7 @@ export function AdminPayoutWorkspace() {
               </tbody>
             </table>
           </div>
-          <h3>{tab === "creators" ? "Creator" : "Shopper"} Payout History</h3>
+          <h3>{tab === "creators" ? "Creator" : "Customer"} Payout History</h3>
           <PayoutHistoryTable page={history} currency={cycle.currencyCode} onPage={(p) => { setHistoryPage(p); void loadHistory(p); }} />
         </>
       )}

@@ -21,6 +21,6 @@ test('PlatformAdmin payout history uses persisted creator and shopper records wi
 })
 
 test('history filters do not replace the current-cycle report',()=>{
-  assert.match(ui,/Current \{tab === "creators" \? "Creator" : "Shopper"\} Cycle/)
+  assert.match(ui,/Current \{tab === "creators" \? "Creator" : "Customer"\} Cycle/)
   assert.match(ui,/PayoutHistoryTable/)
 })

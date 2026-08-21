@@ -19,7 +19,7 @@ test('registration and login use the configured API base',()=>{
 })
 
 test('pilot authentication UI is English-only',()=>{
-  for(const label of ['Shopper Registration','Content Creator Registration','Business Owner Registration','Confirm Password'])assert.ok(auth.includes(label))
+  for(const label of ['Customer Sign Up','Creator Sign Up','Business Sign Up','Confirm Password'])assert.ok(auth.includes(label))
   assert.doesNotMatch(auth,/locale|'am'|አማርኛ|ቋንቋ/)
 })
 

@@ -29,15 +29,18 @@ export const businessTypes = [
 const text = {
   welcome: "Welcome to Weymela",
   signIn: "Sign In",
-  customer: "Shopper Registration",
-  creator: "Content Creator Registration",
-  business: "Business Owner Registration",
+  customer: "Customer Sign Up",
+  creator: "Creator Sign Up",
+  business: "Business Sign Up",
   phone: "Phone",
   email: "Email",
   password: "Password",
   confirm: "Confirm Password",
-  failed: "Registration failed. Please try again.",
+  failed: "Sign up failed. Please try again.",
   invalid: "Invalid phone number or password.",
+  customerSuccess: "Customer sign up successful. Sign in with your phone and password.",
+  creatorSuccess: "Creator sign up successful. Your account is pending Platform review.",
+  businessSuccess: "Business sign up successful. Your account is pending Platform review.",
 };
 const authRestrictionMessages = {
   AccountDeactivated: "Your account is deactivated. Please contact Weymela support.",
@@ -287,9 +290,9 @@ export function AuthWorkspace() {
     <main className="auth">
       <section className="auth-card" aria-busy={busy}>
         <p className="eyebrow">{brand.logoText}</p>
-        <h1>{mode==="welcome"?"Welcome to Weymela":mode==="signup"?"Sign Up to Weymela":mode==="login"?"Sign In":mode==="merchant"?"Create business account":"Create your account"}</h1>
+        <h1>{mode==="welcome"?"Welcome to Weymela":mode==="signup"?"Sign Up to Weymela":mode==="login"?"Sign In":mode==="customer"?text.customer:mode==="creator"?text.creator:text.business}</h1>
         {mode==="login"&&<p className="auth-intro">Welcome back. Keep shopping, promoting, and earning with Weymela.</p>}
-        {mode==="signup"&&<p className="auth-intro">Welcome to Weymela — where shoppers save, creators earn, and businesses grow.</p>}
+        {mode==="signup"&&<p className="auth-intro">Welcome to Weymela — where customers save, creators earn, and businesses grow.</p>}
         {mode === "welcome" ? <><p className="auth-intro welcome-subtitle">Shop. Promote. Earn.</p><div className="signup-choices"><button onClick={()=>changeMode("customer")}>{text.customer}</button><button onClick={()=>changeMode("creator")}>{text.creator}</button><button onClick={()=>changeMode("merchant")}>{text.business}</button></div><button type="button" className="quiet auth-back" onClick={()=>changeMode("login")}>Already have an account? Sign In</button></> : mode === "signup" ? <><div className="signup-choices"><button onClick={()=>changeMode("customer")}>{text.customer}</button><button onClick={()=>changeMode("creator")}>{text.creator}</button><button onClick={()=>changeMode("merchant")}>{text.business}</button></div><button type="button" className="quiet auth-back" onClick={()=>changeMode("login")}>Back to Sign In</button></> : mode === "login" ? (
           forgot ? (
             <form
@@ -392,7 +395,7 @@ export function AuthWorkspace() {
                     phoneNumber: p,
                   });
                 if (result) {
-                  setMessage(result.message ?? "Shopper account created. Sign in with your phone and password.");
+                  setMessage(result.message ?? text.customerSuccess);
                 }
               } finally {
                 shopperSubmitting.current = false;
@@ -409,7 +412,7 @@ export function AuthWorkspace() {
               At least 8 characters with uppercase, lowercase, a number, and a
               special character.
             </small>
-            <button disabled={busy}>Create shopper account</button>
+            <button disabled={busy}>Sign Up</button>
           </form>
         ) : mode === "creator" ? (
           <form
@@ -444,7 +447,7 @@ export function AuthWorkspace() {
                     : [],
                 });
               if (result) {
-                setMessage(result.message ?? "Content Creator registration received. Your account is pending Platform review.");
+                setMessage(result.message ?? text.creatorSuccess);
               }
             }}
           >
@@ -482,7 +485,7 @@ export function AuthWorkspace() {
               />
               I accept the Terms of Service and Privacy Notice
             </label>
-            <button disabled={busy}>Create content creator account</button>
+            <button disabled={busy}>Sign Up</button>
           </form>
         ) : (
           <form
@@ -499,7 +502,7 @@ export function AuthWorkspace() {
                   confirmation,
                 });
               if (result) {
-                setMessage(result.message ?? "Business Owner registration received. Your account is pending Platform review.");
+                setMessage(result.message ?? text.businessSuccess);
               }
             }}
           >
@@ -551,7 +554,7 @@ export function AuthWorkspace() {
               />
               I accept the Terms of Service and Privacy Notice
             </label>
-            <button disabled={busy}>Create business owner account</button>
+            <button disabled={busy}>Sign Up</button>
           </form>
         )}
         {message && <aside role="status">{message}</aside>}

@@ -106,7 +106,7 @@ export function CashierCheckoutWorkspace({
   }, []);
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!confirm("Send this purchase to the Shopper for confirmation?")) return;
+    if (!confirm("Send this purchase to the Customer for confirmation?")) return;
     setResult(undefined);
     setValidation(undefined);
     setMessage("");
@@ -139,11 +139,11 @@ export function CashierCheckoutWorkspace({
       setResult(response);
       void load();
       if (response.code === "shopper_not_registered")
-        showResultThenReset("Shopper account not found.");
+        showResultThenReset("Customer account not found.");
       else
         showResultThenReset(
           response.code === "awaiting_shopper_confirmation"
-            ? "Purchase submitted — awaiting Shopper confirmation."
+            ? "Purchase submitted — awaiting Customer confirmation."
             : response.message,
         );
     } catch (error) {
@@ -180,7 +180,7 @@ export function CashierCheckoutWorkspace({
         <p
           role="status"
           className={
-            message.includes("awaiting Shopper confirmation")
+            message.includes("awaiting Customer confirmation")
               ? "success-note"
               : "friendly-error"
           }
@@ -259,7 +259,7 @@ export function CashierCheckoutWorkspace({
           )}
           {result?.status === "AwaitingShopperConfirmation" && (
             <aside className="success-note">
-              <strong>Awaiting Shopper Confirmation</strong>
+              <strong>Awaiting Customer Confirmation</strong>
               <p>Reference: {result.checkout?.publicCheckoutId}</p>
               <p>
                 Amount:{" "}

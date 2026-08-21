@@ -7,7 +7,7 @@ const source=readFileSync(new URL('../src/CashierCheckoutWorkspace.tsx',import.m
 test('Cashier success resets to a fresh purchase form after a short result message',()=>{
   for(const field of ['setCreatorCode("")','setShopperPhoneNumber("")','setPurchaseAmount("")','setResult(undefined)'])assert.ok(source.includes(field),field)
   assert.match(source,/submissionKey\.current\s*=\s*crypto\.randomUUID\(\)/)
-  assert.match(source,/Purchase submitted — awaiting Shopper confirmation\./)
+  assert.match(source,/Purchase submitted — awaiting Customer confirmation\./)
   assert.match(source,/setTimeout\(resetEntryForm, 3000\)/)
 })
 

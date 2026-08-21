@@ -17,7 +17,7 @@ const roles = [
   { value: "MerchantAdmin", label: "MerchantAdmin / Business" },
   { value: "Cashier", label: "Cashier" },
   { value: "Creator", label: "Creator" },
-  { value: "Customer", label: "Customer / Shopper" },
+  { value: "Customer", label: "Customer" },
 ] as const;
 
 export function AdminAccountCreate({ onCreated }: { onCreated: () => void }) {
