@@ -429,7 +429,7 @@ export function AuthWorkspace() {
                   ...request,
                   phoneNumber: p,
                   confirmation,
-                  biography: "Pilot creator",
+                  biography: "Weymela creator",
                   contentCategories: "General",
                   socialProfiles: profileUrl
                     ? [
