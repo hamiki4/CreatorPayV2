@@ -756,6 +756,7 @@ function Root() {
   if (location.pathname === "/contact") return <ContactSupport />;
   if (location.pathname === "/terms") return <LegalPage kind="terms" />;
   if (location.pathname === "/privacy") return <LegalPage kind="privacy" />;
+  if (location.pathname === "/delete-account") return <LegalPage kind="deleteAccount" />;
   if (location.pathname.includes("/staff-invitations/accept"))
     return <AcceptInvitation />;
   const offerCode = location.pathname.match(/^\/(?:offers|o)\/([^/]+)/)?.[1];
