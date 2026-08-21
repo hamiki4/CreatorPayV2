@@ -9,7 +9,7 @@ type NoticePage={items:Notice[];total:number}
 const notificationTarget=(notice:Notice)=>notice.data?.TargetPath??notice.data?.targetPath
 const iconFor=(type:string)=>type.includes('Payout')?'₿':type.includes('Cashback')?'✓':type.includes('Request')||type.includes('Invitation')?'♙':type.includes('Earning')||type.includes('Purchase')?'↗':'•'
 
-export function AccountChrome({role,name,status='Active',onProfile,onHelp,onSignOut,onManagement,onNavigate,children}:{role:'Shopper'|'Creator'|'Business';name?:string;status?:string;onProfile:()=>void;onHelp:()=>void;onSignOut:()=>void;onManagement?:()=>void;onNavigate?:(target:string,notice:Notice)=>void;children:ReactNode}){
+export function AccountChrome({role,name,status='Active',onProfile,onHelp,onSignOut,onManagement,onNavigate,children}:{role:'Customer'|'Creator'|'Business';name?:string;status?:string;onProfile:()=>void;onHelp:()=>void;onSignOut:()=>void;onManagement?:()=>void;onNavigate?:(target:string,notice:Notice)=>void;children:ReactNode}){
   const[settingsOpen,setSettingsOpen]=useState(false),[notificationsOpen,setNotificationsOpen]=useState(false),[items,setItems]=useState<Notice[]>([]),[unread,setUnread]=useState(0),[notificationError,setNotificationError]=useState('')
   const mounted=useRef(true)
   const refresh=useCallback(async()=>{try{const[list,count]=await Promise.all([api<NoticePage>('/api/v1/notifications?page=1&pageSize=30'),api<{count:number}>('/api/v1/notifications/unread-count')]);if(mounted.current){setItems(list.items);setUnread(count.count);setNotificationError('');requestActionableRefresh()}}catch(error){console.error(error);if(mounted.current)setNotificationError('Notifications are temporarily unavailable.')}},[])

@@ -4,12 +4,12 @@ import { brand } from './brand'
 const apiBase = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
 const faqs = [
-  ['General', 'What is Weymela?', 'Weymela connects shoppers, content creators, and Businesses through trackable advertising, cashback, and creator earnings.'],
+  ['General', 'What is Weymela?', 'Weymela connects customers, content creators, and Businesses through trackable advertising, cashback, and creator earnings.'],
   ['Content Creators', 'How do I advertise for a Business?', 'Open Find Businesses, search for the Business, and send an Advertising Request. After approval, the Business must select Activate Ad.'],
-  ['Content Creators', 'When are Creator earnings recorded?', 'Earnings are recorded after a valid shopper-confirmed purchase is successfully posted.'],
+  ['Content Creators', 'When are Creator earnings recorded?', 'Earnings are recorded after a valid customer-confirmed purchase is successfully posted.'],
   ['Content Creators', 'How do I use My QR?', 'Show or share your Creator QR when promoting an approved Business. Do not alter the QR.'],
   ['Businesses', 'How are Creators approved?', 'The Business reviews Creator advertising requests and approves or rejects them.'],
-  ['Shoppers', 'How does a Shopper earn cashback?', 'Use active Creator advertising at a participating Business and confirm the checkout.'],
+  ['Customers', 'How does a Customer earn cashback?', 'Use active Creator advertising at a participating Business and confirm the checkout.'],
   ['Account and Security', 'How can suspicious activity be reported?', 'Stop the transaction, retain the public reference, and contact support. Never send passwords, one-time codes, or full QR tokens.'],
 ] as const
 
@@ -197,8 +197,14 @@ export function ContactSupport() {
         <label>
           User type
           <select value={f.userType} onChange={(e) => setF({ ...f, userType: e.target.value })}>
-            {['Shopper', 'Creator', 'Business', 'Cashier/Supervisor', 'Other'].map((x) => (
-              <option key={x}>{x}</option>
+            {[
+              ['Shopper', 'Customer'],
+              ['Creator', 'Creator'],
+              ['Business', 'Business'],
+              ['Cashier/Supervisor', 'Cashier/Supervisor'],
+              ['Other', 'Other'],
+            ].map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </label>

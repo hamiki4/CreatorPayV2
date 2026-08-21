@@ -11,12 +11,15 @@ type Creator = {
   biography: string;
   contentCategories: string;
   socialPlatform?: string;
+  socialProfileUrl?: string;
   followerCount?: number;
 };
 export type BusinessRelationship = {
   id: string;
   creatorId: string;
   creatorName: string;
+  creatorSocialPlatform?: string;
+  creatorSocialProfileUrl?: string;
   status: string;
   requestedAtUtc: string;
   startDateUtc?: string;
@@ -28,6 +31,34 @@ export type BusinessRelationship = {
   activationRequired?: boolean;
   initiatedBy: "Business" | "Creator" | "Unknown";
 };
+const socialPlatforms = new Map([
+  ["tiktok", "TikTok"],
+  ["instagram", "Instagram"],
+  ["youtube", "YouTube"],
+  ["facebook", "Facebook"],
+]);
+function socialMedia(platform?: string, profileUrl?: string) {
+  if (!profileUrl) return { label: "Not provided" };
+  let url: URL;
+  try {
+    url = new URL(profileUrl);
+  } catch {
+    return { label: "Not provided" };
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return { label: "Not provided" };
+  const label = platform ? socialPlatforms.get(platform.toLowerCase()) : undefined;
+  return { href: url.toString(), label: `${label ?? "View Profile"} ↗` };
+}
+function SocialMediaLink({ platform, profileUrl }: { platform?: string; profileUrl?: string }) {
+  const link = socialMedia(platform, profileUrl);
+  return "href" in link ? (
+    <a href={link.href} target="_blank" rel="noopener noreferrer">
+      {link.label}
+    </a>
+  ) : (
+    <span>{link.label}</span>
+  );
+}
 const status = (value: string) =>
   value === "Approved"
     ? "Active"
@@ -131,7 +162,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
     return { label: "Unavailable", days: "—", canInvite: false };
   }
   return (
-    <section className="creator-section">
+    <section className="creator-section business-find-creators">
       <h2>Find Creators</h2>
       <p>Search approved Creators and invite them to advertise.</p>
       <form className="business-search" onSubmit={search}>
@@ -159,8 +190,9 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
         <p className="compact-empty">No approved Creators found.</p>
       ) : (
         <div className="discovery-list">
-          <div className="discovery-row discovery-headings">
+          <div className="discovery-row discovery-headings business-discovery-row business-discovery-headings">
             <span>Creator</span>
+            <span>Social Media</span>
             <span>Status</span>
             <span>Days Left</span>
             <span>Action</span>
@@ -168,7 +200,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
           {items.map((x) => {
             const state = stateFor(x);
             return (
-              <article className="discovery-row" key={x.id}>
+              <article className="discovery-row business-discovery-row" key={x.id}>
                 <div>
                   <strong>{x.displayName}</strong>
                   <span>
@@ -186,6 +218,12 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                     {[x.city, x.biography].filter(Boolean).join(" · ")}
                   </small>
                 </div>
+                <span data-label="Social Media">
+                  <SocialMediaLink
+                    platform={x.socialPlatform}
+                    profileUrl={x.socialProfileUrl}
+                  />
+                </span>
                 <span data-label="Status">
                   <span className="status-badge">{state.label}</span>
                 </span>
@@ -274,6 +312,7 @@ export function ActiveCreators({
         <div className="active-ads">
           <div className="active-ad business-table-row business-active-grid headings">
             <span>Creator</span>
+            <span>Social Media</span>
             <span>Status</span>
             <span>Days Left</span>
             <span>Action</span>
@@ -282,10 +321,16 @@ export function ActiveCreators({
             const state = relationshipState(x);
             return (
               <article
-                className={`active-ad business-table-row business-active-grid relationship-${state.tone}`}
-                key={x.id}
-              >
+              className={`active-ad business-table-row business-active-grid relationship-${state.tone}`}
+              key={x.id}
+            >
                 <strong data-label="Creator">{x.creatorName}</strong>
+                <span data-label="Social Media">
+                  <SocialMediaLink
+                    platform={x.creatorSocialPlatform}
+                    profileUrl={x.creatorSocialProfileUrl}
+                  />
+                </span>
                 <span className="table-status" data-label="Status">
                   <span className="status-badge">{state.label}</span>
                 </span>
@@ -377,6 +422,12 @@ export function AdvertisingRequests({
                       {new Date(x.requestedAtUtc).toLocaleDateString()}
                     </small>
                   </div>
+                  <span data-label="Social Media">
+                    <SocialMediaLink
+                      platform={x.creatorSocialPlatform}
+                      profileUrl={x.creatorSocialProfileUrl}
+                    />
+                  </span>
                   <span>{status(x.status)}</span>
                   {x.status === "Pending" && (
                     <div>
@@ -406,6 +457,12 @@ export function AdvertisingRequests({
                       {new Date(x.requestedAtUtc).toLocaleDateString()}
                     </small>
                   </div>
+                  <span data-label="Social Media">
+                    <SocialMediaLink
+                      platform={x.creatorSocialPlatform}
+                      profileUrl={x.creatorSocialProfileUrl}
+                    />
+                  </span>
                   <span>{status(x.status)}</span>
                 </article>
               ))}
