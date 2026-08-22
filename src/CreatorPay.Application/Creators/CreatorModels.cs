@@ -26,6 +26,8 @@ public interface ICreatorService
     Task<CreatorResult> VerifyPhoneAsync(string token, CancellationToken ct);
     Task<CreatorResult<CreatorProfileResponse>> GetMeAsync(Guid userId, CancellationToken ct);
     Task<CreatorResult<CreatorProfileResponse>> UpdateMeAsync(Guid userId, UpdateCreatorProfileRequest request, CancellationToken ct);
+    Task<CreatorResult<CreatorProfileResponse>> UploadProfilePhotoAsync(Guid userId, Stream content, string contentType, long sizeBytes, CancellationToken ct);
+    Task<CreatorResult<CreatorProfileResponse>> RemoveProfilePhotoAsync(Guid userId, CancellationToken ct);
     Task<IReadOnlyList<PendingCreatorResponse>> GetPendingAsync(CancellationToken ct);
     Task<CreatorResult<CreatorProfileResponse>> GetAsync(Guid creatorId, CancellationToken ct);
     Task<CreatorResult> ApproveAsync(Guid creatorId, Guid adminId, CancellationToken ct);

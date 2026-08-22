@@ -3,6 +3,7 @@ import { api } from "./apiClient";
 import { daysLeftText, relationshipState } from "./relationshipTime";
 import { currentPartnerships } from "./partnershipState";
 import { rankMatches, useTypeahead } from "./typeahead";
+import { ProfileAvatar } from "./profileMedia";
 type Creator = {
   id: string;
   publicCreatorId: string;
@@ -13,6 +14,7 @@ type Creator = {
   socialPlatform?: string;
   socialProfileUrl?: string;
   followerCount?: number;
+  profileImageUrl?: string;
 };
 export type BusinessRelationship = {
   id: string;
@@ -30,6 +32,7 @@ export type BusinessRelationship = {
   relationshipState?: string;
   activationRequired?: boolean;
   initiatedBy: "Business" | "Creator" | "Unknown";
+  creatorProfileImageUrl?: string;
 };
 const socialPlatforms = new Map([
   ["tiktok", "TikTok"],
@@ -139,27 +142,27 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
   function stateFor(creator: Creator) {
     const relationship = currentRelationships.find((x) => x.creatorId === creator.id);
     if (!relationship)
-      return { label: "No relationship", days: "—", canInvite: true };
+      return { label: "No relationship", daysText: null, canInvite: true };
     if (relationship.status === "Pending")
-      return { label: "Invitation Pending", days: "—", canInvite: false };
+      return { label: "Invitation Pending", daysText: null, canInvite: false };
     if (relationship.status === "Approved") {
       const state = relationshipState(relationship);
       return {
         label: state.label === "Active" ? "Currently Advertising" : state.label,
-        days:
+        daysText:
           state.daysLeft === null
-            ? "—"
+            ? null
             : daysLeftText(state.daysLeft, state.tone),
         canInvite: false,
       };
     }
     if (["Revoked", "Suspended"].includes(relationship.status))
-      return { label: "Deactivated", days: "—", canInvite: false, canReactivate: true, relationship };
+      return { label: "Deactivated", daysText: null, canInvite: false, canReactivate: true, relationship };
     if (relationship.status === "Blocked")
-      return { label: "Blocked", days: "—", canInvite: false };
+      return { label: "Blocked", daysText: null, canInvite: false };
     if (relationship.status === "Rejected")
-      return { label: "Declined", days: "—", canInvite: true, requestAgain: true };
-    return { label: "Unavailable", days: "—", canInvite: false };
+      return { label: "Declined", daysText: null, canInvite: true, requestAgain: true };
+    return { label: "Unavailable", daysText: null, canInvite: false };
   }
   return (
     <section className="creator-section business-find-creators">
@@ -201,21 +204,26 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
             const state = stateFor(x);
             return (
               <article className="discovery-row business-discovery-row" key={x.id}>
-                <div>
-                  <strong>{x.displayName}</strong>
-                  <span>
-                    {[
-                      x.publicCreatorId,
-                      x.socialPlatform,
-                      x.followerCount != null
-                        ? `${x.followerCount.toLocaleString()} followers`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
+                <div className="creator-card">
+                  <div className="creator-heading">
+                    <ProfileAvatar
+                      name={x.displayName}
+                      photoUrl={x.profileImageUrl}
+                    />
+                    <div>
+                      <strong>{x.displayName}</strong>
+                      <small>
+                        {x.followerCount != null
+                          ? `${x.followerCount.toLocaleString()} followers`
+                          : "No social media provided"}
+                      </small>
+                    </div>
+                  </div>
                   <small>
-                    {[x.city, x.biography].filter(Boolean).join(" · ")}
+                    {x.city}
+                    {x.followerCount != null
+                      ? ` · ${x.followerCount.toLocaleString()} followers`
+                      : ""}
                   </small>
                 </div>
                 <span data-label="Social Media">
@@ -227,7 +235,11 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                 <span data-label="Status">
                   <span className="status-badge">{state.label}</span>
                 </span>
-                <span data-label="Days Left">{state.days}</span>
+                {state.daysText !== null && (
+                  <span data-label="Days Left">
+                    {state.daysText}
+                  </span>
+                )}
                 <span data-label="Action">
                   {state.canInvite && (
                     <button onClick={() => void invite(x)}>
@@ -304,7 +316,7 @@ export function ActiveCreators({
     <section className="creator-section">
       <h2>Active Ads</h2>
       {message && <p role="status">{message}</p>}
-      {visible.length === 0 ? (
+          {visible.length === 0 ? (
         <p className="compact-empty">
           No Creator advertising relationships yet.
         </p>
@@ -324,7 +336,18 @@ export function ActiveCreators({
               className={`active-ad business-table-row business-active-grid relationship-${state.tone}`}
               key={x.id}
             >
-                <strong data-label="Creator">{x.creatorName}</strong>
+                <div className="creator-card">
+                  <div className="creator-heading">
+                    <ProfileAvatar
+                      name={x.creatorName}
+                      photoUrl={x.creatorProfileImageUrl}
+                    />
+                    <div>
+                      <strong data-label="Creator">{x.creatorName}</strong>
+                      <small>{x.creatorSocialPlatform ? "Social profile available" : "No social media provided"}</small>
+                    </div>
+                  </div>
+                </div>
                 <span data-label="Social Media">
                   <SocialMediaLink
                     platform={x.creatorSocialPlatform}
@@ -412,15 +435,23 @@ export function AdvertisingRequests({
         <div className="request-groups">
           <div>
             <h3>Incoming Advertising Requests</h3>
-            {requests
+          {requests
               .filter((x) => x.initiatedBy === "Creator")
               .map((x) => (
                 <article key={x.id}>
-                  <div>
-                    <strong>{x.creatorName}</strong>
-                    <small>
-                      {new Date(x.requestedAtUtc).toLocaleDateString()}
-                    </small>
+                  <div className="creator-card">
+                    <div className="creator-heading">
+                      <ProfileAvatar
+                        name={x.creatorName}
+                        photoUrl={x.creatorProfileImageUrl}
+                      />
+                      <div>
+                        <strong>{x.creatorName}</strong>
+                        <small>
+                          {new Date(x.requestedAtUtc).toLocaleDateString()}
+                        </small>
+                      </div>
+                    </div>
                   </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
@@ -447,15 +478,23 @@ export function AdvertisingRequests({
           </div>
           <div>
             <h3>Outgoing Invitations</h3>
-            {requests
+          {requests
               .filter((x) => x.initiatedBy === "Business")
               .map((x) => (
                 <article key={x.id}>
-                  <div>
-                    <strong>{x.creatorName}</strong>
-                    <small>
-                      {new Date(x.requestedAtUtc).toLocaleDateString()}
-                    </small>
+                  <div className="creator-card">
+                    <div className="creator-heading">
+                      <ProfileAvatar
+                        name={x.creatorName}
+                        photoUrl={x.creatorProfileImageUrl}
+                      />
+                      <div>
+                        <strong>{x.creatorName}</strong>
+                        <small>
+                          {new Date(x.requestedAtUtc).toLocaleDateString()}
+                        </small>
+                      </div>
+                    </div>
                   </div>
                   <span data-label="Social Media">
                     <SocialMediaLink

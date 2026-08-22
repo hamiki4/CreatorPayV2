@@ -35,6 +35,7 @@ services:
     volumes:
       - ${FIREBASE_ADMIN_HOST_PATH:-/etc/creatorpay/secrets/weymela-firebase-admin.json}:/run/secrets/weymela-firebase-admin.json:ro
       - /etc/creatorpay/firebase/weymela-pilot-fcm.json:/run/secrets/weymela-pilot-fcm.json:ro
+      - /etc/creatorpay/profile-photos:/app/data/profile-photos
   worker:
     environment:
       DOTNET_ENVIRONMENT: Pilot

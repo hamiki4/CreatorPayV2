@@ -62,7 +62,7 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, PasswordHasherService>();
         services.AddSingleton<IFirebaseIdentityVerifier, FirebaseIdentityVerifier>();
         services.AddSingleton<IUtcClock, UtcClock>(); services.AddSingleton<ITokenService, TokenService>(); services.AddSingleton<IPasswordResetNotifier, SafePasswordResetNotifier>();
-        services.AddScoped<ICreatorStore, CreatorStore>(); services.AddSingleton<ICreatorVerificationProvider, DevelopmentCreatorVerificationProvider>();
+        services.AddScoped<ICreatorStore, CreatorStore>(); services.AddSingleton<ICreatorProfilePhotoStore, CreatorProfilePhotoStore>(); services.AddSingleton<ICreatorVerificationProvider, DevelopmentCreatorVerificationProvider>();
         services.AddScoped<IMerchantStore, MerchantStore>(); services.AddSingleton<IMerchantVerificationProvider, DevelopmentMerchantVerificationProvider>(); services.AddSingleton<IMerchantDocumentStorage, MetadataOnlyMerchantDocumentStorage>(); services.AddSingleton<IDepositProofStorage, DepositProofStorage>();
         services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddSingleton<IQrTokenService, QrTokenService>();

@@ -10,6 +10,18 @@ public static class DiscoveryEndpoints
         var creators = e.MapGroup("/api/v1/discovery/creators");
         creators.MapGet("/", (string? q, int? page, int? pageSize, IDiscoveryService s, CancellationToken ct) => Run(() => s.SearchCreatorsAsync(q, page ?? 1, pageSize ?? 12, ct)));
         creators.MapGet("/{publicCreatorId}", (string publicCreatorId, IDiscoveryService s, CancellationToken ct) => Run(() => s.GetCreatorAsync(publicCreatorId, ct)));
+        creators.MapGet("/{publicCreatorId}/photo", async (string publicCreatorId, IDiscoveryService s, CancellationToken ct) =>
+        {
+            try
+            {
+                var photo = await s.GetCreatorPhotoAsync(publicCreatorId, ct);
+                return Results.File(photo.Content, photo.ContentType);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Problem(statusCode: 404, detail: ex.Message);
+            }
+        });
         e.MapGet("/api/v1/discovery/offers/{offerCode}", (string offerCode, IDiscoveryService s, CancellationToken ct) => Run(() => s.GetOfferAsync(offerCode, ct)));
         e.MapGet("/api/v1/discovery/offer-qr/{publicQrId}", (string publicQrId, IDiscoveryService s, CancellationToken ct) => Run(() => s.ResolveOfferQrAsync(publicQrId, ct)));
         var d = e.MapGroup("/api/v1/discovery"); d.MapGet("/merchants", (string? q, string? zone, IDiscoveryService s, CancellationToken ct) => s.SearchAsync(q, zone, ct)); d.MapGet("/merchants/{id:guid}", (Guid id, IDiscoveryService s, CancellationToken ct) => s.GetMerchantAsync(id, ct)); d.MapGet("/merchant-qr/{id}", (string id, IDiscoveryService s, CancellationToken ct) => s.ResolveStoreQrAsync(id, ct));

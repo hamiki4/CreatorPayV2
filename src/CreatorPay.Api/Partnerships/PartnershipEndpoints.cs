@@ -19,7 +19,7 @@ public sealed record MerchantInviteCreatorRequest(Guid CreatorId, string? Introd
 public sealed record PartnershipReasonRequest(string? Reason);
 public sealed record PartnershipDatesRequest(DateTime? StartDateUtc, DateTime? EndDateUtc);
 public sealed record PartnershipLocationsRequest(Guid[] LocationIds);
-public sealed record PartnershipListItem(Guid Id, Guid MerchantId, string MerchantName, Guid CreatorId, string CreatorName, PartnershipStatus Status, DateTime RequestedAtUtc, DateTime? StartDateUtc, DateTime? EndDateUtc, string? IntroductoryMessage, IReadOnlyList<LocationItem> Locations, string InitiatedBy = "Unknown", DateTime? ActivatedAtUtc = null, DateTime? ExpiresAtUtc = null, bool PromotionActive = false, string RelationshipState = "Pending", bool ActivationRequired = false, string? CreatorSocialPlatform = null, string? CreatorSocialProfileUrl = null);
+public sealed record PartnershipListItem(Guid Id, Guid MerchantId, string MerchantName, Guid CreatorId, string CreatorName, PartnershipStatus Status, DateTime RequestedAtUtc, DateTime? StartDateUtc, DateTime? EndDateUtc, string? IntroductoryMessage, IReadOnlyList<LocationItem> Locations, string InitiatedBy = "Unknown", DateTime? ActivatedAtUtc = null, DateTime? ExpiresAtUtc = null, bool PromotionActive = false, string RelationshipState = "Pending", bool ActivationRequired = false, string? CreatorSocialPlatform = null, string? CreatorSocialProfileUrl = null, string? CreatorCity = null, long? CreatorFollowerCount = null, string? CreatorProfileImageUrl = null);
 public sealed record LocationItem(Guid Id, string Name, bool IsActive);
 
 public static class PartnershipEndpoints
@@ -102,7 +102,7 @@ public static class PartnershipEndpoints
         var active = db.CreatorMerchantCampaigns.Where(x => x.MerchantId == u.MerchantId && x.Status == CampaignStatus.Active && x.StartsAtUtc <= DateTime.UtcNow && x.ExpiresAtUtc > DateTime.UtcNow).Select(x => x.CreatorId);
         var query = db.Creators.AsNoTracking().Where(x => x.Status == CreatorStatus.Active && db.UserAccounts.Any(u => u.CreatorId == x.Id && u.Status == AccountStatus.Active) && !active.Contains(x.Id));
         if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => EF.Functions.ILike(x.DisplayName, $"%{q}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{q}%") || x.SocialProfiles.Any(s => EF.Functions.ILike(s.Handle, $"%{q}%")));
-        return Results.Ok(await query.OrderBy(x => x.DisplayName).Take(50).Select(x => new
+        var rows = await query.OrderBy(x => x.DisplayName).Take(50).Select(x => new
         {
             x.Id,
             x.PublicCreatorId,
@@ -110,10 +110,24 @@ public static class PartnershipEndpoints
             x.City,
             x.Biography,
             x.ContentCategories,
+            x.ProfileImageFileName,
             SocialPlatform = x.SocialProfiles.OrderByDescending(s => s.IsPrimary).Select(s => (SocialPlatform?)s.Platform).FirstOrDefault(),
             SocialProfileUrl = x.SocialProfiles.OrderByDescending(s => s.IsPrimary).Select(s => s.ProfileUrl).FirstOrDefault(),
             FollowerCount = x.SocialProfiles.OrderByDescending(s => s.IsPrimary).Select(s => (long?)s.FollowerCount).FirstOrDefault()
-        }).ToListAsync(ct));
+        }).ToListAsync(ct);
+        return Results.Ok(rows.Select(x => new
+        {
+            x.Id,
+            x.PublicCreatorId,
+            x.DisplayName,
+            x.City,
+            x.Biography,
+            x.ContentCategories,
+            x.SocialPlatform,
+            x.SocialProfileUrl,
+            x.FollowerCount,
+            ProfileImageUrl = x.ProfileImageFileName is null ? null : $"/api/v1/discovery/creators/{Uri.EscapeDataString(x.PublicCreatorId)}/photo?v={Uri.EscapeDataString(x.ProfileImageFileName)}"
+        }));
     }
     private static async Task<IResult> MerchantPartnerships(string? status, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct)
     { var query = Query(db).Where(x => x.MerchantId == u.MerchantId); if (Enum.TryParse<PartnershipStatus>(status, true, out var s)) query = query.Where(x => x.Status == s); return Results.Ok(await ItemsWithInitiator(query, db, campaignOptions.Value.CurrencyCode, ct)); }
@@ -263,7 +277,7 @@ public static class PartnershipEndpoints
     private static PartnershipListItem Item(MerchantCreatorPartnership p, Merchant m, Creator c)
     {
         var social = c.SocialProfiles.OrderByDescending(s => s.IsPrimary).ThenByDescending(s => s.VerificationStatus).ThenByDescending(s => s.FollowerCount).FirstOrDefault();
-        return new(p.Id, p.MerchantId, m.TradingName, p.CreatorId, c.DisplayName, p.Status, p.RequestedAtUtc, p.StartDateUtc, p.EndDateUtc, p.IntroductoryMessage, p.Locations.Where(x => x.IsActive).Select(x => new LocationItem(x.MerchantLocationId, x.MerchantLocation?.Name ?? "Location", x.MerchantLocation?.IsActive ?? true)).ToList(), ActivatedAtUtc: p.ApprovedAtUtc, ExpiresAtUtc: p.EndDateUtc, CreatorSocialPlatform: social?.Platform.ToString(), CreatorSocialProfileUrl: social?.ProfileUrl);
+        return new(p.Id, p.MerchantId, m.TradingName, p.CreatorId, c.DisplayName, p.Status, p.RequestedAtUtc, p.StartDateUtc, p.EndDateUtc, p.IntroductoryMessage, p.Locations.Where(x => x.IsActive).Select(x => new LocationItem(x.MerchantLocationId, x.MerchantLocation?.Name ?? "Location", x.MerchantLocation?.IsActive ?? true)).ToList(), ActivatedAtUtc: p.ApprovedAtUtc, ExpiresAtUtc: p.EndDateUtc, CreatorSocialPlatform: social?.Platform.ToString(), CreatorSocialProfileUrl: social?.ProfileUrl, CreatorCity: c.City, CreatorFollowerCount: social?.FollowerCount, CreatorProfileImageUrl: c.ProfileImageFileName is null ? null : $"/api/v1/discovery/creators/{Uri.EscapeDataString(c.PublicCreatorId)}/photo?v={Uri.EscapeDataString(c.ProfileImageFileName)}");
     }
     private static PartnershipLocation NewLocation(Guid p, Guid l, Guid user, DateTime now) => new() { Id = Guid.NewGuid(), MerchantCreatorPartnershipId = p, MerchantLocationId = l, IsActive = true, CreatedAtUtc = now, CreatedBy = user.ToString() };
     private static void Audit(ApplicationDbContext db, MerchantCreatorPartnership p, Guid user, PartnershipStatus old, PartnershipStatus next, string type, string? reason, HttpContext h, DateTime now) { db.PartnershipStatusHistories.Add(new() { Id = Guid.NewGuid(), MerchantCreatorPartnershipId = p.Id, PreviousStatus = old, NewStatus = next, ChangedAtUtc = now, ChangedByUserId = user, Reason = reason, CorrelationId = h.TraceIdentifier, CreatedAtUtc = now, CreatedBy = user.ToString() }); AddMerchantAudit(db, p, type, user, reason); }
