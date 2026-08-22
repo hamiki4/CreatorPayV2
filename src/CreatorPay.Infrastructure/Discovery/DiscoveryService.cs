@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using CreatorPay.Application.Creators;
 using CreatorPay.Application.Discovery;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
@@ -13,7 +14,7 @@ using CreatorPay.Infrastructure.Qr;
 
 namespace CreatorPay.Infrastructure.Discovery;
 
-public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutOptions> checkoutOptions, IQrTokenService qrTokens, CreatorQrUrlBuilder qrUrls) : IDiscoveryService
+public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutOptions> checkoutOptions, IQrTokenService qrTokens, CreatorQrUrlBuilder qrUrls, ICreatorProfilePhotoStore profilePhotos) : IDiscoveryService
 {
     private readonly string currencyCode = checkoutOptions.Value.CurrencyCode;
     public async Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, CancellationToken ct)
@@ -45,7 +46,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
                           where campaign.MerchantId == merchantId
                           join partnership in db.MerchantCreatorPartnerships.AsNoTracking() on campaign.MerchantCreatorPartnershipId equals partnership.Id
                           join creator in db.Creators.AsNoTracking() on campaign.CreatorId equals creator.Id
-                          select new { campaign.Id, campaign.CreatorId, creator.PublicCreatorId, creator.DisplayName, partnership.EndDateUtc, campaign.ExpiresAtUtc }).ToListAsync(ct);
+                          select new { campaign.Id, campaign.CreatorId, creator.PublicCreatorId, creator.DisplayName, creator.ProfileImageFileName, partnership.EndDateUtc, campaign.ExpiresAtUtc }).ToListAsync(ct);
         var creatorIds = rows.Select(x => x.CreatorId).Distinct().ToArray();
         var socials = await db.CreatorSocialProfiles.AsNoTracking().Where(x => creatorIds.Contains(x.CreatorId))
             .OrderByDescending(x => x.IsPrimary).ThenByDescending(x => x.VerificationStatus).ThenByDescending(x => x.FollowerCount)
@@ -54,7 +55,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         {
             var social = socials.FirstOrDefault(s => s.CreatorId == x.CreatorId);
             var end = x.EndDateUtc ?? x.ExpiresAtUtc ?? now;
-            return new ShopperAdvertisingCreatorDto(x.CreatorId, x.PublicCreatorId, x.DisplayName, social?.Platform, social?.FollowerCount, Math.Max(1, (int)Math.Ceiling((end - now).TotalDays)), x.Id);
+            return new ShopperAdvertisingCreatorDto(x.CreatorId, x.PublicCreatorId, x.DisplayName, social?.Platform, social?.FollowerCount, Math.Max(1, (int)Math.Ceiling((end - now).TotalDays)), x.Id, PhotoUrl(x.PublicCreatorId, x.ProfileImageFileName));
         }).OrderBy(x => x.DisplayName).ToArray();
         return new(merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.Category, merchant.City, true, creators);
     }
@@ -71,13 +72,13 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
                             join relationship in db.MerchantCreatorPartnerships.AsNoTracking() on campaign.MerchantCreatorPartnershipId equals relationship.Id
                             join merchant in db.Merchants.AsNoTracking() on relationship.MerchantId equals merchant.Id
                             join creator in db.Creators.AsNoTracking() on relationship.CreatorId equals creator.Id
-                            select new { RelationshipId = relationship.Id, MerchantId = merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.City, CreatorId = creator.Id, creator.PublicCreatorId, creator.CreatorCode, creator.DisplayName, relationship.EndDateUtc, campaign.ExpiresAtUtc };
+                            select new { RelationshipId = relationship.Id, MerchantId = merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.City, CreatorId = creator.Id, creator.PublicCreatorId, creator.CreatorCode, creator.DisplayName, creator.ProfileImageFileName, relationship.EndDateUtc, campaign.ExpiresAtUtc };
         var term = query?.Trim();
         if (!string.IsNullOrWhiteSpace(term)) relationships = relationships.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.DisplayName, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{term}%"));
         var campaignRows = await relationships.OrderBy(x => x.TradingName).ThenBy(x => x.DisplayName).Take(200).ToListAsync(ct);
         var rows = campaignRows.GroupBy(x => x.RelationshipId).Select(x => x.OrderByDescending(y => y.ExpiresAtUtc).First()).Take(100).ToList();
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.MerchantId).Distinct(), currencyCode, ct);
-        return rows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x => new ShopperAdvertisingRowDto(x.RelationshipId, x.MerchantId, x.PublicMerchantId, x.TradingName, x.City, x.CreatorId, x.PublicCreatorId, x.CreatorCode, x.DisplayName, "Active", Math.Max(1, (int)Math.Ceiling((new[] { x.EndDateUtc, x.ExpiresAtUtc }.Where(v => v.HasValue).Min()!.Value - now).TotalDays)), true)).ToArray();
+        return rows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x => new ShopperAdvertisingRowDto(x.RelationshipId, x.MerchantId, x.PublicMerchantId, x.TradingName, x.City, x.CreatorId, x.PublicCreatorId, x.CreatorCode, x.DisplayName, "Active", Math.Max(1, (int)Math.Ceiling((new[] { x.EndDateUtc, x.ExpiresAtUtc }.Where(v => v.HasValue).Min()!.Value - now).TotalDays)), true, PhotoUrl(x.PublicCreatorId, x.ProfileImageFileName))).ToArray();
     }
 
     public async Task<ShopperCreatorQrDto> GetShopperCreatorQrAsync(Guid relationshipId, CancellationToken ct)
@@ -107,11 +108,11 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         if (!string.IsNullOrWhiteSpace(term)) creators = creators.Where(x => EF.Functions.ILike(x.DisplayName, $"%{term}%"));
         var total = await creators.CountAsync(ct);
         var rows = await creators.OrderBy(x => x.DisplayName).Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(x => new { x.Id, x.PublicCreatorId, x.DisplayName }).ToListAsync(ct);
+            .Select(x => new { x.Id, x.PublicCreatorId, x.DisplayName, x.ProfileImageFileName }).ToListAsync(ct);
         var ids = rows.Select(x => x.Id).ToArray();
         var counts = campaignRows.Where(x => eligibleMerchantIds.Contains(x.MerchantId) && ids.Contains(x.CreatorId))
             .GroupBy(x => x.CreatorId).ToDictionary(x => x.Key, x => x.Count());
-        return new(rows.Select(x => new PublicCreatorCardDto(x.PublicCreatorId, x.DisplayName, null, counts[x.Id])).ToArray(), page, pageSize, total);
+        return new(rows.Select(x => new PublicCreatorCardDto(x.PublicCreatorId, x.DisplayName, PhotoUrl(x.PublicCreatorId, x.ProfileImageFileName), counts[x.Id])).ToArray(), page, pageSize, total);
     }
 
     public async Task<PublicCreatorProfileDto> GetCreatorAsync(string publicCreatorId, CancellationToken ct)
@@ -129,9 +130,16 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         var offers = filtered.Select(x => new OfferRow(x.Id, x.PublicCampaignId, x.CampaignCode, x.CreatorId, creator.PublicCreatorId, creator.DisplayName, x.TradingName, x.PublicDescription, x.Conditions, x.ExpiresAtUtc)).ToArray();
         var links = await db.CreatorSocialProfiles.AsNoTracking().Where(x => x.CreatorId == creator.Id && x.ProfileUrl != null)
             .Select(x => new { x.Platform, x.ProfileUrl }).ToListAsync(ct);
-        return new(creator.PublicCreatorId, creator.DisplayName, null,
+        return new(creator.PublicCreatorId, creator.DisplayName, PhotoUrl(creator.PublicCreatorId, creator.ProfileImageFileName),
             links.Select(x => SafeSocial(x.Platform.ToString(), x.ProfileUrl)).Where(x => x is not null).Cast<PublicSocialLinkDto>().ToArray(),
             offers.Select(MapOffer).ToArray());
+    }
+
+    public async Task<CreatorPhotoFile> GetCreatorPhotoAsync(string publicCreatorId, CancellationToken ct)
+    {
+        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active && x.ProfileImageFileName != null, ct)
+            ?? throw new KeyNotFoundException("Creator photo is unavailable.");
+        return new(await profilePhotos.OpenAsync(creator.ProfileImageFileName!, ct), creator.ProfileImageContentType ?? "application/octet-stream");
     }
 
     public async Task<PublicOfferDto> GetOfferAsync(string offerCode, CancellationToken ct)
@@ -177,6 +185,8 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || string.IsNullOrWhiteSpace(uri.Host)) return null;
         return new(platform, uri.AbsoluteUri);
     }
+
+    private static string? PhotoUrl(string publicCreatorId, string? profileImageFileName) => profileImageFileName is null ? null : $"/api/v1/discovery/creators/{Uri.EscapeDataString(publicCreatorId)}/photo?v={Uri.EscapeDataString(profileImageFileName)}";
 
     private sealed record OfferRow(Guid Id, string PublicCampaignId, string CampaignCode, Guid CreatorId, string CreatorPublicId,
         string CreatorDisplayName, string MerchantName, string? MerchantDescription, string? Conditions, DateTime ExpiresAtUtc);

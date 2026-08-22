@@ -8,7 +8,8 @@ using Microsoft.Extensions.Options;
 namespace CreatorPay.Application.Creators;
 
 public sealed class CreatorService(ICreatorStore store, IPasswordHasher passwords, ITokenService tokens, IUtcClock clock,
-    ICreatorVerificationProvider provider, PasswordPolicyValidator passwordPolicy, IOptions<CreatorVerificationOptions> options, IPhoneOtpService phoneOtp) : ICreatorService
+    ICreatorVerificationProvider provider, PasswordPolicyValidator passwordPolicy, IOptions<CreatorVerificationOptions> options, IPhoneOtpService phoneOtp,
+    ICreatorProfilePhotoStore profilePhotos) : ICreatorService
 {
     public Task<CreatorResult<CreatorRegistrationResponse>> RegisterAsync(RegisterCreatorRequest request, CancellationToken ct)
     {
@@ -87,6 +88,46 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         return CreatorResult<CreatorProfileResponse>.Success(ToProfile(pair.Value.User, pair.Value.Creator));
     }, ct);
 
+    public Task<CreatorResult<CreatorProfileResponse>> UploadProfilePhotoAsync(Guid userId, Stream content, string contentType, long sizeBytes, CancellationToken ct) => store.InTransactionAsync(async innerCt =>
+    {
+        var pair = await store.FindByUserAsync(userId, innerCt); if (pair is null) return CreatorResult<CreatorProfileResponse>.Failure("Creator not found.");
+        if (!IsValidPhoto(contentType, sizeBytes)) return CreatorResult<CreatorProfileResponse>.Failure("Profile photo is invalid.");
+        var now = clock.UtcNow;
+        var oldKey = pair.Value.Creator.ProfileImageFileName;
+        (string StorageKey, long SizeBytes) stored;
+        try { stored = await profilePhotos.SaveAsync(pair.Value.Creator.Id, content, contentType, sizeBytes, innerCt); }
+        catch (Exception ex) { return CreatorResult<CreatorProfileResponse>.Failure(ex.Message.StartsWith("Profile photo", StringComparison.OrdinalIgnoreCase) ? ex.Message : "Profile photo is invalid."); }
+        var storageKey = stored.StorageKey;
+        pair.Value.Creator.ProfileImageFileName = storageKey;
+        pair.Value.Creator.ProfileImageContentType = contentType.Trim().ToLowerInvariant();
+        pair.Value.Creator.ProfileImageSizeBytes = stored.SizeBytes;
+        pair.Value.Creator.UpdatedAtUtc = now;
+        pair.Value.Creator.UpdatedBy = userId.ToString();
+        Audit(pair.Value.Creator.Id, userId, oldKey is null ? "ProfilePhotoUploaded" : "ProfilePhotoReplaced", null, now);
+        await store.SaveAsync(innerCt);
+        if (!string.IsNullOrWhiteSpace(oldKey) && !string.Equals(oldKey, storageKey, StringComparison.Ordinal))
+        {
+            try { await profilePhotos.DeleteAsync(oldKey, ct); } catch { /* preserve profile state if cleanup fails */ }
+        }
+        return CreatorResult<CreatorProfileResponse>.Success(ToProfile(pair.Value.User, pair.Value.Creator));
+    }, ct);
+
+    public Task<CreatorResult<CreatorProfileResponse>> RemoveProfilePhotoAsync(Guid userId, CancellationToken ct) => store.InTransactionAsync(async innerCt =>
+    {
+        var pair = await store.FindByUserAsync(userId, innerCt); if (pair is null) return CreatorResult<CreatorProfileResponse>.Failure("Creator not found.");
+        if (pair.Value.Creator.ProfileImageFileName is not { Length: > 0 } oldKey) return CreatorResult<CreatorProfileResponse>.Success(ToProfile(pair.Value.User, pair.Value.Creator));
+        var now = clock.UtcNow;
+        pair.Value.Creator.ProfileImageFileName = null;
+        pair.Value.Creator.ProfileImageContentType = null;
+        pair.Value.Creator.ProfileImageSizeBytes = null;
+        pair.Value.Creator.UpdatedAtUtc = now;
+        pair.Value.Creator.UpdatedBy = userId.ToString();
+        Audit(pair.Value.Creator.Id, userId, "ProfilePhotoRemoved", null, now);
+        await store.SaveAsync(innerCt);
+        try { await profilePhotos.DeleteAsync(oldKey, ct); } catch { /* keep profile state canonical even if cleanup fails */ }
+        return CreatorResult<CreatorProfileResponse>.Success(ToProfile(pair.Value.User, pair.Value.Creator));
+    }, ct);
+
     public async Task<IReadOnlyList<PendingCreatorResponse>> GetPendingAsync(CancellationToken ct) => (await store.FindByStatusAsync(CreatorStatus.PendingApproval, ct)).Select(x => new PendingCreatorResponse(x.Id, x.PublicCreatorId, x.DisplayName, x.Email, x.CreatedAtUtc)).ToArray();
     public async Task<CreatorResult<CreatorProfileResponse>> GetAsync(Guid creatorId, CancellationToken ct) { var c = await store.FindCreatorAsync(creatorId, ct); if (c is null) return CreatorResult<CreatorProfileResponse>.Failure("Creator not found."); var u = await FindCreatorUser(c, ct); return u is null ? CreatorResult<CreatorProfileResponse>.Failure("Creator not found.") : CreatorResult<CreatorProfileResponse>.Success(ToProfile(u, c)); }
     public Task<CreatorResult> ApproveAsync(Guid id, Guid admin, CancellationToken ct) => DecideAsync(id, admin, null, "Approval", (c, now, actor) => c.Approve(now, actor), CreatorStatus.PendingApproval, AccountStatus.Active, ct);
@@ -127,4 +168,5 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
     private void AddSocialProfiles(Guid creatorId, IReadOnlyList<SocialProfileRequest> profiles, DateTime now, Guid actor)
     { foreach (var x in profiles) store.Add(new CreatorSocialProfile { Id = Guid.NewGuid(), CreatorId = creatorId, Platform = x.Platform, Handle = SocialKey(x), ProfileUrl = x.ProfileUrl?.Trim(), FollowerCount = x.FollowerCount, IsPrimary = x.IsPrimary, VerificationStatus = SocialProfileVerificationStatus.Unverified, CreatedAtUtc = now, CreatedBy = actor.ToString() }); }
     private static string SocialKey(SocialProfileRequest profile) => string.IsNullOrWhiteSpace(profile.Handle) ? profile.ProfileUrl!.Trim().ToUpperInvariant() : profile.Handle.Trim().ToUpperInvariant();
+    private static bool IsValidPhoto(string contentType, long sizeBytes) => sizeBytes is > 0 and <= 5_000_000;
 }

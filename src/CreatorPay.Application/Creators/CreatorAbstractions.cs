@@ -27,3 +27,10 @@ public interface ICreatorVerificationProvider
     Task SendEmailVerificationAsync(UserAccount user, string token, CancellationToken ct);
     Task SendPhoneVerificationAsync(Creator creator, string token, CancellationToken ct);
 }
+
+public interface ICreatorProfilePhotoStore
+{
+    Task<(string StorageKey, long SizeBytes)> SaveAsync(Guid creatorId, Stream content, string contentType, long sizeBytes, CancellationToken ct);
+    Task<Stream> OpenAsync(string storageKey, CancellationToken ct);
+    Task DeleteAsync(string storageKey, CancellationToken ct);
+}
