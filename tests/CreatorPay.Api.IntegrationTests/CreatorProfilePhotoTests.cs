@@ -79,8 +79,7 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
-            (await db.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance = 1000m;
-            await db.SaveChangesAsync();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""UPDATE platform_financial_settings SET "MinimumBusinessWalletBalance" = 1000, "ChangedAtUtc" = {DateTime.UtcNow} WHERE "CurrencyCode" = 'ETB'""");
         }
 
         var first = await Upload(client, png, "photo.png", "image/png");
@@ -137,8 +136,7 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
-            (await db.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance = 1000m;
-            await db.SaveChangesAsync();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""UPDATE platform_financial_settings SET "MinimumBusinessWalletBalance" = 1000, "ChangedAtUtc" = {DateTime.UtcNow} WHERE "CurrencyCode" = 'ETB'""");
         }
         using var activeClient = Client(activeCreator.UserId, activeCreator.CreatorId);
         var png = PngBytes();
