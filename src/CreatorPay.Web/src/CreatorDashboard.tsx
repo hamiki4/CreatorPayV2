@@ -236,6 +236,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
     ['sales', 'Confirmed Sales'],
     ['payout', 'Payout'],
   ]
+  const headerPhoto = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
   const navigate = (target: string) =>
     setTab(
       target.includes('payout')
@@ -258,6 +259,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
       role="Creator"
       name={profile?.displayName}
       status={profile ? statusLabel(profile.creatorStatus) : 'Active'}
+      identityMedia={profile ? <ProfileAvatar name={profile.displayName} photoUrl={headerPhoto} style={{ width: '2.5rem', height: '2.5rem', fontSize: '1rem' }} /> : undefined}
       onProfile={() => setTab('profile')}
       onHelp={() => location.assign('/help')}
       onSignOut={onSignOut}
