@@ -831,6 +831,76 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Merchant_admin_checkout_records_owner_actor_and_preserves_cashier_flow()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var seed = await seeded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
+        var owner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000008", merchantId: "20000000-0000-0000-0000-000000000001");
+        var cashier = Token(UserRole.Cashier, "20000000-0000-0000-0000-000000000006", merchantId: "20000000-0000-0000-0000-000000000001", cashierId: "20000000-0000-0000-0000-000000000005");
+        var otherOwner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000099", merchantId: "20000000-0000-0000-0000-000000000002");
+        var shopper = Token(UserRole.Customer, "10000000-0000-0000-0000-000000000002", customerId: "10000000-0000-0000-0000-000000000001");
+        var creatorCode = seed.GetProperty("creatorCode").GetString()!;
+        var ownerUserId = Guid.Parse("20000000-0000-0000-0000-000000000008");
+        var cashierUserId = Guid.Parse("20000000-0000-0000-0000-000000000006");
+        var cashierEntityId = Guid.Parse("20000000-0000-0000-0000-000000000005");
+
+        var cashierValidation = await Post(client, "/api/v1/cashier/checkouts/validate-creator", cashier, new { creatorCode });
+        Assert.Equal(HttpStatusCode.OK, cashierValidation.StatusCode);
+        Assert.True((await cashierValidation.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("isValid").GetBoolean());
+
+        var cashierCheckout = await Post(client, "/api/v1/cashier/checkouts/by-creator", cashier, new { creatorCode, shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "cashier-owner-regression");
+        Assert.Equal(HttpStatusCode.OK, cashierCheckout.StatusCode);
+        var cashierBody = await cashierCheckout.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("awaiting_shopper_confirmation", cashierBody!.GetProperty("code").GetString());
+        var cashierCheckoutId = cashierBody.GetProperty("checkout").GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/customer/checkouts/{cashierCheckoutId}/approve", shopper, new { }, "cashier-owner-regression-confirm")).StatusCode);
+
+        var ownerValidation = await Post(client, "/api/v1/merchant/checkouts/validate-creator", owner, new { creatorCode });
+        Assert.Equal(HttpStatusCode.OK, ownerValidation.StatusCode);
+        Assert.True((await ownerValidation.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("isValid").GetBoolean());
+        var otherOwnerValidation = await Post(client, "/api/v1/merchant/checkouts/validate-creator", otherOwner, new { creatorCode });
+        Assert.Equal(HttpStatusCode.OK, otherOwnerValidation.StatusCode);
+        Assert.False((await otherOwnerValidation.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("isValid").GetBoolean());
+
+        var ownerCheckout = await Post(client, "/api/v1/merchant/checkouts/by-creator", owner, new { creatorCode, shopperPhoneNumber = "0911000001", purchaseAmount = 125m }, "owner-checkout");
+        Assert.Equal(HttpStatusCode.OK, ownerCheckout.StatusCode);
+        var ownerBody = await ownerCheckout.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("awaiting_shopper_confirmation", ownerBody!.GetProperty("code").GetString());
+        var ownerCheckoutId = ownerBody.GetProperty("checkout").GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/customer/checkouts/{ownerCheckoutId}/approve", shopper, new { }, "owner-checkout-confirm")).StatusCode);
+
+        await using (var db = Db())
+        {
+            var cashierSession = await db.CheckoutSessions.SingleAsync(x => x.Id == cashierCheckoutId);
+            var ownerSession = await db.CheckoutSessions.SingleAsync(x => x.Id == ownerCheckoutId);
+            Assert.NotNull(cashierSession.PurchaseTransactionId);
+            Assert.NotNull(ownerSession.PurchaseTransactionId);
+            var cashierPurchase = await db.PurchaseTransactions.SingleAsync(x => x.Id == cashierSession.PurchaseTransactionId!.Value);
+            var ownerPurchase = await db.PurchaseTransactions.SingleAsync(x => x.Id == ownerSession.PurchaseTransactionId!.Value);
+            Assert.Equal(cashierEntityId, cashierPurchase.CashierId);
+            Assert.Equal(cashierUserId, cashierPurchase.CreatedByUserId);
+            Assert.Null(ownerPurchase.CashierId);
+            Assert.Equal(ownerUserId, ownerPurchase.CreatedByUserId);
+            Assert.Equal(2, await db.PurchaseTransactions.CountAsync());
+            Assert.True(await db.OperationalAuditEvents.AnyAsync(x => x.EventType == "FourPartyPurchaseConfirmed" && x.SubjectId == cashierPurchase.Id && x.ActorUserId == cashierUserId));
+            Assert.True(await db.OperationalAuditEvents.AnyAsync(x => x.EventType == "FourPartyPurchaseConfirmed" && x.SubjectId == ownerPurchase.Id && x.ActorUserId == ownerUserId));
+        }
+
+        var confirmedSales = await Get(client, "/api/v1/merchant/confirmed-sales?page=1&pageSize=10", owner);
+        Assert.Equal(HttpStatusCode.OK, confirmedSales.StatusCode);
+        var confirmedSalesBody = await confirmedSales.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var sales = confirmedSalesBody!.GetProperty("sales").EnumerateArray().ToList();
+        Assert.Equal(2, sales.Count);
+        Assert.Contains(sales, x => x.GetProperty("cashierName").GetString()!.Contains("Business Owner", StringComparison.Ordinal));
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, "/api/v1/merchant/checkouts/by-creator", Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001"), new { creatorCode, shopperPhoneNumber = "0911000001", purchaseAmount = 75m }, "creator-cannot-checkout")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, "/api/v1/merchant/checkouts/by-creator", shopper, new { creatorCode, shopperPhoneNumber = "0911000001", purchaseAmount = 75m }, "customer-cannot-checkout")).StatusCode);
+    }
+
+    [DockerFact]
     public async Task Platform_admin_sees_cashier_business_and_location_and_disabling_preserves_history()
     {
         using var client = factory!.CreateClient();

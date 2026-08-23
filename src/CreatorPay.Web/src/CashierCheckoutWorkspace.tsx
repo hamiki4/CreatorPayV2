@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "./apiClient";
 
+type Mode = "cashier" | "merchant";
 type Staff = {
   firstName: string;
   lastName: string;
@@ -34,6 +35,7 @@ type Validation = {
   businessName?: string;
 };
 type Tab = "purchase" | "recent" | "profile";
+
 const money = (value: number) =>
   new Intl.NumberFormat("en-ET", { style: "currency", currency: "ETB" }).format(
     value,
@@ -57,20 +59,35 @@ const transactionTime = (value?: string) =>
 
 export function CashierCheckoutWorkspace({
   initialQrPayload,
-}: { initialQrPayload?: string } = {}) {
+  mode = "cashier",
+}: { initialQrPayload?: string; mode?: Mode } = {}) {
   void initialQrPayload;
-  const [tab, setTab] = useState<Tab>("purchase"),
-    [staff, setStaff] = useState<Staff>(),
-    [recent, setRecent] = useState<Purchase[]>([]);
-  const [creatorCode, setCreatorCode] = useState(""),
-    [validation, setValidation] = useState<Validation>(),
-    [shopperPhoneNumber, setShopperPhoneNumber] = useState(""),
-    [purchaseAmount, setPurchaseAmount] = useState("");
-  const [result, setResult] = useState<Result>(),
-    [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false),
-    submissionKey = useRef(crypto.randomUUID());
-  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const merchantMode = mode === "merchant";
+  const [tab, setTab] = useState<Tab>("purchase");
+  const [staff, setStaff] = useState<Staff>();
+  const [recent, setRecent] = useState<Purchase[]>([]);
+  const [creatorCode, setCreatorCode] = useState("");
+  const [validation, setValidation] = useState<Validation>();
+  const [shopperPhoneNumber, setShopperPhoneNumber] = useState("");
+  const [purchaseAmount, setPurchaseAmount] = useState("");
+  const [result, setResult] = useState<Result>();
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submissionKey = useRef(crypto.randomUUID());
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
+  const recentEndpoint = merchantMode
+    ? "/api/v1/merchant/purchases"
+    : "/api/v1/cashier/purchases/recent";
+  const validateEndpoint = merchantMode
+    ? "/api/v1/merchant/checkouts/validate-creator"
+    : "/api/v1/cashier/checkouts/validate-creator";
+  const submitEndpoint = merchantMode
+    ? "/api/v1/merchant/checkouts/by-creator"
+    : "/api/v1/cashier/checkouts/by-creator";
+
   const resetEntryForm = () => {
     setCreatorCode("");
     setShopperPhoneNumber("");
@@ -85,37 +102,40 @@ export function CashierCheckoutWorkspace({
     setMessage(nextMessage);
     resetTimer.current = setTimeout(resetEntryForm, 3000);
   };
-  const load = () =>
-    Promise.all([
-      api<Staff>("/api/v1/cashier/me"),
-      api<Purchase[]>("/api/v1/cashier/purchases/recent"),
-    ])
-      .then(([s, p]) => {
-        setStaff(s);
-        setRecent(p);
-      })
-      .catch((error) => {
-        console.error(error);
-        setMessage("We couldn't load this information.");
-      });
+  const load = async () => {
+    try {
+      const purchases = await api<Purchase[]>(recentEndpoint);
+      setRecent(purchases);
+      if (!merchantMode) {
+        const cashier = await api<Staff>("/api/v1/cashier/me");
+        setStaff(cashier);
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage("We couldn't load this information.");
+    }
+  };
+
   useEffect(() => {
     void load();
     return () => {
       if (resetTimer.current) clearTimeout(resetTimer.current);
     };
   }, []);
+
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!confirm("Send this purchase to the Customer for confirmation?")) return;
+    if (!confirm("Send this purchase to the Customer for confirmation?"))
+      return;
     setResult(undefined);
     setValidation(undefined);
     setMessage("");
     setBusy(true);
     try {
-      const eligibility = await api<Validation>(
-        "/api/v1/cashier/checkouts/validate-creator",
-        { method: "POST", body: JSON.stringify({ creatorCode }) },
-      );
+      const eligibility = await api<Validation>(validateEndpoint, {
+        method: "POST",
+        body: JSON.stringify({ creatorCode }),
+      });
       setValidation(eligibility);
       if (!eligibility.isValid) {
         showResultThenReset(
@@ -124,28 +144,26 @@ export function CashierCheckoutWorkspace({
         );
         return;
       }
-      const response = await api<Result>(
-        "/api/v1/cashier/checkouts/by-creator",
-        {
-          method: "POST",
-          headers: { "Idempotency-Key": submissionKey.current },
-          body: JSON.stringify({
-            creatorCode,
-            shopperPhoneNumber,
-            purchaseAmount: Number(purchaseAmount),
-          }),
-        },
-      );
+      const response = await api<Result>(submitEndpoint, {
+        method: "POST",
+        headers: { "Idempotency-Key": submissionKey.current },
+        body: JSON.stringify({
+          creatorCode,
+          shopperPhoneNumber,
+          purchaseAmount: Number(purchaseAmount),
+        }),
+      });
       setResult(response);
       void load();
       if (response.code === "shopper_not_registered")
         showResultThenReset("Customer account not found.");
-      else
+      else {
         showResultThenReset(
           response.code === "awaiting_shopper_confirmation"
             ? "Purchase submitted — awaiting Customer confirmation."
             : response.message,
         );
+      }
     } catch (error) {
       console.error(error);
       showResultThenReset(
@@ -157,16 +175,21 @@ export function CashierCheckoutWorkspace({
     }
   }
 
+  const tabs: [Tab, string][] = merchantMode
+    ? [
+        ["purchase", "Checkout"],
+        ["recent", "Recent Transactions"],
+      ]
+    : [
+        ["purchase", "New Purchase"],
+        ["recent", "Recent Transactions"],
+        ["profile", "Profile"],
+      ];
+
   return (
     <div className="creator-dashboard cashier-dashboard">
       <nav className="creator-tabs" aria-label="Cashier Dashboard sections">
-        {(
-          [
-            ["purchase", "New Purchase"],
-            ["recent", "Recent Transactions"],
-            ["profile", "Profile"],
-          ] as [Tab, string][]
-        ).map(([id, label]) => (
+        {tabs.map(([id, label]) => (
           <button
             key={id}
             className={tab === id ? "active" : ""}
@@ -190,7 +213,7 @@ export function CashierCheckoutWorkspace({
       )}
       {tab === "purchase" && (
         <section className="creator-section cashier-scan">
-          <h2>New Purchase</h2>
+          <h2>{merchantMode ? "Checkout" : "New Purchase"}</h2>
           {result?.status !== "AwaitingShopperConfirmation" && (
             <form className="panel form cashier-sale" onSubmit={submit}>
               <label>
@@ -313,7 +336,7 @@ export function CashierCheckoutWorkspace({
           )}
         </section>
       )}
-      {tab === "profile" && (
+      {!merchantMode && tab === "profile" && (
         <section className="creator-section">
           <h2>Profile</h2>
           <div className="compact-panel">

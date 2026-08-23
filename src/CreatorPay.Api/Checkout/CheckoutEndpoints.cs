@@ -30,12 +30,15 @@ public static class CheckoutEndpoints
         c.MapPost("/cashback-payouts", (HttpRequest h, ICurrentUserService u, ICheckoutService s, CancellationToken ct) => Run(() => s.RequestPayoutAsync(u.CustomerId!.Value, Key(h), ct), 201));
         c.MapGet("/cashback-payouts", (ICurrentUserService u, ICheckoutService s, CancellationToken ct) => Run(() => s.GetPayoutsAsync(u.CustomerId, ct)));
         var cashier = e.MapGroup("/api/v1/cashier/checkouts").RequireAuthorization("CashierOnly");
-        cashier.MapPost("/present", async (PresentCheckoutRequest r, HttpRequest h, ICurrentUserService u, ICheckoutService s, IHubContext<CheckoutHub> hub, CancellationToken ct) => { try { var x = await s.PresentAsync(u.MerchantId!.Value, u.CashierId!.Value, Key(h), r, ct); await hub.Clients.Group($"customer:{x.CustomerId}").SendAsync("CheckoutApprovalRequired", x, ct); return Results.Ok(x); } catch (KeyNotFoundException x) { return Results.Problem(statusCode: 404, detail: x.Message); } catch (UnauthorizedAccessException x) { return Results.Problem(statusCode: 403, detail: x.Message); } catch (ArgumentException x) { return Results.Problem(statusCode: 400, detail: x.Message); } catch (InvalidOperationException x) { return Results.Problem(statusCode: 409, detail: x.Message); } });
+        cashier.MapPost("/present", async (PresentCheckoutRequest r, HttpRequest h, ICurrentUserService u, ICheckoutService s, IHubContext<CheckoutHub> hub, CancellationToken ct) => { try { var x = await s.PresentAsync(u.MerchantId!.Value, u.CashierId!.Value, u.UserAccountId!.Value, Key(h), r, ct); await hub.Clients.Group($"customer:{x.CustomerId}").SendAsync("CheckoutApprovalRequired", x, ct); return Results.Ok(x); } catch (KeyNotFoundException x) { return Results.Problem(statusCode: 404, detail: x.Message); } catch (UnauthorizedAccessException x) { return Results.Problem(statusCode: 403, detail: x.Message); } catch (ArgumentException x) { return Results.Problem(statusCode: 400, detail: x.Message); } catch (InvalidOperationException x) { return Results.Problem(statusCode: 409, detail: x.Message); } });
         cashier.MapPost("/offer", SubmitCashierOffer);
         cashier.MapPost("/validate-offer", ValidateCashierOffer);
         cashier.MapPost("/by-creator", SubmitCashierCreator);
         cashier.MapPost("/validate-creator", ValidateCashierCreator);
         cashier.MapPost("/repeat-use-approvals", CreateRepeatUseApproval);
+        var merchantCheckouts = e.MapGroup("/api/v1/merchant/checkouts").RequireAuthorization("MerchantAdminOnly");
+        merchantCheckouts.MapPost("/by-creator", SubmitMerchantCreator);
+        merchantCheckouts.MapPost("/validate-creator", ValidateMerchantCreator);
         var repeat = e.MapGroup("/api/v1/merchant/repeat-use-approvals").RequireAuthorization("AuthenticatedUser");
         repeat.MapPost("/{id:guid}/approve", (Guid id, DecideRepeatUseApprovalRequest r, HttpContext h, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => DecideRepeatUseApproval(id, true, r, h, u, db, ct));
         repeat.MapPost("/{id:guid}/reject", (Guid id, DecideRepeatUseApprovalRequest r, HttpContext h, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => DecideRepeatUseApproval(id, false, r, h, u, db, ct));
@@ -68,6 +71,16 @@ public static class CheckoutEndpoints
     }
     static async Task<IResult> ValidateCashierCreator(CashierCreatorValidationRequest r, ICurrentUserService u, ICheckoutService s, ApplicationDbContext db, CancellationToken ct) =>
         await Run(async () => await s.ValidateOfferAsync(u.MerchantId!.Value, u.CashierId!.Value, await ActiveCashierLocation(u, db, ct), await CreatorPayload(r.CreatorCode, db, ct), ct));
+    static async Task<IResult> SubmitMerchantCreator(CashierCreatorCheckoutRequest r, HttpRequest h, ICurrentUserService u, ICheckoutService s, ApplicationDbContext db, CancellationToken ct)
+    {
+        return await Run(async () =>
+        {
+            var payload = await CreatorPayload(r.CreatorCode, db, ct);
+            return await s.SubmitOfferAsync(u.MerchantId!.Value, null, u.UserAccountId!.Value, Key(h), new(payload, null, r.ShopperPhoneNumber, r.PurchaseAmount), ct);
+        });
+    }
+    static async Task<IResult> ValidateMerchantCreator(CashierCreatorValidationRequest r, ICurrentUserService u, ICheckoutService s, ApplicationDbContext db, CancellationToken ct) =>
+        await Run(async () => await s.ValidateOfferAsync(u.MerchantId!.Value, null, null, await CreatorPayload(r.CreatorCode, db, ct), ct));
     static Task<Guid?> ActiveCashierLocation(ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) =>
         db.CashierLocationAssignments.AsNoTracking().Where(x => x.CashierId == u.CashierId && x.IsActive).OrderByDescending(x => x.IsPrimary).Select(x => (Guid?)x.MerchantLocationId).FirstOrDefaultAsync(ct);
     static async Task<string> CreatorPayload(string creatorCode, ApplicationDbContext db, CancellationToken ct)
