@@ -25,6 +25,7 @@ using CreatorPay.Api.Testing;
 using CreatorPay.Api.Support;
 using CreatorPay.Application;
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Creators;
 using CreatorPay.Application.Operations;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure;
@@ -49,6 +50,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = c => c.ProblemDetails.Extensions["correlationId"] = c.HttpContext.TraceIdentifier);
 builder.Services.AddHttpContextAccessor(); builder.Services.AddResponseCompression();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => o.MultipartBodyLengthLimit = ProfilePhotoLimits.MaximumUploadBytes);
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;

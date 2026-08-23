@@ -74,7 +74,7 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         if (error is not null) return CreatorResult<CreatorProfileResponse>.Failure(error);
         error = ValidatePilotProfile(true, request.City, request.Biography, request.ContentCategories, request.SocialProfiles);
         if (error is not null) return CreatorResult<CreatorProfileResponse>.Failure(error);
-        if (request.ProfileImage is { } image && (image.SizeBytes is <= 0 or > 5_000_000 || image.FileName.Trim().Length is 0 or > 255 || image.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))) return CreatorResult<CreatorProfileResponse>.Failure("Profile image metadata is invalid.");
+        if (request.ProfileImage is { } image && (image.SizeBytes is <= 0 or > ProfilePhotoLimits.MaximumUploadBytes || image.FileName.Trim().Length is 0 or > 255 || image.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))) return CreatorResult<CreatorProfileResponse>.Failure("Profile image metadata is invalid.");
         var normalizedEmail = NormalizeEmail(request.Email); var normalizedPhone = NormalizePhone(request.PhoneNumber);
         if (await store.EmailExistsAsync(normalizedEmail, userId, innerCt)) return CreatorResult<CreatorProfileResponse>.Failure("Email is already registered.");
         if (await store.PhoneExistsAsync(normalizedPhone, pair.Value.Creator.Id, innerCt)) return CreatorResult<CreatorProfileResponse>.Failure("Phone number is already registered.");

@@ -11,13 +11,12 @@ namespace CreatorPay.Infrastructure.Creators;
 
 public sealed class CreatorProfilePhotoStore(IConfiguration configuration) : ICreatorProfilePhotoStore
 {
-    private const long MaximumBytes = 5 * 1024 * 1024;
     private const int TargetSize = 512;
     private readonly string root = Path.GetFullPath(configuration["CreatorProfilePhotos:RootPath"] ?? "/app/data/profile-photos");
 
     public async Task<(string StorageKey, long SizeBytes)> SaveAsync(Guid creatorId, Stream content, string contentType, long sizeBytes, CancellationToken ct)
     {
-        if (sizeBytes is <= 0 or > MaximumBytes) throw new ArgumentException("Profile photo must be a JPG, PNG, or WEBP image no larger than 5 MB.");
+        if (sizeBytes is <= 0 or > ProfilePhotoLimits.MaximumUploadBytes) throw new ArgumentException("Profile photo must be a JPG, PNG, or WEBP image no larger than 12 MB.");
         using var memory = new MemoryStream();
         await content.CopyToAsync(memory, ct);
         var bytes = memory.ToArray();

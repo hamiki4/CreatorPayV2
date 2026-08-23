@@ -1,5 +1,7 @@
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Creators;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
 
 namespace CreatorPay.Api.Creators;
 
@@ -15,12 +17,14 @@ public static class CreatorEndpoints
         group.MapPut("/me", async (UpdateCreatorProfileRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.UpdateMeAsync(user.UserAccountId!.Value, request, ct))).RequireAuthorization("CreatorOnboarding");
         group.MapPost("/me/profile-photo", async (HttpRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) =>
         {
+            var requestSize = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (requestSize is { IsReadOnly: false }) requestSize.MaxRequestBodySize = ProfilePhotoLimits.MaximumUploadBytes;
             var form = await request.ReadFormAsync(ct);
             var photo = form.Files.GetFile("photo") ?? form.Files.FirstOrDefault();
             if (photo is null || photo.Length == 0) return Problem("A profile photo file is required.");
             await using var stream = photo.OpenReadStream();
             return ToHttp(await service.UploadProfilePhotoAsync(user.UserAccountId!.Value, stream, photo.ContentType ?? "application/octet-stream", photo.Length, ct));
-        }).RequireAuthorization("CreatorOnboarding").DisableAntiforgery();
+        }).RequireAuthorization("CreatorOnboarding").DisableAntiforgery().WithMetadata(new RequestFormLimitsAttribute { MultipartBodyLengthLimit = ProfilePhotoLimits.MaximumUploadBytes }, new RequestSizeLimitAttribute(ProfilePhotoLimits.MaximumUploadBytes));
         group.MapDelete("/me/profile-photo", async (ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RemoveProfilePhotoAsync(user.UserAccountId!.Value, ct))).RequireAuthorization("CreatorOnboarding");
         group.MapGet("/pending", async (ICreatorService service, CancellationToken ct) => Results.Ok(await service.GetPendingAsync(ct))).RequireAuthorization("PlatformAdminOnly");
         group.MapGet("/{creatorId:guid}", async (Guid creatorId, ICreatorService service, CancellationToken ct) => ToHttp(await service.GetAsync(creatorId, ct))).RequireAuthorization("PlatformAdminOnly");

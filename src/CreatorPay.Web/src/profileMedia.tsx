@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react'
+import {buildProfilePhotoUrl, normalizeProfilePhotoUrl} from './photoUpload'
 
-export const creatorPhotoUrl=(publicCreatorId?:string,version?:string)=>publicCreatorId?`/api/v1/discovery/creators/${encodeURIComponent(publicCreatorId)}/photo${version?`?v=${encodeURIComponent(version)}`:''}`:undefined
+export const creatorPhotoUrl=(publicCreatorId?:string,version?:string)=>publicCreatorId?buildProfilePhotoUrl(publicCreatorId,version):undefined
 
 export const initials=(value?:string)=>{
   const tokens=(value??'').trim().split(/\s+/).filter(Boolean)
@@ -12,6 +13,7 @@ export function ProfileAvatar({name,photoUrl,className=''}:{name?:string;photoUr
   const[failed,setFailed]=useState(false)
   useEffect(()=>{setFailed(false)},[photoUrl])
   const label=initials(name)
-  if(photoUrl&&!failed)return <span className={`avatar creator-avatar ${className}`.trim()}><img src={photoUrl} alt="" onError={()=>setFailed(true)} /></span>
+  const resolvedPhotoUrl=normalizeProfilePhotoUrl(photoUrl)
+  if(resolvedPhotoUrl&&!failed)return <span className={`avatar creator-avatar ${className}`.trim()}><img src={resolvedPhotoUrl} alt="" onError={()=>setFailed(true)} /></span>
   return <span className={`avatar creator-avatar ${className}`.trim()} aria-hidden="true">{label}</span>
 }
