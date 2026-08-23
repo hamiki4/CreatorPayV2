@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CreatorPay.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260819051706_AllowUnassignedCashierCheckout")]
-    partial class AllowUnassignedCashierCheckout
+    [Migration("20260822071619_AllowMerchantOwnerCheckoutActor")]
+    partial class AllowMerchantOwnerCheckoutActor
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -458,6 +458,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<string>("CreatedBy")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("CreatorId")
                         .HasColumnType("uuid");
@@ -5280,7 +5283,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("CampaignStartsAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("CashierId")
+                    b.Property<Guid?>("CashierId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("CheckoutSessionId")
@@ -5350,7 +5353,7 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("MerchantLocalDate")
                         .HasColumnType("date");
 
-                    b.Property<Guid>("MerchantLocationId")
+                    b.Property<Guid?>("MerchantLocationId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("PublicTransactionId")

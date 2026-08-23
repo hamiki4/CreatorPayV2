@@ -46,7 +46,9 @@ public sealed class WalletService(ApplicationDbContext db, IOptions<WalletOption
         if (!string.IsNullOrWhiteSpace(request.CashierName))
         {
             var term = request.CashierName.Trim();
-            q = q.Where(x => db.Cashiers.Any(c => c.Id == x.CashierId && (EF.Functions.ILike(c.FirstName, $"%{term}%") || EF.Functions.ILike(c.LastName, $"%{term}%"))));
+            q = q.Where(x => x.CashierId.HasValue
+                ? db.Cashiers.Any(c => c.Id == x.CashierId && (EF.Functions.ILike(c.FirstName, $"%{term}%") || EF.Functions.ILike(c.LastName, $"%{term}%")))
+                : db.Merchants.Any(m => m.Id == x.MerchantId && (EF.Functions.ILike(m.PrimaryContactName, $"%{term}%") || EF.Functions.ILike(m.TradingName, $"%{term}%"))));
         }
         if (request.DateFromUtc.HasValue) q = q.Where(x => x.TransactionDateUtc >= request.DateFromUtc.Value);
         if (request.DateToUtc.HasValue) q = q.Where(x => x.TransactionDateUtc < request.DateToUtc.Value);
@@ -56,20 +58,23 @@ public sealed class WalletService(ApplicationDbContext db, IOptions<WalletOption
             var term = request.Search.Trim();
             q = q.Where(x => EF.Functions.ILike(x.PublicTransactionId, $"%{term}%") ||
                 db.Creators.Any(c => c.Id == x.CreatorId && (EF.Functions.ILike(c.DisplayName, $"%{term}%") || EF.Functions.ILike(c.CreatorCode, $"%{term}%") || EF.Functions.ILike(c.PublicCreatorId, $"%{term}%"))) ||
-                db.Cashiers.Any(c => c.Id == x.CashierId && (EF.Functions.ILike(c.FirstName, $"%{term}%") || EF.Functions.ILike(c.LastName, $"%{term}%"))));
+                (x.CashierId.HasValue ? db.Cashiers.Any(c => c.Id == x.CashierId && (EF.Functions.ILike(c.FirstName, $"%{term}%") || EF.Functions.ILike(c.LastName, $"%{term}%"))) : db.Merchants.Any(m => m.Id == x.MerchantId && (EF.Functions.ILike(m.PrimaryContactName, $"%{term}%") || EF.Functions.ILike(m.TradingName, $"%{term}%")))));
         }
         var all = await q.OrderByDescending(x => x.TransactionDateUtc).ToListAsync(ct);
         var snapshots = await db.CommissionCalculationSnapshots.AsNoTracking().Where(x => all.Select(p => p.CommissionCalculationSnapshotId).Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
         var creatorIds = all.Select(x => x.CreatorId).Distinct().ToArray();
         var creators = await db.Creators.AsNoTracking().Where(x => creatorIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
-        var cashierIds = all.Select(x => x.CashierId).Distinct().ToArray();
+        var cashierIds = all.Where(x => x.CashierId.HasValue).Select(x => x.CashierId!.Value).Distinct().ToArray();
         var cashiers = await db.Cashiers.AsNoTracking().Where(x => cashierIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
+        var merchantIds = all.Select(x => x.MerchantId).Distinct().ToArray();
+        var merchants = await db.Merchants.AsNoTracking().Where(x => merchantIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
         var locationIds = all.Where(x => x.MerchantLocationId.HasValue).Select(x => x.MerchantLocationId!.Value).Distinct().ToArray();
         var locations = await db.MerchantLocations.AsNoTracking().Where(x => locationIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
         var rows = all.Skip(Math.Max(0, request.Page - 1) * Math.Clamp(request.PageSize, 1, 100)).Take(Math.Clamp(request.PageSize, 1, 100)).Select(x =>
         {
-            var creator = creators[x.CreatorId]; var cashier = cashiers[x.CashierId]; var snapshot = snapshots[x.CommissionCalculationSnapshotId];
-            return new ConfirmedSaleDto(x.Id, x.PublicTransactionId, x.ConfirmedAtUtc ?? x.TransactionDateUtc, x.PurchaseAmount, snapshot.TotalCommissionAmount, creator.DisplayName, string.IsNullOrWhiteSpace(creator.CreatorCode) ? creator.PublicCreatorId : creator.CreatorCode, $"{cashier.FirstName} {cashier.LastName}".Trim(), x.Status.ToString(), (x.MerchantLocationId.HasValue ? locations.GetValueOrDefault(x.MerchantLocationId.Value)?.Name : null));
+            var creator = creators[x.CreatorId]; var merchant = merchants[x.MerchantId]; var snapshot = snapshots[x.CommissionCalculationSnapshotId];
+            var cashierName = x.CashierId.HasValue && cashiers.TryGetValue(x.CashierId.Value, out var cashier) ? $"{cashier.FirstName} {cashier.LastName}".Trim() : string.IsNullOrWhiteSpace(merchant.PrimaryContactName) ? "Business Owner" : $"{merchant.PrimaryContactName} (Business Owner)";
+            return new ConfirmedSaleDto(x.Id, x.PublicTransactionId, x.ConfirmedAtUtc ?? x.TransactionDateUtc, x.PurchaseAmount, snapshot.TotalCommissionAmount, creator.DisplayName, string.IsNullOrWhiteSpace(creator.CreatorCode) ? creator.PublicCreatorId : creator.CreatorCode, cashierName, x.Status.ToString(), (x.MerchantLocationId.HasValue ? locations.GetValueOrDefault(x.MerchantLocationId.Value)?.Name : null));
         }).ToList();
         var performance = all.GroupBy(x => x.CreatorId).Select(g => { var c = creators[g.Key]; return new CreatorPerformanceDto(c.DisplayName, string.IsNullOrWhiteSpace(c.CreatorCode) ? c.PublicCreatorId : c.CreatorCode, g.Count(), g.Sum(x => x.PurchaseAmount), g.Sum(x => snapshots[x.CommissionCalculationSnapshotId].TotalCommissionAmount)); }).OrderByDescending(x => x.SalesAmount).ToList();
         return new ConfirmedSalesReportDto(all.Count, all.Sum(x => x.PurchaseAmount), all.Sum(x => snapshots[x.CommissionCalculationSnapshotId].TotalCommissionAmount), rows, performance);

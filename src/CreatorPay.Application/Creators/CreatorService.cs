@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.CustomerVerification;
 using CreatorPay.Domain.Entities;
@@ -11,18 +12,20 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
     ICreatorVerificationProvider provider, PasswordPolicyValidator passwordPolicy, IOptions<CreatorVerificationOptions> options, IPhoneOtpService phoneOtp,
     ICreatorProfilePhotoStore profilePhotos) : ICreatorService
 {
-    public Task<CreatorResult<CreatorRegistrationResponse>> RegisterAsync(RegisterCreatorRequest request, CancellationToken ct)
+    public async Task<CreatorResult<CreatorRegistrationResponse>> RegisterAsync(RegisterCreatorRequest request, CancellationToken ct)
     {
         _ = phoneOtp; // retained for constructor compatibility while OTP registration is disabled
         _ = provider; // legacy verification endpoints remain compatible but are not part of onboarding
         var error = ValidateIdentity(request.FirstName, request.LastName, request.DisplayName, request.Email, request.PhoneNumber);
-        if (error is not null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(error));
+        if (error is not null) return CreatorResult<CreatorRegistrationResponse>.Failure(error);
         error = ValidatePilotProfile(request.TermsAccepted, request.City, request.Biography, request.ContentCategories, request.SocialProfiles);
-        if (error is not null) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(error));
+        if (error is not null) return CreatorResult<CreatorRegistrationResponse>.Failure(error);
+        error = await ValidateMinimumTikTokFollowersAsync(request, ct);
+        if (error is not null) return CreatorResult<CreatorRegistrationResponse>.Failure(error);
         var passwordErrors = passwordPolicy.Validate(request.Password);
-        if (passwordErrors.Count > 0) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure(string.Join(" ", passwordErrors)));
-        if (request.Confirmation is not null && request.Password != request.Confirmation) return Task.FromResult(CreatorResult<CreatorRegistrationResponse>.Failure("Password confirmation does not match."));
-        return RegisterValidatedAsync(request, ct);
+        if (passwordErrors.Count > 0) return CreatorResult<CreatorRegistrationResponse>.Failure(string.Join(" ", passwordErrors));
+        if (request.Confirmation is not null && request.Password != request.Confirmation) return CreatorResult<CreatorRegistrationResponse>.Failure("Password confirmation does not match.");
+        return await RegisterValidatedAsync(request, ct);
     }
 
     private Task<CreatorResult<CreatorRegistrationResponse>> RegisterValidatedAsync(RegisterCreatorRequest request, CancellationToken ct) => store.InTransactionAsync(async innerCt =>
@@ -74,7 +77,7 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         if (error is not null) return CreatorResult<CreatorProfileResponse>.Failure(error);
         error = ValidatePilotProfile(true, request.City, request.Biography, request.ContentCategories, request.SocialProfiles);
         if (error is not null) return CreatorResult<CreatorProfileResponse>.Failure(error);
-        if (request.ProfileImage is { } image && (image.SizeBytes is <= 0 or > 5_000_000 || image.FileName.Trim().Length is 0 or > 255 || image.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))) return CreatorResult<CreatorProfileResponse>.Failure("Profile image metadata is invalid.");
+        if (request.ProfileImage is { } image && (image.SizeBytes is <= 0 or > ProfilePhotoLimits.MaximumUploadBytes || image.FileName.Trim().Length is 0 or > 255 || image.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))) return CreatorResult<CreatorProfileResponse>.Failure("Profile image metadata is invalid.");
         var normalizedEmail = NormalizeEmail(request.Email); var normalizedPhone = NormalizePhone(request.PhoneNumber);
         if (await store.EmailExistsAsync(normalizedEmail, userId, innerCt)) return CreatorResult<CreatorProfileResponse>.Failure("Email is already registered.");
         if (await store.PhoneExistsAsync(normalizedPhone, pair.Value.Creator.Id, innerCt)) return CreatorResult<CreatorProfileResponse>.Failure("Phone number is already registered.");
@@ -165,8 +168,15 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
         if (profiles.GroupBy(x => new { x.Platform, Handle = SocialKey(x) }).Any(x => x.Count() > 1)) return "Duplicate social platform and handle combinations are not allowed.";
         return null;
     }
+    private async Task<string?> ValidateMinimumTikTokFollowersAsync(RegisterCreatorRequest request, CancellationToken ct)
+    {
+        var primary = request.SocialProfiles?.SingleOrDefault(x => x.IsPrimary);
+        if (primary is null || primary.Platform != SocialPlatform.TikTok) return null;
+        var minimum = await store.GetMinimumTikTokFollowersAsync(ct);
+        return primary.FollowerCount < minimum ? $"Minimum required TikTok followers: {minimum.ToString("N0", CultureInfo.InvariantCulture)}." : null;
+    }
     private void AddSocialProfiles(Guid creatorId, IReadOnlyList<SocialProfileRequest> profiles, DateTime now, Guid actor)
     { foreach (var x in profiles) store.Add(new CreatorSocialProfile { Id = Guid.NewGuid(), CreatorId = creatorId, Platform = x.Platform, Handle = SocialKey(x), ProfileUrl = x.ProfileUrl?.Trim(), FollowerCount = x.FollowerCount, IsPrimary = x.IsPrimary, VerificationStatus = SocialProfileVerificationStatus.Unverified, CreatedAtUtc = now, CreatedBy = actor.ToString() }); }
     private static string SocialKey(SocialProfileRequest profile) => string.IsNullOrWhiteSpace(profile.Handle) ? profile.ProfileUrl!.Trim().ToUpperInvariant() : profile.Handle.Trim().ToUpperInvariant();
-    private static bool IsValidPhoto(string contentType, long sizeBytes) => sizeBytes is > 0 and <= 5_000_000;
+    private static bool IsValidPhoto(string contentType, long sizeBytes) => sizeBytes is > 0 and <= ProfilePhotoLimits.MaximumUploadBytes;
 }

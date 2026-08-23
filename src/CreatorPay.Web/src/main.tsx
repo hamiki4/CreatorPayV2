@@ -742,6 +742,7 @@ function App({initialQrPayload}:{initialQrPayload?:string}={}) {
         ) : (
           <BusinessDashboard
             cashiers={<StaffArea kind="cashiers" />}
+            checkout={<CashierCheckoutWorkspace mode="merchant" />}
             wallet={<MerchantWalletWorkspace />}
             profile={<MerchantWorkspace />}
             onSignOut={()=>void signOut()}

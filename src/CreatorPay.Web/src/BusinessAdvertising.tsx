@@ -50,16 +50,22 @@ function socialMedia(platform?: string, profileUrl?: string) {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return { label: "Not provided" };
   const label = platform ? socialPlatforms.get(platform.toLowerCase()) : undefined;
-  return { href: url.toString(), label: `${label ?? "View Profile"} ↗` };
+  return { href: url.toString(), label: label ?? "View Profile" };
 }
 function SocialMediaLink({ platform, profileUrl }: { platform?: string; profileUrl?: string }) {
   const link = socialMedia(platform, profileUrl);
   return "href" in link ? (
-    <a href={link.href} target="_blank" rel="noopener noreferrer">
+    <a
+      className="social-media-link"
+      href={link.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: '#2563eb', textDecoration: 'none' }}
+    >
       {link.label}
     </a>
   ) : (
-    <span>{link.label}</span>
+    <span className="social-media-link">{link.label}</span>
   );
 }
 const status = (value: string) =>
@@ -142,13 +148,13 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
   function stateFor(creator: Creator) {
     const relationship = currentRelationships.find((x) => x.creatorId === creator.id);
     if (!relationship)
-      return { label: "No relationship", daysText: null, canInvite: true };
+      return { label: "No Relationship", daysText: null, canInvite: true };
     if (relationship.status === "Pending")
       return { label: "Invitation Pending", daysText: null, canInvite: false };
     if (relationship.status === "Approved") {
       const state = relationshipState(relationship);
       return {
-        label: state.label === "Active" ? "Currently Advertising" : state.label,
+        label: state.label,
         daysText:
           state.daysLeft === null
             ? null
@@ -212,19 +218,9 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                     />
                     <div>
                       <strong>{x.displayName}</strong>
-                      <small>
-                        {x.followerCount != null
-                          ? `${x.followerCount.toLocaleString()} followers`
-                          : "No social media provided"}
-                      </small>
+                      <small>{x.city}</small>
                     </div>
                   </div>
-                  <small>
-                    {x.city}
-                    {x.followerCount != null
-                      ? ` · ${x.followerCount.toLocaleString()} followers`
-                      : ""}
-                  </small>
                 </div>
                 <span data-label="Social Media">
                   <SocialMediaLink
@@ -232,11 +228,11 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                     profileUrl={x.socialProfileUrl}
                   />
                 </span>
-                <span data-label="Status">
+                <span>
                   <span className="status-badge">{state.label}</span>
                 </span>
                 {state.daysText !== null && (
-                  <span data-label="Days Left">
+                  <span>
                     {state.daysText}
                   </span>
                 )}
@@ -344,7 +340,6 @@ export function ActiveCreators({
                     />
                     <div>
                       <strong data-label="Creator">{x.creatorName}</strong>
-                      <small>{x.creatorSocialPlatform ? "Social profile available" : "No social media provided"}</small>
                     </div>
                   </div>
                 </div>
@@ -354,12 +349,12 @@ export function ActiveCreators({
                     profileUrl={x.creatorSocialProfileUrl}
                   />
                 </span>
-                <span className="table-status" data-label="Status">
+                <span className="table-status">
                   <span className="status-badge">{state.label}</span>
                 </span>
-                <span className="days-left" data-label="Days Left">
-                  {daysLeftText(state.daysLeft, state.tone)}
-                </span>
+                {state.daysLeft !== null && (
+                  <span className="days-left">{daysLeftText(state.daysLeft, state.tone)}</span>
+                )}
                 <span className="table-action" data-label="Action">
                   {state.label === "Active" ? (
                     <button

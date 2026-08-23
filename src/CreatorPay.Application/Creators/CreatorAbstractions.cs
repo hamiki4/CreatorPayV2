@@ -14,6 +14,7 @@ public interface ICreatorStore
     Task<(UserAccount User, Creator Creator)?> FindByUserAsync(Guid userId, CancellationToken ct);
     Task<(UserAccount User, Creator Creator)?> FindByTokenAsync(string hash, string purpose, CancellationToken ct);
     Task<CreatorVerificationToken?> FindTokenAsync(string hash, string purpose, CancellationToken ct);
+    Task<long> GetMinimumTikTokFollowersAsync(CancellationToken ct);
     Task<IReadOnlyList<Creator>> FindByStatusAsync(CreatorStatus status, CancellationToken ct);
     Task InvalidateTokensAsync(Guid userId, string purpose, DateTime usedAtUtc, CancellationToken ct);
     void Add(UserAccount user); void Add(Creator creator); void Add(CreatorVerificationToken token); void Add(CreatorAuditEvent audit); void Add(CreatorSocialProfile profile);

@@ -19,6 +19,34 @@ public sealed class PilotRuntimeTests
     private const string SigningKey = "pilot-runtime-test-signing-key-000000000000";
 
     [Fact]
+    public async Task Pilot_cors_allows_the_real_web_origin_for_profile_photo_requests()
+    {
+        await using var factory = Factory("Pilot", new Dictionary<string, string?>
+        {
+            ["Cors:AllowedOrigins:0"] = "https://pilot.weymela.com",
+            ["Cors:AllowedOrigins:1"] = "https://localhost"
+        });
+
+        using var client = factory.CreateClient();
+
+        using var preflight = new HttpRequestMessage(HttpMethod.Options, "/api/v1/creators/me/profile-photo");
+        preflight.Headers.TryAddWithoutValidation("Origin", "https://pilot.weymela.com");
+        preflight.Headers.TryAddWithoutValidation("Access-Control-Request-Method", "POST");
+        preflight.Headers.TryAddWithoutValidation("Access-Control-Request-Headers", "authorization,content-type");
+        var preflightResponse = await client.SendAsync(preflight);
+        Assert.Equal(HttpStatusCode.NoContent, preflightResponse.StatusCode);
+        Assert.Equal("https://pilot.weymela.com", preflightResponse.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Contains("POST", preflightResponse.Headers.GetValues("Access-Control-Allow-Methods").Single());
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/api/v1/creators/me/profile-photo");
+        post.Headers.TryAddWithoutValidation("Origin", "https://pilot.weymela.com");
+        post.Content = new MultipartFormDataContent();
+        var postResponse = await client.SendAsync(post);
+        Assert.True(postResponse.Headers.TryGetValues("Access-Control-Allow-Origin", out var originValues));
+        Assert.Equal("https://pilot.weymela.com", originValues.Single());
+    }
+
+    [Fact]
     public async Task Pilot_maintenance_and_public_feature_flags_fail_closed()
     {
         await using var factory = Factory("Pilot", new Dictionary<string, string?>

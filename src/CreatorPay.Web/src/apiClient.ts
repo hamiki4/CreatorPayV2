@@ -1,6 +1,6 @@
 import {handleUnauthorized} from './authSession'
 import {getAccessToken,getRefreshToken,setSessionTokens} from './sessionStore'
-const apiBase=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'')
+export const apiBase=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'')
 const token=getAccessToken
 
 export class ApiError extends Error{constructor(message:string,readonly technical:string,readonly status:number=0,readonly title?:string){super(message)}}

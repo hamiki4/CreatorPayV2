@@ -49,6 +49,7 @@ public sealed class CreatorVerificationTests
         public Task<CreatorVerificationToken?> FindTokenAsync(string hash, string purpose, CancellationToken ct) => Task.FromResult(tokens.SingleOrDefault(x => x.TokenHash == hash && x.Purpose == purpose));
         public Task<string> AllocateCreatorCodeAsync(CancellationToken ct) => Task.FromResult("4827");
         public Task<(UserAccount User, Creator Creator)?> FindByTokenAsync(string hash, string purpose, CancellationToken ct) => Task.FromResult(tokens.Any(x => x.TokenHash == hash && x.Purpose == purpose) ? ((UserAccount, Creator)?)(user, creator) : null);
+        public Task<long> GetMinimumTikTokFollowersAsync(CancellationToken ct) => Task.FromResult(50_000L);
         public Task<T> InTransactionAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken ct) => action(ct); public Task<int> SaveAsync(CancellationToken ct) => Task.FromResult(1);
         public Task<bool> EmailExistsAsync(string normalizedEmail, Guid? excludingUserId, CancellationToken ct) => Task.FromResult(false); public Task<bool> PhoneExistsAsync(string normalizedPhone, Guid? excludingCreatorId, CancellationToken ct) => Task.FromResult(false);
         public Task<UserAccount?> FindUserAsync(Guid id, CancellationToken ct) => Task.FromResult<UserAccount?>(user); public Task<UserAccount?> FindUserByCreatorAsync(Guid creatorId, CancellationToken ct) => Task.FromResult<UserAccount?>(user); public Task<Creator?> FindCreatorAsync(Guid id, CancellationToken ct) => Task.FromResult<Creator?>(creator);

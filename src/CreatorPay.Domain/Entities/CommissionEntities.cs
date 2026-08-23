@@ -57,6 +57,7 @@ public sealed class CommissionAuditEvent : Entity { public Guid? ActorUserAccoun
 public sealed class PlatformFinancialSetting : Entity
 {
     public string CurrencyCode { get; set; } = "ETB"; public decimal MinimumBusinessWalletBalance { get; set; }
+    public long MinimumTikTokFollowers { get; set; }
     public DayOfWeek CreatorCutoffDay { get; set; } = DayOfWeek.Friday; public TimeSpan CreatorCutoffTime { get; set; } = TimeSpan.Zero; public DayOfWeek CreatorPayoutDay { get; set; } = DayOfWeek.Saturday;
     public int ShopperCutoffDay { get; set; } = 0; public TimeSpan ShopperCutoffTime { get; set; } = TimeSpan.Zero; public int ShopperPayoutDay { get; set; } = 1;
     public DateTime PayoutScheduleEffectiveFromUtc { get; set; } = DateTime.UnixEpoch;

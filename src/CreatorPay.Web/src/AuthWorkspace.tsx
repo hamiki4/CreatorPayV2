@@ -130,10 +130,28 @@ export function AuthWorkspace() {
       phoneNumber: "",
       newPassword: "",
       confirmation: "",
-    }), [pinValue,setPinValue]=useState(""), [forgotPin,setForgotPin]=useState(false);
+    }), [pinValue,setPinValue]=useState(""), [forgotPin,setForgotPin]=useState(false), [creatorSignupSettings,setCreatorSignupSettings]=useState<{minimumTikTokFollowers:number}|null>(null), [creatorSettingsLoading,setCreatorSettingsLoading]=useState(false);
   const shopperSubmitting = useRef(false);
   useEffect(()=>{
     if(mode==="welcome")localStorage.setItem("weymela_welcome_seen","1");
+  },[mode]);
+  useEffect(()=>{
+    if(mode!=="creator"){setCreatorSignupSettings(null);setCreatorSettingsLoading(false);return}
+    let active=true;
+    setCreatorSettingsLoading(true);
+    fetch(`${base}/api/v1/auth/signup-settings`)
+      .then(async response=>{
+        const value=await response.json().catch(()=>({minimumTikTokFollowers:0}));
+        if(!active)return;
+        if(!response.ok)throw new Error((value as {detail?:string}).detail??"Unable to load creator signup settings.");
+        setCreatorSignupSettings(value as {minimumTikTokFollowers:number});
+      })
+      .catch(error=>{
+        console.error(error);
+        if(active)setCreatorSignupSettings({minimumTikTokFollowers:0});
+      })
+      .finally(()=>{if(active)setCreatorSettingsLoading(false)});
+    return()=>{active=false}
   },[mode]);
   function changeMode(next: Mode) {
     if (next === mode) return;
@@ -200,6 +218,10 @@ export function AuthWorkspace() {
       return false;
     }
     return true;
+  }
+  function minimumTikTokFollowersText() {
+    const minimum = creatorSignupSettings?.minimumTikTokFollowers ?? 0;
+    return `Minimum required TikTok followers: ${new Intl.NumberFormat('en-US').format(minimum)}.`;
   }
   async function signIn(e: FormEvent) {
     e.preventDefault();
@@ -428,6 +450,11 @@ export function AuthWorkspace() {
                 followerCount,
                 ...request
               } = creator;
+              const minimumTikTokFollowers = creatorSignupSettings?.minimumTikTokFollowers ?? 0;
+              if (platform === "TikTok" && followerCount < minimumTikTokFollowers) {
+                setMessage(`Minimum required TikTok followers: ${new Intl.NumberFormat('en-US').format(minimumTikTokFollowers)}.`);
+                return;
+              }
               const result = await post("/api/v1/creators/register", {
                   ...request,
                   phoneNumber: p,
@@ -472,6 +499,11 @@ export function AuthWorkspace() {
               "followerCount",
               "Estimated Follower Count",
               "number",
+            )}
+            {creator.platform === "TikTok" && (
+              <small className="full">
+                {creatorSettingsLoading ? "Loading TikTok follower requirement…" : minimumTikTokFollowersText()}
+              </small>
             )}
             {passwords(creator, setCreator)}
             <label className="check full">
