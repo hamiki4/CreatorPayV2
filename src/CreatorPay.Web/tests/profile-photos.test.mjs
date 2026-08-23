@@ -18,12 +18,13 @@ test('creator profile photo controls stay on the authenticated Profile screen',(
 })
 
 test('creator photos are reused in business and customer discovery cards',()=>{
-  for(const label of ['profileImageUrl','creatorProfileImageUrl','ProfileAvatar','creator-heading'])assert.ok(business.includes(label)||customer.includes(label))
+  for(const label of ['profileImageUrl','creatorProfileImageUrl','creatorPhoneNumber','phoneNumber','ProfileAvatar','creator-heading'])assert.ok(business.includes(label)||customer.includes(label))
   assert.match(business,/Find Creators/)
   assert.match(business,/Active Ads/)
   assert.match(business,/Requests/)
   assert.match(customer,/Discover Businesses/)
   assert.match(profile,/export const creatorPhotoUrl/)
+  assert.match(creator,/identityMedia=/)
 })
 
 test('social media and photo controls remain safe and bounded',()=>{

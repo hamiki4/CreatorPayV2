@@ -19,7 +19,7 @@ public sealed record MerchantInviteCreatorRequest(Guid CreatorId, string? Introd
 public sealed record PartnershipReasonRequest(string? Reason);
 public sealed record PartnershipDatesRequest(DateTime? StartDateUtc, DateTime? EndDateUtc);
 public sealed record PartnershipLocationsRequest(Guid[] LocationIds);
-public sealed record PartnershipListItem(Guid Id, Guid MerchantId, string MerchantName, Guid CreatorId, string CreatorName, PartnershipStatus Status, DateTime RequestedAtUtc, DateTime? StartDateUtc, DateTime? EndDateUtc, string? IntroductoryMessage, IReadOnlyList<LocationItem> Locations, string InitiatedBy = "Unknown", DateTime? ActivatedAtUtc = null, DateTime? ExpiresAtUtc = null, bool PromotionActive = false, string RelationshipState = "Pending", bool ActivationRequired = false, string? CreatorSocialPlatform = null, string? CreatorSocialProfileUrl = null, string? CreatorCity = null, long? CreatorFollowerCount = null, string? CreatorProfileImageUrl = null);
+public sealed record PartnershipListItem(Guid Id, Guid MerchantId, string MerchantName, Guid CreatorId, string CreatorName, PartnershipStatus Status, DateTime RequestedAtUtc, DateTime? StartDateUtc, DateTime? EndDateUtc, string? IntroductoryMessage, IReadOnlyList<LocationItem> Locations, string InitiatedBy = "Unknown", DateTime? ActivatedAtUtc = null, DateTime? ExpiresAtUtc = null, bool PromotionActive = false, string RelationshipState = "Pending", bool ActivationRequired = false, string? CreatorSocialPlatform = null, string? CreatorSocialProfileUrl = null, string? CreatorCity = null, long? CreatorFollowerCount = null, string? CreatorProfileImageUrl = null, string? CreatorPhoneNumber = null);
 public sealed record LocationItem(Guid Id, string Name, bool IsActive);
 
 public static class PartnershipEndpoints
@@ -108,6 +108,7 @@ public static class PartnershipEndpoints
             x.PublicCreatorId,
             x.DisplayName,
             x.City,
+            x.PhoneNumber,
             x.Biography,
             x.ContentCategories,
             x.ProfileImageFileName,
@@ -126,6 +127,7 @@ public static class PartnershipEndpoints
             x.SocialPlatform,
             x.SocialProfileUrl,
             x.FollowerCount,
+            PhoneNumber = x.PhoneNumber,
             ProfileImageUrl = x.ProfileImageFileName is null ? null : $"/api/v1/discovery/creators/{Uri.EscapeDataString(x.PublicCreatorId)}/photo?v={Uri.EscapeDataString(x.ProfileImageFileName)}"
         }));
     }
@@ -277,7 +279,7 @@ public static class PartnershipEndpoints
     private static PartnershipListItem Item(MerchantCreatorPartnership p, Merchant m, Creator c)
     {
         var social = c.SocialProfiles.OrderByDescending(s => s.IsPrimary).ThenByDescending(s => s.VerificationStatus).ThenByDescending(s => s.FollowerCount).FirstOrDefault();
-        return new(p.Id, p.MerchantId, m.TradingName, p.CreatorId, c.DisplayName, p.Status, p.RequestedAtUtc, p.StartDateUtc, p.EndDateUtc, p.IntroductoryMessage, p.Locations.Where(x => x.IsActive).Select(x => new LocationItem(x.MerchantLocationId, x.MerchantLocation?.Name ?? "Location", x.MerchantLocation?.IsActive ?? true)).ToList(), ActivatedAtUtc: p.ApprovedAtUtc, ExpiresAtUtc: p.EndDateUtc, CreatorSocialPlatform: social?.Platform.ToString(), CreatorSocialProfileUrl: social?.ProfileUrl, CreatorCity: c.City, CreatorFollowerCount: social?.FollowerCount, CreatorProfileImageUrl: c.ProfileImageFileName is null ? null : $"/api/v1/discovery/creators/{Uri.EscapeDataString(c.PublicCreatorId)}/photo?v={Uri.EscapeDataString(c.ProfileImageFileName)}");
+        return new(p.Id, p.MerchantId, m.TradingName, p.CreatorId, c.DisplayName, p.Status, p.RequestedAtUtc, p.StartDateUtc, p.EndDateUtc, p.IntroductoryMessage, p.Locations.Where(x => x.IsActive).Select(x => new LocationItem(x.MerchantLocationId, x.MerchantLocation?.Name ?? "Location", x.MerchantLocation?.IsActive ?? true)).ToList(), ActivatedAtUtc: p.ApprovedAtUtc, ExpiresAtUtc: p.EndDateUtc, CreatorSocialPlatform: social?.Platform.ToString(), CreatorSocialProfileUrl: social?.ProfileUrl, CreatorCity: c.City, CreatorFollowerCount: social?.FollowerCount, CreatorProfileImageUrl: c.ProfileImageFileName is null ? null : $"/api/v1/discovery/creators/{Uri.EscapeDataString(c.PublicCreatorId)}/photo?v={Uri.EscapeDataString(c.ProfileImageFileName)}", CreatorPhoneNumber: c.PhoneNumber);
     }
     private static PartnershipLocation NewLocation(Guid p, Guid l, Guid user, DateTime now) => new() { Id = Guid.NewGuid(), MerchantCreatorPartnershipId = p, MerchantLocationId = l, IsActive = true, CreatedAtUtc = now, CreatedBy = user.ToString() };
     private static void Audit(ApplicationDbContext db, MerchantCreatorPartnership p, Guid user, PartnershipStatus old, PartnershipStatus next, string type, string? reason, HttpContext h, DateTime now) { db.PartnershipStatusHistories.Add(new() { Id = Guid.NewGuid(), MerchantCreatorPartnershipId = p.Id, PreviousStatus = old, NewStatus = next, ChangedAtUtc = now, ChangedByUserId = user, Reason = reason, CorrelationId = h.TraceIdentifier, CreatedAtUtc = now, CreatedBy = user.ToString() }); AddMerchantAudit(db, p, type, user, reason); }

@@ -9,6 +9,7 @@ type Creator = {
   publicCreatorId: string;
   displayName: string;
   city: string;
+  phoneNumber?: string;
   biography: string;
   contentCategories: string;
   socialPlatform?: string;
@@ -32,7 +33,9 @@ export type BusinessRelationship = {
   relationshipState?: string;
   activationRequired?: boolean;
   initiatedBy: "Business" | "Creator" | "Unknown";
+  creatorCity?: string;
   creatorProfileImageUrl?: string;
+  creatorPhoneNumber?: string;
 };
 const socialPlatforms = new Map([
   ["tiktok", "TikTok"],
@@ -66,6 +69,29 @@ function SocialMediaLink({ platform, profileUrl }: { platform?: string; profileU
     </a>
   ) : (
     <span className="social-media-link">{link.label}</span>
+  );
+}
+
+function CreatorIdentity({
+  name,
+  photoUrl,
+  phoneNumber,
+  city,
+}: {
+  name: string;
+  photoUrl?: string;
+  phoneNumber?: string;
+  city?: string;
+}) {
+  return (
+    <div className="creator-heading">
+      <ProfileAvatar name={name} photoUrl={photoUrl} />
+      <div className="creator-identity-text">
+        <strong>{name}</strong>
+        {phoneNumber && <small style={{ display: 'block' }}>{phoneNumber}</small>}
+        {city && <small style={{ display: 'block' }}>📍 {city}</small>}
+      </div>
+    </div>
   );
 }
 const status = (value: string) =>
@@ -211,16 +237,12 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
             return (
               <article className="discovery-row business-discovery-row" key={x.id}>
                 <div className="creator-card">
-                  <div className="creator-heading">
-                    <ProfileAvatar
-                      name={x.displayName}
-                      photoUrl={x.profileImageUrl}
-                    />
-                    <div>
-                      <strong>{x.displayName}</strong>
-                      <small>{x.city}</small>
-                    </div>
-                  </div>
+                  <CreatorIdentity
+                    name={x.displayName}
+                    photoUrl={x.profileImageUrl}
+                    phoneNumber={x.phoneNumber}
+                    city={x.city}
+                  />
                 </div>
                 <span data-label="Social Media">
                   <SocialMediaLink
@@ -236,7 +258,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                     {state.daysText}
                   </span>
                 )}
-                <span data-label="Action">
+                <span>
                   {state.canInvite && (
                     <button onClick={() => void invite(x)}>
                       {state.label === "Declined" ? "Request Again" : "Invite to Advertise"}
@@ -333,15 +355,12 @@ export function ActiveCreators({
               key={x.id}
             >
                 <div className="creator-card">
-                  <div className="creator-heading">
-                    <ProfileAvatar
-                      name={x.creatorName}
-                      photoUrl={x.creatorProfileImageUrl}
-                    />
-                    <div>
-                      <strong data-label="Creator">{x.creatorName}</strong>
-                    </div>
-                  </div>
+                  <CreatorIdentity
+                    name={x.creatorName}
+                    photoUrl={x.creatorProfileImageUrl}
+                    phoneNumber={x.creatorPhoneNumber}
+                    city={x.creatorCity}
+                  />
                 </div>
                 <span data-label="Social Media">
                   <SocialMediaLink
@@ -355,7 +374,7 @@ export function ActiveCreators({
                 {state.daysLeft !== null && (
                   <span className="days-left">{daysLeftText(state.daysLeft, state.tone)}</span>
                 )}
-                <span className="table-action" data-label="Action">
+                <span className="table-action">
                   {state.label === "Active" ? (
                     <button
                       className="danger compact-action"
@@ -434,20 +453,15 @@ export function AdvertisingRequests({
               .filter((x) => x.initiatedBy === "Creator")
               .map((x) => (
                 <article key={x.id}>
-                  <div className="creator-card">
-                    <div className="creator-heading">
-                      <ProfileAvatar
-                        name={x.creatorName}
-                        photoUrl={x.creatorProfileImageUrl}
-                      />
-                      <div>
-                        <strong>{x.creatorName}</strong>
-                        <small>
-                          {new Date(x.requestedAtUtc).toLocaleDateString()}
-                        </small>
-                      </div>
-                    </div>
-                  </div>
+                <div className="creator-card">
+                  <CreatorIdentity
+                    name={x.creatorName}
+                    photoUrl={x.creatorProfileImageUrl}
+                    phoneNumber={x.creatorPhoneNumber}
+                    city={x.creatorCity}
+                  />
+                  <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
                       platform={x.creatorSocialPlatform}
@@ -477,20 +491,15 @@ export function AdvertisingRequests({
               .filter((x) => x.initiatedBy === "Business")
               .map((x) => (
                 <article key={x.id}>
-                  <div className="creator-card">
-                    <div className="creator-heading">
-                      <ProfileAvatar
-                        name={x.creatorName}
-                        photoUrl={x.creatorProfileImageUrl}
-                      />
-                      <div>
-                        <strong>{x.creatorName}</strong>
-                        <small>
-                          {new Date(x.requestedAtUtc).toLocaleDateString()}
-                        </small>
-                      </div>
-                    </div>
-                  </div>
+                <div className="creator-card">
+                  <CreatorIdentity
+                    name={x.creatorName}
+                    photoUrl={x.creatorProfileImageUrl}
+                    phoneNumber={x.creatorPhoneNumber}
+                    city={x.creatorCity}
+                  />
+                  <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
                       platform={x.creatorSocialPlatform}
