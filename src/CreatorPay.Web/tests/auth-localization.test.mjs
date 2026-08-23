@@ -37,6 +37,8 @@ test('registration validates passwords and Ethiopian phones',()=>{
   assert.match(auth,/Passwords do not match\./)
   assert.match(auth,/\^0\[79\]\\d\{8\}\$/)
   assert.match(auth,/\^\\\+251\[79\]\\d\{8\}\$/)
+  assert.match(auth,/\/api\/v1\/auth\/signup-settings/)
+  assert.match(auth,/Minimum required TikTok followers:/)
   assert.match(authCompact,/const\{confirmation,platform,profileUrl,followerCount,\.\.\.request\}=creator/)
   assert.match(authCompact,/const\{confirmation,\.\.\.request\}=business/)
 })

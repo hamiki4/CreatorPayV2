@@ -5189,6 +5189,9 @@ namespace CreatorPay.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<long>("MinimumTikTokFollowers")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTime>("PayoutScheduleEffectiveFromUtc")
                         .HasColumnType("timestamp with time zone");
 

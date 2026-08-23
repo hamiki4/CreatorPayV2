@@ -12,6 +12,7 @@ public sealed class PlatformFinancialSettingConfiguration : IEntityTypeConfigura
         builder.HasIndex(x => x.CurrencyCode).IsUnique();
         builder.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
         builder.Property(x => x.MinimumBusinessWalletBalance).HasPrecision(18, 2);
+        builder.Property(x => x.MinimumTikTokFollowers).HasColumnType("bigint");
     }
 }
 

@@ -13,6 +13,7 @@ test('admin operations exposes the simplified secure pilot navigation',async()=>
   assert.match(source,/Deactivate/)
   const commission=await readFile(new URL('../src/CommissionWorkspace.tsx',import.meta.url),'utf8')
   assert.match(commission,/Minimum Business Wallet Balance/)
+  assert.match(commission,/Minimum TikTok Followers/)
   assert.match(commission,/Split of that commission/)
   assert.match(commission,/Save Settings/)
   assert.match(commission,/percentages must total 100%/)

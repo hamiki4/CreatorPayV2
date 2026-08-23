@@ -42,6 +42,7 @@ public sealed class CreatorStore(ApplicationDbContext db) : ICreatorStore
         return row is null ? null : (row.u, row.c);
     }
     public Task<CreatorVerificationToken?> FindTokenAsync(string hash, string purpose, CancellationToken ct) => db.CreatorVerificationTokens.SingleOrDefaultAsync(x => x.TokenHash == hash && x.Purpose == purpose, ct);
+    public async Task<long> GetMinimumTikTokFollowersAsync(CancellationToken ct) => await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (long?)x.MinimumTikTokFollowers).SingleOrDefaultAsync(ct) ?? 0L;
     public async Task<IReadOnlyList<Creator>> FindByStatusAsync(CreatorStatus status, CancellationToken ct) => await db.Creators.AsNoTracking().Where(x => x.Status == status).OrderBy(x => x.CreatedAtUtc).Take(200).ToListAsync(ct);
     public Task InvalidateTokensAsync(Guid userId, string purpose, DateTime usedAt, CancellationToken ct) => db.CreatorVerificationTokens.Where(x => x.UserAccountId == userId && x.Purpose == purpose && x.UsedAtUtc == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.UsedAtUtc, usedAt), ct);
     public void Add(UserAccount item) => db.UserAccounts.Add(item); public void Add(Creator item) => db.Creators.Add(item); public void Add(CreatorVerificationToken item) => db.CreatorVerificationTokens.Add(item); public void Add(CreatorAuditEvent item) => db.CreatorAuditEvents.Add(item);
