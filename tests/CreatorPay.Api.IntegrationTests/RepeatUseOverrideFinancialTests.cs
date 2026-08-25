@@ -988,6 +988,13 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         }, "create-customer");
         Assert.Equal(HttpStatusCode.Created, customerResponse.StatusCode);
         var customerAccountId = (await customerResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accountId").GetGuid();
+        await using (var customerDb = Db())
+        {
+            var createdCustomer = await customerDb.Customers.SingleAsync(x => x.PhoneNumber == "+251911000992");
+            var wallet = await customerDb.CustomerWallets.SingleAsync(x => x.CustomerId == createdCustomer.Id);
+            Assert.Equal(0m, wallet.AvailableCashback);
+            Assert.Equal(0m, wallet.ReservedCashback);
+        }
 
         var merchantResponse = await Post(client, "/api/v1/admin/accounts/create", admin, new
         {

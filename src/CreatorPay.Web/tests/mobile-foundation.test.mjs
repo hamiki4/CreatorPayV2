@@ -43,7 +43,7 @@ test('Android back navigation is native-aware without duplicating browser histor
 
 test('Android manifest permits only HTTPS networking and protects session data',()=>{
   const manifest=read('android/app/src/main/AndroidManifest.xml')
-  for(const expected of ['android:usesCleartextTraffic="false"','android:allowBackup="false"','android:windowSoftInputMode="adjustResize"','android.permission.INTERNET'])
+  for(const expected of ['android:usesCleartextTraffic="false"','android:allowBackup="false"','android:windowSoftInputMode="adjustResize"','android.permission.INTERNET','android.permission.POST_NOTIFICATIONS'])
     assert.ok(manifest.includes(expected),expected)
   assert.ok(!manifest.includes('android.permission.CAMERA'))
 })

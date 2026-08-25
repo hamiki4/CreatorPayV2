@@ -1,8 +1,14 @@
 name: creatorpay
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: "25m"
+    max-file: "3"
 services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *json-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-CreatorPayV2Db}
       POSTGRES_USER: ${POSTGRES_USER:-creatorpay}
@@ -13,6 +19,7 @@ services:
   api:
     build: { context: ., dockerfile: src/CreatorPay.Api/Dockerfile }
     restart: unless-stopped
+    logging: *json-logging
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ConnectionStrings__CreatorPayDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:-CreatorPayV2Db};Username=${POSTGRES_USER:-creatorpay};Password=${POSTGRES_PASSWORD}
@@ -42,6 +49,7 @@ services:
   worker:
     build: { context: ., dockerfile: src/CreatorPay.Worker/Dockerfile }
     restart: unless-stopped
+    logging: *json-logging
     environment:
       DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ConnectionStrings__CreatorPayDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:-CreatorPayV2Db};Username=${POSTGRES_USER:-creatorpay};Password=${POSTGRES_PASSWORD}
@@ -65,6 +73,7 @@ services:
         VITE_FIREBASE_MESSAGING_SENDER_ID: "${VITE_FIREBASE_MESSAGING_SENDER_ID:-}"
         VITE_FIREBASE_VAPID_PUBLIC_KEY: "${VITE_FIREBASE_VAPID_PUBLIC_KEY:-}"
     restart: unless-stopped
+    logging: *json-logging
     ports: ["${WEB_PORT:-8081}:8080"]
     depends_on: { api: { condition: service_healthy } }
     networks: [edge]
