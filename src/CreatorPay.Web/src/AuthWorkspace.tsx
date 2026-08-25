@@ -326,9 +326,6 @@ export function AuthWorkspace() {
                   if(result){setResetReference(result.reference??"");setResetStage("waiting");setMessage("Your password reset request is waiting for support approval.")}
                   return;
                 }
-                if(resetStage==="waiting"){
-                  setBusy(true);const r=await fetch(`${base}/api/v1/auth/password-reset-requests/${encodeURIComponent(resetReference)}`);const v=await r.json().catch(()=>({}));setBusy(false);if(v.status==="Approved"){setResetStage("approved");setMessage("Your request was approved. Create a new password.")}else setMessage(v.message??"Your password reset request is waiting for support approval.");return
-                }
                 if(!validPassword({password:reset.newPassword,confirmation:reset.confirmation}))return;
                 if(await post("/api/v1/auth/reset-password",{resetToken:resetReference,newPassword:reset.newPassword,confirmation:reset.confirmation})){setMessage("Password reset. You can sign in now.");setResetStage("request")}
               }}
@@ -354,9 +351,42 @@ export function AuthWorkspace() {
                   )}
                 </>
               )}
-              <button disabled={busy}>
-                {resetStage==="request"?"Request Password Reset":resetStage==="waiting"?"Check Approval Status":"Reset Password"}
-              </button>
+              {resetStage==="waiting" ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (!resetReference) {
+                      setMessage("Your password reset request is waiting for support approval.");
+                      return;
+                    }
+                    setBusy(true);
+                    try {
+                      const response = await fetch(
+                        `${base}/api/v1/auth/password-reset-requests/${encodeURIComponent(resetReference)}`,
+                      );
+                      const value = await response.json().catch(() => ({}));
+                      if (value.status === "Approved") {
+                        setResetStage("approved");
+                        setMessage("Your request was approved. Create a new password.");
+                      } else if (value.status === "Rejected") {
+                        setResetStage("request");
+                        setMessage("Your request was rejected. You can submit a new reset request.");
+                      } else {
+                        setMessage(value.message ?? "Your password reset request is waiting for support approval.");
+                      }
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Check Approval Status
+                </button>
+              ) : (
+                <button disabled={busy}>
+                  {resetStage==="request"?"Request Password Reset":"Reset Password"}
+                </button>
+              )}
               <button
                 type="button"
                 className="quiet"

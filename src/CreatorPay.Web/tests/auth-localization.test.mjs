@@ -81,6 +81,13 @@ test('notifications use the shared configured base and reject non-JSON safely',(
   assert.match(notifications,/This section is temporarily unavailable/)
 })
 
+test('forgot password status polling remains clickable and explicit',()=>{
+  assert.match(auth,/Check Approval Status/)
+  assert.match(auth,/type="button"/)
+  assert.match(auth,/setResetStage\("approved"\)/)
+  assert.match(auth,/setResetStage\("request"\)/)
+})
+
 test('service worker JavaScript is valid',()=>{
   const result=spawnSync(process.execPath,['--check',fileURLToPath(sw)],{encoding:'utf8'})
   assert.equal(result.status,0,result.stderr)

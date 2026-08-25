@@ -13,7 +13,7 @@ export function ProfileAvatar({name,photoUrl,className='',style}:{name?:string;p
   const[failed,setFailed]=useState(false)
   useEffect(()=>{setFailed(false)},[photoUrl])
   const label=initials(name)
-  const resolvedPhotoUrl=normalizeProfilePhotoUrl(photoUrl)
-  if(resolvedPhotoUrl&&!failed)return <span className={`avatar creator-avatar ${className}`.trim()} style={style}><img src={resolvedPhotoUrl} alt="" onError={()=>setFailed(true)} /></span>
+  const resolvedPhotoUrl=normalizeProfilePhotoUrl(photoUrl)?.trim()
+  if(resolvedPhotoUrl&&!failed)return <span className={`avatar creator-avatar ${className}`.trim()} style={style}><img key={resolvedPhotoUrl} src={resolvedPhotoUrl} alt="" loading="eager" decoding="async" referrerPolicy="no-referrer" onError={()=>setFailed(true)} /></span>
   return <span className={`avatar creator-avatar ${className}`.trim()} style={style} aria-hidden="true">{label}</span>
 }

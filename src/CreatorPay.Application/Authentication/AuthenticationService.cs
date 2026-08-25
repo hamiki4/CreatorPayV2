@@ -211,7 +211,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         : user.Status switch
         {
             AccountStatus.Suspended => new("AccountSuspended", "Your account is suspended. Please contact Weymela support."),
-            AccountStatus.Closed or AccountStatus.Rejected => new("AccountDeactivated", "Your account is deactivated. Please contact Weymela support."),
+            AccountStatus.Closed or AccountStatus.Rejected or AccountStatus.Deleted => new("AccountDeactivated", "Your account is deactivated. Please contact Weymela support."),
             _ => null
         };
     private static string Normalize(string email) => email.Trim().ToUpperInvariant();

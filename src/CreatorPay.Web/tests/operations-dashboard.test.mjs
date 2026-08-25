@@ -5,7 +5,7 @@ import {repoPath} from './repoPath.mjs'
 
 test('admin operations exposes the simplified secure pilot navigation',async()=>{
   const source=await readFile(new URL('../src/AdminPortal.tsx',import.meta.url),'utf8')
-  for(const item of ['Dashboard','Reports','Creators','Businesses','Accounts','Commission','Deposits','Wallets','Payouts','Fraud','System']) assert.match(source,new RegExp(`'${item}'`))
+  for(const item of ['Dashboard','Reports','Creator Review','Business Review','Accounts','Commission','Deposits','Wallets','Payouts','Fraud','System','Business Accounts','Creator Accounts','Customer Accounts']) assert.match(source,new RegExp(`'${item}'`))
   assert.doesNotMatch(source,/\['transactions','Transactions'\]/)
   for(const removed of ["'Support'","'Pilot feedback'","'Partnerships'","'Repeat use'","'Reversals'","'Offline sync'","'Audit log'"]) assert.doesNotMatch(source,new RegExp(removed))
   const reports=await readFile(new URL('../src/ReportingWorkspace.tsx',import.meta.url),'utf8')
@@ -24,7 +24,7 @@ test('admin operations exposes the simplified secure pilot navigation',async()=>
   assert.match(source,/header=\(value:string\)=>value==='cashierName'\?'Name':label\(value\)/)
   assert.match(source,/Disable Cashier/)
   assert.match(api,/MerchantCashiers/)
-  for(const accountFilter of ['General Search','All roles','All statuses','Business name or public ID','Clear Filters']) assert.match(source,new RegExp(accountFilter))
+  for(const accountFilter of ['General Search','All statuses','Business name or public ID','Clear Filters']) assert.match(source,new RegExp(accountFilter))
   const payouts=await readFile(new URL('../src/EarningsWorkspace.tsx',import.meta.url),'utf8')
   for(const label of ['Cycle Start','Cutoff','Payout Date','Eligible/Scheduled Total','Reserved/In Batch','Paid This Cycle','Creator Name','Creator ID','Eligible Amount','Customer Name','Eligible Cashback','Payout Status','UNPAID','Search Creator Name or Creator ID','Search Customer Name','Clear','Period Start','Period End','Transactions','Platform Revenue','Platform Revenue History'])assert.match(payouts,new RegExp(label))
   assert.match(payouts,/payout-batches\/\$\{line\.payoutBatchId\}\/process/)

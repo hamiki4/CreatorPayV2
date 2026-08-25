@@ -64,5 +64,7 @@ test('shared avatar component rewrites relative creator photo urls to the pilot 
   assert.match(profile,/normalizeProfilePhotoUrl\(photoUrl\)/)
   assert.match(profile,/resolvedPhotoUrl/)
   assert.match(profile,/img src=\{resolvedPhotoUrl\}/)
+  assert.match(profile,/loading="eager"/)
+  assert.match(profile,/referrerPolicy="no-referrer"/)
   assert.doesNotMatch(profile,/img src=\{photoUrl\}/)
 })
