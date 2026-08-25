@@ -790,7 +790,7 @@ function Root() {
         </div>
       </main></PinEnrollmentGate>
     );
-  return user.role === "PlatformAdmin" ? (
+  return user.role === "PlatformAdmin" || user.role === "OperationsAdmin" ? (
     <AdminPortal
       operations={{
         commission: <CommissionWorkspace role={user.role} />,

@@ -15,7 +15,7 @@ public static class MerchantEndpoints
         merchants.MapPost("/verify-phone", async (VerifyMerchantRequest r, IMerchantService s, CancellationToken ct) => ToHttp(await s.VerifyPhoneAsync(r.Token, ct))).RequireRateLimiting("auth-sensitive");
         merchants.MapGet("/me", async (ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.GetMeAsync(u.UserAccountId!.Value, ct))).RequireAuthorization("MerchantOnboarding");
         merchants.MapPut("/me", async (UpdateMerchantProfileRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.UpdateMeAsync(u.UserAccountId!.Value, r, ct))).RequireAuthorization("MerchantOnboarding");
-        var admin = endpoints.MapGroup("/api/v1/admin/merchants").WithTags("Merchant approval").RequireAuthorization("PlatformAdminOnly");
+        var admin = endpoints.MapGroup("/api/v1/admin/merchants").WithTags("Merchant approval").RequireAuthorization("AdminOperations");
         admin.MapGet("/pending", async (IMerchantService s, CancellationToken ct) => Results.Ok(await s.GetPendingAsync(ct)));
         admin.MapGet("/{merchantId:guid}", async (Guid merchantId, IMerchantService s, CancellationToken ct) => ToHttp(await s.GetAsync(merchantId, ct)));
         admin.MapPost("/approve", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.ApproveAsync(r.MerchantId, u.UserAccountId!.Value, ct)));

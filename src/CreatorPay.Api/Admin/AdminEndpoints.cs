@@ -16,21 +16,21 @@ public static class AdminEndpoints
 
     public static IEndpointRouteBuilder MapAdminEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var admin = endpoints.MapGroup("/api/v1/admin").WithTags("Platform administration").RequireAuthorization("PlatformAdminOnly");
-        admin.MapGet("/dashboard/summary", Dashboard).RequireRateLimiting("admin-report");
-        admin.MapGet("/dashboard/trends", Trends).RequireRateLimiting("admin-report");
-        admin.MapGet("/dashboard/pilot-metrics", PilotMetrics).RequireRateLimiting("admin-report");
-        admin.MapGet("/dashboard/pilot-operations", PilotOperations).RequireRateLimiting("admin-report");
+        var admin = endpoints.MapGroup("/api/v1/admin").WithTags("Platform administration").RequireAuthorization("AdminOperations");
+        admin.MapGet("/dashboard/summary", Dashboard).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/trends", Trends).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/pilot-metrics", PilotMetrics).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/pilot-operations", PilotOperations).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
         admin.MapGet("/creators", Creators);
         admin.MapGet("/merchants", Merchants);
         admin.MapGet("/merchants/{merchantId:guid}/cashiers", MerchantCashiers);
         admin.MapGet("/cashiers", Cashiers);
         admin.MapGet("/accounts", Accounts);
-        admin.MapPost("/accounts/create", CreateAccount);
+        admin.MapPost("/accounts/create", CreateAccount).RequireAuthorization("PlatformAdminOnly");
         admin.MapGet("/password-reset-requests", PasswordResetRequests);
         admin.MapPost("/password-reset-requests/{id:guid}/approve", ApprovePasswordReset);
         admin.MapPost("/password-reset-requests/{id:guid}/reject", RejectPasswordReset);
-        admin.MapGet("/reports/financial-summary", FinancialSummary).RequireRateLimiting("admin-report");
+        admin.MapGet("/reports/financial-summary", FinancialSummary).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
         admin.MapGet("/purchases", Purchases);
         admin.MapGet("/wallets", Wallets);
         admin.MapGet("/partnerships", Partnerships);
@@ -39,19 +39,21 @@ public static class AdminEndpoints
         admin.MapGet("/search", Search).RequireRateLimiting("admin-report");
         admin.MapGet("/support", Support).RequireRateLimiting("admin-report");
         admin.MapGet("/pilot-feedback", PilotFeedback).RequireRateLimiting("admin-report");
-        admin.MapGet("/system", SystemStatus);
+        admin.MapGet("/system", SystemStatus).RequireAuthorization("PlatformAdminOnly");
         admin.MapGet("/operational-alerts", Alerts);
-        admin.MapPost("/accounts/{id:guid}/{action}", ChangeAccountStatus);
-        admin.MapPost("/accounts/{id:guid}/revoke-sessions", RevokeSessions);
+        admin.MapPost("/accounts/{id:guid}/{action}", ChangeAccountStatus).RequireAuthorization("PlatformAdminOnly");
+        admin.MapPost("/accounts/{id:guid}/revoke-sessions", RevokeSessions).RequireAuthorization("PlatformAdminOnly");
         admin.MapPost("/operational-alerts/{id:guid}/acknowledge", (Guid id, AdminReason request, HttpContext h, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => ChangeAlert(id, "Acknowledged", request.Reason, h, u, db, ct));
         admin.MapPost("/operational-alerts/{id:guid}/resolve", (Guid id, AdminReason request, HttpContext h, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => ChangeAlert(id, "Resolved", request.Reason, h, u, db, ct));
         return endpoints;
     }
 
-    private static async Task<IResult> PasswordResetRequests(ApplicationDbContext db, CancellationToken ct)
+    private static async Task<IResult> PasswordResetRequests(string? role, ApplicationDbContext db, CancellationToken ct)
     {
-        var items = await db.SupportRequests.AsNoTracking().Where(x => x.Subject == "Password Reset")
-            .OrderByDescending(x => x.CreatedAtUtc).Select(x => new { id = x.Id, name = x.Name, phone = x.Contact, role = x.UserType, requestedAtUtc = x.CreatedAtUtc, status = x.Status == "Approved" ? "Pending" : x.Status, canApprove = x.Status == "Pending" }).ToListAsync(ct);
+        var query = db.SupportRequests.AsNoTracking().Where(x => x.Subject == "Password Reset");
+        if (!string.IsNullOrWhiteSpace(role)) query = query.Where(x => x.UserType == role);
+        var items = await query
+            .OrderByDescending(x => x.CreatedAtUtc).Select(x => new { id = x.Id, name = x.Name, phone = x.Contact, role = x.UserType, requestedAtUtc = x.CreatedAtUtc, status = x.Status, canApprove = x.Status == "Pending" }).ToListAsync(ct);
         return Results.Ok(items);
     }
 
@@ -67,7 +69,7 @@ public static class AdminEndpoints
         db.PasswordResetTokens.Add(new PasswordResetToken { Id = Guid.NewGuid(), UserAccountId = user.Id, TokenHash = tokens.HashToken(request.PublicReference), CreatedAtUtc = now, ExpiresAtUtc = now.AddMinutes(options.Value.TokenLifetimeMinutes), RequestedByIp = h.Connection.RemoteIpAddress?.ToString() });
         request.Status = "Approved"; request.UpdatedAtUtc = now;
         await AddAudit(db, current.UserAccountId!.Value, "PasswordResetAuthorized", request.Id, "Admin approved password reset authorization", h.TraceIdentifier, ct);
-        return Results.Ok(new { status = "Pending", authorized = true });
+        return Results.Ok(new { status = "Approved", authorized = true });
     }
 
     private static async Task<IResult> RejectPasswordReset(Guid id, HttpContext h, ICurrentUserService current, ApplicationDbContext db, CancellationToken ct)
@@ -297,6 +299,15 @@ public static class AdminEndpoints
                     {
                         if (string.IsNullOrWhiteSpace(email)) return Results.Problem(detail: "Email is required for PlatformAdmin.", statusCode: StatusCodes.Status400BadRequest);
                         var account = new UserAccount { Id = Guid.NewGuid(), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.PlatformAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        account.PasswordHash = passwords.Hash(account, request.Password);
+                        db.Add(account);
+                        createdAccounts.Add(account.Id);
+                        break;
+                    }
+                case UserRole.OperationsAdmin:
+                    {
+                        if (string.IsNullOrWhiteSpace(email)) return Results.Problem(detail: "Email is required for OperationsAdmin.", statusCode: StatusCodes.Status400BadRequest);
+                        var account = new UserAccount { Id = Guid.NewGuid(), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.OperationsAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
                         account.PasswordHash = passwords.Hash(account, request.Password);
                         db.Add(account);
                         createdAccounts.Add(account.Id);

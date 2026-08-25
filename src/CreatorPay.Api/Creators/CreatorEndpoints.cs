@@ -1,7 +1,10 @@
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Creators;
+using CreatorPay.Domain.Enums;
+using CreatorPay.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CreatorPay.Api.Creators;
 
@@ -26,13 +29,21 @@ public static class CreatorEndpoints
             return ToHttp(await service.UploadProfilePhotoAsync(user.UserAccountId!.Value, stream, photo.ContentType ?? "application/octet-stream", photo.Length, ct));
         }).RequireAuthorization("CreatorOnboarding").DisableAntiforgery().WithMetadata(new RequestFormLimitsAttribute { MultipartBodyLengthLimit = ProfilePhotoLimits.MaximumUploadBytes }, new RequestSizeLimitAttribute(ProfilePhotoLimits.MaximumUploadBytes));
         group.MapDelete("/me/profile-photo", async (ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RemoveProfilePhotoAsync(user.UserAccountId!.Value, ct))).RequireAuthorization("CreatorOnboarding");
-        group.MapGet("/pending", async (ICreatorService service, CancellationToken ct) => Results.Ok(await service.GetPendingAsync(ct))).RequireAuthorization("PlatformAdminOnly");
-        group.MapGet("/{creatorId:guid}", async (Guid creatorId, ICreatorService service, CancellationToken ct) => ToHttp(await service.GetAsync(creatorId, ct))).RequireAuthorization("PlatformAdminOnly");
-        group.MapPost("/approve", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.ApproveAsync(request.CreatorId, user.UserAccountId!.Value, ct))).RequireAuthorization("PlatformAdminOnly");
-        group.MapPost("/reject", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RejectAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("PlatformAdminOnly");
-        group.MapPost("/request-correction", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RequestCorrectionAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("PlatformAdminOnly");
-        group.MapPost("/suspend", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.SuspendAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("PlatformAdminOnly");
-        group.MapPost("/reactivate", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.ReactivateAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("PlatformAdminOnly");
+        group.MapGet("/pending", async (ApplicationDbContext db, CancellationToken ct) =>
+        {
+            var items = await db.Creators.AsNoTracking()
+                .Where(x => x.Status == CreatorStatus.PendingApproval)
+                .OrderBy(x => x.CreatedAtUtc)
+                .Select(x => new PendingCreatorResponse(x.Id, x.PublicCreatorId, x.DisplayName, x.Email, x.CreatedAtUtc))
+                .ToListAsync(ct);
+            return Results.Ok(items);
+        }).RequireAuthorization("AdminOperations");
+        group.MapGet("/{creatorId:guid}", async (Guid creatorId, ICreatorService service, CancellationToken ct) => ToHttp(await service.GetAsync(creatorId, ct))).RequireAuthorization("AdminOperations");
+        group.MapPost("/approve", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.ApproveAsync(request.CreatorId, user.UserAccountId!.Value, ct))).RequireAuthorization("AdminOperations");
+        group.MapPost("/reject", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RejectAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("AdminOperations");
+        group.MapPost("/request-correction", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RequestCorrectionAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("AdminOperations");
+        group.MapPost("/suspend", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.SuspendAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("AdminOperations");
+        group.MapPost("/reactivate", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.ReactivateAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("AdminOperations");
         return endpoints;
     }
     private static IResult ToHttp(CreatorResult result) => result.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(result.Error!);

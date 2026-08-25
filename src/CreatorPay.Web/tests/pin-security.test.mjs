@@ -8,7 +8,7 @@ const auth = await readFile(new URL("../src/AuthWorkspace.tsx", import.meta.url)
 const client = await readFile(new URL("../src/apiClient.ts", import.meta.url), "utf8");
 
 test("normal roles are gated by PIN while PlatformAdmin remains unchanged", () => {
-  assert.match(main, /user\.role === "PlatformAdmin"/);
+  assert.match(main, /user\.role === "PlatformAdmin" \|\| user\.role === "OperationsAdmin"/);
   assert.match(main, /<PinEnrollmentGate><App \/><\/PinEnrollmentGate>/);
   assert.doesNotMatch(main, /<PinEnrollmentGate><AdminPortal/);
 });

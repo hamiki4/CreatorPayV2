@@ -93,6 +93,7 @@ builder.Services.AddAuthorization(o =>
     static bool Status(ClaimsPrincipal user, params AccountStatus[] statuses) => statuses.Any(status => user.HasClaim(AuthenticationClaimTypes.AccountStatus, status.ToString()));
     o.AddPolicy("AuthenticatedUser", p => p.RequireAuthenticatedUser());
     foreach (var role in Enum.GetValues<UserRole>()) o.AddPolicy($"{role}Only", p => p.RequireAssertion(c => c.User.IsInRole(role.ToString()) && Status(c.User, AccountStatus.Active)));
+    o.AddPolicy("AdminOperations", p => p.RequireAssertion(c => (c.User.IsInRole(nameof(UserRole.PlatformAdmin)) || c.User.IsInRole(nameof(UserRole.OperationsAdmin))) && Status(c.User, AccountStatus.Active)));
     o.AddPolicy("CreatorOnboarding", p => p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.Creator)) && Status(c.User, AccountStatus.PendingVerification, AccountStatus.PendingApproval, AccountStatus.Active)));
     o.AddPolicy("MerchantOnboarding", p => p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.MerchantAdmin)) && Status(c.User, AccountStatus.PendingVerification, AccountStatus.PendingApproval, AccountStatus.Active)));
     o.AddPolicy("MerchantOperations", p => { p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.MerchantAdmin)) || c.User.IsInRole(nameof(UserRole.Supervisor)) || c.User.IsInRole(nameof(UserRole.Cashier))); p.RequireClaim(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()); });

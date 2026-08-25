@@ -20,7 +20,7 @@ public static class WalletEndpoints
         m.MapGet("/confirmed-sales", (string? search, Guid? creatorId, Guid? cashierId, DateTime? dateFromUtc, DateTime? dateToUtc, string? status, int? page, int? pageSize, string? creatorName, string? cashierName, ICurrentUserService u, IWalletService s, CancellationToken c) => Run(() => s.GetConfirmedSalesAsync(u.MerchantId!.Value, new(search, creatorId, cashierId, dateFromUtc, dateToUtc, status, page ?? 1, pageSize ?? 100, creatorName, cashierName), c)));
         m.MapGet("/purchases", (ICurrentUserService u, IWalletService s, CancellationToken c) => Run(() => s.GetPurchasesAsync(u.MerchantId, null, 100, c)));
         m.MapGet("/purchases/{id:guid}", (Guid id, ICurrentUserService u, IWalletService s, CancellationToken c) => Run(() => s.GetPurchaseAsync(id, u.MerchantId, null, c)));
-        var a = e.MapGroup("/api/v1/admin").RequireAuthorization("PlatformAdminOnly");
+        var a = e.MapGroup("/api/v1/admin").RequireAuthorization("AdminOperations");
         a.MapGet("/deposits", (IWalletService s, CancellationToken c) => Run(() => s.GetDepositsAsync(null, false, c)));
         a.MapGet("/deposits/pending", (IWalletService s, CancellationToken c) => Run(() => s.GetDepositsAsync(null, true, c)));
         a.MapGet("/deposits/{id:guid}", (Guid id, IWalletService s, CancellationToken c) => Run(() => s.GetDepositAsync(id, null, c)));
