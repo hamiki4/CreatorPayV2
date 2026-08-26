@@ -18,6 +18,7 @@ const profile=fs.readFileSync(new URL('../src/profileMedia.tsx',import.meta.url)
 const photoUpload=fs.readFileSync(new URL('../src/photoUpload.ts',import.meta.url),'utf8')
 const styles=fs.readFileSync(new URL('../src/styles.css',import.meta.url),'utf8')
 const nginx=fs.readFileSync(new URL('../nginx.conf',import.meta.url),'utf8')
+const { renderNginxConfig, resolveApiOrigin } = await import(new URL('../scripts/render-nginx-config.mjs', import.meta.url))
 
 function compileModule(fileUrl, replacements = {}, overrides = {}) {
   let source = fs.readFileSync(fileUrl, 'utf8')
@@ -124,10 +125,18 @@ test('creator header avatar reuses the same profile photo source as the profile 
   assert.match(styles,/\.account-identity-avatar\{width:2\.9rem;height:2\.9rem;min-width:2\.9rem\}/)
 })
 
-test('pilot web csp allows only the pilot api image origin in img-src',()=>{
-  assert.match(nginx,/img-src 'self' data: https:\/\/api-pilot\.weymela\.com;/)
-  assert.doesNotMatch(nginx,/img-src .*https:\/\/(?!api-pilot\.weymela\.com)/)
-  assert.match(nginx,/default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:\/\/api-pilot\.weymela\.com; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'/)
+test('web csp is rendered from the configured api origin without broadening image sources',()=>{
+  assert.match(nginx,/__IMG_SRC__/)
+  assert.doesNotMatch(nginx,/api-pilot\.weymela\.com|api\.weymela\.com/)
+  assert.equal(resolveApiOrigin('https://api-pilot.weymela.com/api/v1/discovery/creators/CR-EFCD7528C632/photo?v=file-one.jpg'),'https://api-pilot.weymela.com')
+  assert.equal(resolveApiOrigin('https://api.weymela.com/api/v1/discovery/creators/CR-EFCD7528C632/photo?v=file-one.jpg'),'https://api.weymela.com')
+  assert.equal(resolveApiOrigin('/api/v1/discovery/creators/CR-EFCD7528C632/photo?v=file-one.jpg'),'')
+  const pilotRendered = renderNginxConfig(nginx, 'https://api-pilot.weymela.com')
+  assert.match(pilotRendered,/img-src 'self' data: https:\/\/api-pilot\.weymela\.com;/)
+  const prodRendered = renderNginxConfig(nginx, 'https://api.weymela.com')
+  assert.match(prodRendered,/img-src 'self' data: https:\/\/api\.weymela\.com;/)
+  const relativeRendered = renderNginxConfig(nginx, '/')
+  assert.match(relativeRendered,/img-src 'self' data:;/)
 })
 
 test('profile photo helpers render the same current image across relative and absolute urls',()=>{
