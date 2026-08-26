@@ -10,11 +10,12 @@ public static class DiscoveryEndpoints
         var creators = e.MapGroup("/api/v1/discovery/creators");
         creators.MapGet("/", (string? q, int? page, int? pageSize, IDiscoveryService s, CancellationToken ct) => Run(() => s.SearchCreatorsAsync(q, page ?? 1, pageSize ?? 12, ct)));
         creators.MapGet("/{publicCreatorId}", (string publicCreatorId, IDiscoveryService s, CancellationToken ct) => Run(() => s.GetCreatorAsync(publicCreatorId, ct)));
-        creators.MapGet("/{publicCreatorId}/photo", async (string publicCreatorId, IDiscoveryService s, CancellationToken ct) =>
+        creators.MapGet("/{publicCreatorId}/photo", async (string publicCreatorId, HttpContext http, IDiscoveryService s, CancellationToken ct) =>
         {
             try
             {
                 var photo = await s.GetCreatorPhotoAsync(publicCreatorId, ct);
+                http.Response.Headers["Cross-Origin-Resource-Policy"] = "cross-origin";
                 return Results.File(photo.Content, photo.ContentType);
             }
             catch (KeyNotFoundException ex)

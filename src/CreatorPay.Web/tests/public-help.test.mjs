@@ -9,7 +9,10 @@ test('public help, legal, and support routes remain unauthenticated',()=>{const 
 test('public account deletion route and navigation are present',()=>{
   const compact=main.replace(/\s+/g,'')
   assert.ok(compact.includes('/delete-account'))
-  assert.match(page,/Help Center[\s\S]*Contact Support[\s\S]*Terms[\s\S]*Privacy[\s\S]*Delete Account[\s\S]*Sign In/)
+  assert.match(page,/Help Center[\s\S]*Contact Support[\s\S]*Terms[\s\S]*Privacy[\s\S]*Delete Account/)
+  assert.doesNotMatch(page,/Sign In/)
+  assert.doesNotMatch(page,/Search help|type="search"/i)
+  for(const category of ['All','General','Content Creators','Businesses','Customers','Accounts']) assert.match(page,new RegExp(category))
   assert.match(page,/Delete Your Weymela Account/)
   assert.match(page,/brand\.supportEmail/)
   assert.match(brand,/support@weymela\.com/)

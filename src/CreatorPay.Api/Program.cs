@@ -91,8 +91,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.AddAuthorization(o =>
 {
     static bool Status(ClaimsPrincipal user, params AccountStatus[] statuses) => statuses.Any(status => user.HasClaim(AuthenticationClaimTypes.AccountStatus, status.ToString()));
+    static bool AdminOperations(ClaimsPrincipal user) => (user.IsInRole(nameof(UserRole.PlatformAdmin)) || user.IsInRole(nameof(UserRole.OperationsAdmin))) && Status(user, AccountStatus.Active);
     o.AddPolicy("AuthenticatedUser", p => p.RequireAuthenticatedUser());
     foreach (var role in Enum.GetValues<UserRole>()) o.AddPolicy($"{role}Only", p => p.RequireAssertion(c => c.User.IsInRole(role.ToString()) && Status(c.User, AccountStatus.Active)));
+    o.AddPolicy("AdminOperationsOnly", p => p.RequireAssertion(c => AdminOperations(c.User)));
     o.AddPolicy("CreatorOnboarding", p => p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.Creator)) && Status(c.User, AccountStatus.PendingVerification, AccountStatus.PendingApproval, AccountStatus.Active)));
     o.AddPolicy("MerchantOnboarding", p => p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.MerchantAdmin)) && Status(c.User, AccountStatus.PendingVerification, AccountStatus.PendingApproval, AccountStatus.Active)));
     o.AddPolicy("MerchantOperations", p => { p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.MerchantAdmin)) || c.User.IsInRole(nameof(UserRole.Supervisor)) || c.User.IsInRole(nameof(UserRole.Cashier))); p.RequireClaim(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()); });

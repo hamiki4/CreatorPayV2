@@ -7,6 +7,7 @@ using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 
 namespace CreatorPay.Api.Admin;
 
@@ -16,21 +17,21 @@ public static class AdminEndpoints
 
     public static IEndpointRouteBuilder MapAdminEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var admin = endpoints.MapGroup("/api/v1/admin").WithTags("Platform administration").RequireAuthorization("PlatformAdminOnly");
-        admin.MapGet("/dashboard/summary", Dashboard).RequireRateLimiting("admin-report");
-        admin.MapGet("/dashboard/trends", Trends).RequireRateLimiting("admin-report");
-        admin.MapGet("/dashboard/pilot-metrics", PilotMetrics).RequireRateLimiting("admin-report");
-        admin.MapGet("/dashboard/pilot-operations", PilotOperations).RequireRateLimiting("admin-report");
+        var admin = endpoints.MapGroup("/api/v1/admin").WithTags("Platform administration").RequireAuthorization("AdminOperationsOnly");
+        admin.MapGet("/dashboard/summary", Dashboard).RequireAuthorization("AdminOperationsOnly").RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/trends", Trends).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/pilot-metrics", PilotMetrics).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/pilot-operations", PilotOperations).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
         admin.MapGet("/creators", Creators);
         admin.MapGet("/merchants", Merchants);
         admin.MapGet("/merchants/{merchantId:guid}/cashiers", MerchantCashiers);
         admin.MapGet("/cashiers", Cashiers);
         admin.MapGet("/accounts", Accounts);
-        admin.MapPost("/accounts/create", CreateAccount);
-        admin.MapGet("/password-reset-requests", PasswordResetRequests);
+        admin.MapPost("/accounts/create", CreateAccount).RequireAuthorization("PlatformAdminOnly");
+        admin.MapGet("/password-reset-requests", PasswordResetRequests).RequireAuthorization("PlatformAdminOnly");
         admin.MapPost("/password-reset-requests/{id:guid}/approve", ApprovePasswordReset);
         admin.MapPost("/password-reset-requests/{id:guid}/reject", RejectPasswordReset);
-        admin.MapGet("/reports/financial-summary", FinancialSummary).RequireRateLimiting("admin-report");
+        admin.MapGet("/reports/financial-summary", FinancialSummary).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
         admin.MapGet("/purchases", Purchases);
         admin.MapGet("/wallets", Wallets);
         admin.MapGet("/partnerships", Partnerships);
@@ -50,8 +51,11 @@ public static class AdminEndpoints
 
     private static async Task<IResult> PasswordResetRequests(ApplicationDbContext db, CancellationToken ct)
     {
-        var items = await db.SupportRequests.AsNoTracking().Where(x => x.Subject == "Password Reset")
-            .OrderByDescending(x => x.CreatedAtUtc).Select(x => new { id = x.Id, name = x.Name, phone = x.Contact, role = x.UserType, requestedAtUtc = x.CreatedAtUtc, status = x.Status == "Approved" ? "Pending" : x.Status, canApprove = x.Status == "Pending" }).ToListAsync(ct);
+        var items = await db.SupportRequests.AsNoTracking()
+            .Where(x => x.Subject == "Password Reset" && (x.Status == "Pending" || x.Status == "Approved"))
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Select(x => new { id = x.Id, name = x.Name, phone = x.Contact, role = x.UserType, requestedAtUtc = x.CreatedAtUtc, status = x.Status, canApprove = x.Status == "Pending" })
+            .ToListAsync(ct);
         return Results.Ok(items);
     }
 
@@ -66,7 +70,8 @@ public static class AdminEndpoints
         var now = DateTime.UtcNow;
         db.PasswordResetTokens.Add(new PasswordResetToken { Id = Guid.NewGuid(), UserAccountId = user.Id, TokenHash = tokens.HashToken(request.PublicReference), CreatedAtUtc = now, ExpiresAtUtc = now.AddMinutes(options.Value.TokenLifetimeMinutes), RequestedByIp = h.Connection.RemoteIpAddress?.ToString() });
         request.Status = "Approved"; request.UpdatedAtUtc = now;
-        await AddAudit(db, current.UserAccountId!.Value, "PasswordResetAuthorized", request.Id, "Admin approved password reset authorization", h.TraceIdentifier, ct);
+        AddPasswordResetAudit(db, current.UserAccountId!.Value, request.Id, "PasswordResetAuthorized", request.PublicReference, request.Contact, request.Status, h.TraceIdentifier, now);
+        await db.SaveChangesAsync(ct);
         return Results.Ok(new { status = "Pending", authorized = true });
     }
 
@@ -75,8 +80,10 @@ public static class AdminEndpoints
         var request = await db.SupportRequests.SingleOrDefaultAsync(x => x.Id == id && x.Subject == "Password Reset", ct);
         if (request is null) return Results.NotFound();
         if (request.Status != "Pending") return Results.Conflict(new { detail = "This password reset request has already been reviewed." });
-        request.Status = "Rejected"; request.UpdatedAtUtc = DateTime.UtcNow;
-        await AddAudit(db, current.UserAccountId!.Value, "PasswordResetRejected", request.Id, "Admin rejected password reset request", h.TraceIdentifier, ct);
+        var now = DateTime.UtcNow;
+        request.Status = "Rejected"; request.UpdatedAtUtc = now;
+        AddPasswordResetAudit(db, current.UserAccountId!.Value, request.Id, "PasswordResetRejected", request.PublicReference, request.Contact, request.Status, h.TraceIdentifier, now);
+        await db.SaveChangesAsync(ct);
         return Results.Ok(new { status = "Rejected" });
     }
 
@@ -100,7 +107,7 @@ public static class AdminEndpoints
             failedCheckouts = await db.CheckoutSessions.CountAsync(x => x.Status == CheckoutSessionStatus.Rejected || x.Status == CheckoutSessionStatus.Expired || x.Status == CheckoutSessionStatus.Cancelled, ct),
             failedNotifications = await db.NotificationOutboxMessages.CountAsync(x => x.Status == NotificationOutboxStatus.Failed || x.Status == NotificationOutboxStatus.DeadLettered, ct),
             suspiciousActivity = await db.FraudAlerts.CountAsync(x => x.Status == FraudAlertStatus.Open, ct),
-            openSupportRequests = await db.SupportRequests.CountAsync(x => x.Status == "Open", ct),
+            openSupportRequests = await db.SupportRequests.CountAsync(x => x.Status == "Open" || x.Subject == "Password Reset" && x.Status == "Pending", ct),
             notificationDeadLetters = await db.NotificationDeadLetters.CountAsync(x => x.Status != NotificationDeadLetterStatus.Resolved, ct),
             walletsBelowThreshold = await db.MerchantWallets.CountAsync(x => x.Status == MerchantWalletStatus.LowBalance && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
             rejectedOfflineSyncItems = await db.OfflineSyncItemResults.CountAsync(x => x.ResultStatus == "Rejected", ct),
@@ -201,8 +208,19 @@ public static class AdminEndpoints
     { var query = db.Creators.AsNoTracking(); if (status.HasValue) query = query.Where(x => x.Status == status); if (!string.IsNullOrWhiteSpace(q)) { q = q.Trim(); query = query.Where(x => x.PublicCreatorId.Contains(q) || x.DisplayName.Contains(q) || x.Email.Contains(q)); } return Results.Ok(await Page(query.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.PublicCreatorId, x.DisplayName, email = x.Email, phone = x.PhoneNumber, status = x.Status.ToString(), x.CreatedAtUtc }), page, pageSize, ct)); }
     private static async Task<IResult> Merchants(string? q, MerchantStatus? status, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
     { var minimum = await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m; var query = db.Merchants.AsNoTracking(); if (status.HasValue) query = query.Where(x => x.Status == status); if (!string.IsNullOrWhiteSpace(q)) { q = q.Trim(); query = query.Where(x => x.PublicMerchantId.Contains(q) || x.TradingName.Contains(q) || (x.Email != null && x.Email.Contains(q))); } return Results.Ok(await Page(query.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, email = x.Email, phone = x.PhoneNumber, status = x.Status.ToString(), walletBalance = db.MerchantWallets.Where(w => w.MerchantId == x.Id && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() ?? 0m, requiredMinimum = minimum, fundingStatus = x.Status == MerchantStatus.Suspended ? "Suspended" : x.Status == MerchantStatus.Closed ? "Deactivated" : x.Status != MerchantStatus.Active ? "Pending Approval" : (db.MerchantWallets.Where(w => w.MerchantId == x.Id && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() ?? 0m) < minimum ? "Insufficient Funds" : "Active", x.CreatedAtUtc }), page, pageSize, ct)); }
-    private static async Task<IResult> Accounts(string? q, string? status, UserRole? role, string? business, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
-    { var now = DateTime.UtcNow; var minimum = await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m; var query = db.UserAccounts.AsNoTracking(); if (!string.IsNullOrWhiteSpace(status)) { if (status.Equals("Locked", StringComparison.OrdinalIgnoreCase)) query = query.Where(x => x.LockoutEndUtc > now); else { var normalized = status.Equals("Pending", StringComparison.OrdinalIgnoreCase) ? AccountStatus.PendingVerification : status.Equals("Deactivated", StringComparison.OrdinalIgnoreCase) ? AccountStatus.Closed : Enum.TryParse<AccountStatus>(status, true, out var parsed) ? parsed : (AccountStatus?)null; if (!normalized.HasValue) return Results.BadRequest(new { detail = "Unknown account status filter." }); query = query.Where(x => x.Status == normalized.Value); } } if (role.HasValue) query = query.Where(x => x.Role == role); if (!string.IsNullOrWhiteSpace(q)) { var n = q.Trim().ToUpperInvariant(); var raw = q.Trim(); var digits = new string(raw.Where(char.IsDigit).ToArray()); var phoneSuffix = digits.StartsWith("0") ? digits[1..] : digits.StartsWith("251") ? digits[3..] : digits; var phoneFragment = digits.StartsWith("0") ? "251" + digits[1..] : digits; var hasPhone = phoneSuffix.Length > 0; query = query.Where(x => x.NormalizedEmail.Contains(n) || (hasPhone && x.NormalizedPhoneNumber != null && (x.NormalizedPhoneNumber.Contains(phoneFragment) || x.NormalizedPhoneNumber.EndsWith(phoneSuffix))) || (x.CreatorId.HasValue && db.Creators.Any(c => c.Id == x.CreatorId && (c.DisplayName.ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix)))))) || (x.CustomerId.HasValue && db.Customers.Any(c => c.Id == x.CustomerId && (c.DisplayName.ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix)))))) || (x.CashierId.HasValue && db.Cashiers.Any(c => c.Id == x.CashierId && ((c.FirstName + " " + c.LastName).ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix))) || c.Merchant.TradingName.ToUpper().Contains(n) || c.Merchant.PublicMerchantId.ToUpper().Contains(n)))) || (x.MerchantId.HasValue && db.Merchants.Any(m => m.Id == x.MerchantId && (m.TradingName.ToUpper().Contains(n) || m.PublicMerchantId.ToUpper().Contains(n))))); } if (!string.IsNullOrWhiteSpace(business)) { var n = business.Trim().ToUpperInvariant(); query = query.Where(x => x.MerchantId.HasValue && db.Merchants.Any(m => m.Id == x.MerchantId && (m.TradingName.ToUpper().Contains(n) || m.PublicMerchantId.ToUpper().Contains(n)))); } return Results.Ok(await Page(query.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, cashierName = x.CashierId.HasValue ? db.Cashiers.Where(c => c.Id == x.CashierId).Select(c => c.FirstName + " " + c.LastName).FirstOrDefault() : x.CreatorId.HasValue ? db.Creators.Where(c => c.Id == x.CreatorId).Select(c => c.DisplayName).FirstOrDefault() : x.CustomerId.HasValue ? db.Customers.Where(c => c.Id == x.CustomerId).Select(c => c.DisplayName).FirstOrDefault() : null, email = x.Email, phone = x.NormalizedPhoneNumber, businessName = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.TradingName).FirstOrDefault() : null, publicBusinessId = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.PublicMerchantId).FirstOrDefault() : null, assignedLocation = x.CashierId.HasValue ? db.CashierLocationAssignments.Where(a => a.CashierId == x.CashierId && a.IsActive).OrderByDescending(a => a.IsPrimary).Select(a => a.MerchantLocation.Name).FirstOrDefault() : null, role = x.Role.ToString(), status = x.Status.ToString(), x.IsEmailVerified, x.IsPhoneVerified, isLocked = x.LockoutEndUtc > now, x.LastLoginAtUtc, walletBalance = x.Role == UserRole.MerchantAdmin && x.MerchantId.HasValue ? db.MerchantWallets.Where(w => w.MerchantId == x.MerchantId && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() : null, requiredMinimum = x.Role == UserRole.MerchantAdmin && x.MerchantId.HasValue ? minimum : (decimal?)null, fundingStatus = x.Role != UserRole.MerchantAdmin || !x.MerchantId.HasValue ? null : x.Status == AccountStatus.Suspended ? "Suspended" : x.Status == AccountStatus.Closed ? "Deactivated" : x.Status != AccountStatus.Active ? "Pending Approval" : (db.MerchantWallets.Where(w => w.MerchantId == x.MerchantId && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() ?? 0m) < minimum ? "Insufficient Funds" : "Active" }), page, pageSize, ct)); }
+    private static async Task<IResult> Accounts(ICurrentUserService current, string? q, string? status, UserRole? role, string? business, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var minimum = await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m;
+        if (current.Role == nameof(UserRole.OperationsAdmin) && role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
+        var query = db.UserAccounts.AsNoTracking();
+        if (current.Role == nameof(UserRole.OperationsAdmin)) query = query.Where(x => x.Role != UserRole.PlatformAdmin && x.Role != UserRole.OperationsAdmin);
+        if (!string.IsNullOrWhiteSpace(status)) { if (status.Equals("Locked", StringComparison.OrdinalIgnoreCase)) query = query.Where(x => x.LockoutEndUtc > now); else { var normalized = status.Equals("Pending", StringComparison.OrdinalIgnoreCase) ? AccountStatus.PendingVerification : status.Equals("Deactivated", StringComparison.OrdinalIgnoreCase) ? AccountStatus.Closed : Enum.TryParse<AccountStatus>(status, true, out var parsed) ? parsed : (AccountStatus?)null; if (!normalized.HasValue) return Results.BadRequest(new { detail = "Unknown account status filter." }); query = query.Where(x => x.Status == normalized.Value); } }
+        if (role.HasValue) query = query.Where(x => x.Role == role);
+        if (!string.IsNullOrWhiteSpace(q)) { var n = q.Trim().ToUpperInvariant(); var raw = q.Trim(); var digits = new string(raw.Where(char.IsDigit).ToArray()); var phoneSuffix = digits.StartsWith("0") ? digits[1..] : digits.StartsWith("251") ? digits[3..] : digits; var phoneFragment = digits.StartsWith("0") ? "251" + digits[1..] : digits; var hasPhone = phoneSuffix.Length > 0; query = query.Where(x => x.NormalizedEmail.Contains(n) || (hasPhone && x.NormalizedPhoneNumber != null && (x.NormalizedPhoneNumber.Contains(phoneFragment) || x.NormalizedPhoneNumber.EndsWith(phoneSuffix))) || (x.CreatorId.HasValue && db.Creators.Any(c => c.Id == x.CreatorId && (c.DisplayName.ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix)))))) || (x.CustomerId.HasValue && db.Customers.Any(c => c.Id == x.CustomerId && (c.DisplayName.ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix)))))) || (x.CashierId.HasValue && db.Cashiers.Any(c => c.Id == x.CashierId && ((c.FirstName + " " + c.LastName).ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix))) || c.Merchant.TradingName.ToUpper().Contains(n) || c.Merchant.PublicMerchantId.ToUpper().Contains(n)))) || (x.MerchantId.HasValue && db.Merchants.Any(m => m.Id == x.MerchantId && (m.TradingName.ToUpper().Contains(n) || m.PublicMerchantId.ToUpper().Contains(n))))); }
+        if (!string.IsNullOrWhiteSpace(business)) { var n = business.Trim().ToUpperInvariant(); query = query.Where(x => x.MerchantId.HasValue && db.Merchants.Any(m => m.Id == x.MerchantId && (m.TradingName.ToUpper().Contains(n) || m.PublicMerchantId.ToUpper().Contains(n)))); }
+        return Results.Ok(await Page(query.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, cashierName = x.CashierId.HasValue ? db.Cashiers.Where(c => c.Id == x.CashierId).Select(c => c.FirstName + " " + c.LastName).FirstOrDefault() : x.CreatorId.HasValue ? db.Creators.Where(c => c.Id == x.CreatorId).Select(c => c.DisplayName).FirstOrDefault() : x.CustomerId.HasValue ? db.Customers.Where(c => c.Id == x.CustomerId).Select(c => c.DisplayName).FirstOrDefault() : null, email = x.Email, phone = x.NormalizedPhoneNumber, businessName = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.TradingName).FirstOrDefault() : null, publicBusinessId = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.PublicMerchantId).FirstOrDefault() : null, assignedLocation = x.CashierId.HasValue ? db.CashierLocationAssignments.Where(a => a.CashierId == x.CashierId && a.IsActive).OrderByDescending(a => a.IsPrimary).Select(a => a.MerchantLocation.Name).FirstOrDefault() : null, role = x.Role.ToString(), status = x.Status.ToString(), x.IsEmailVerified, x.IsPhoneVerified, isLocked = x.LockoutEndUtc > now, x.LastLoginAtUtc, walletBalance = x.Role == UserRole.MerchantAdmin && x.MerchantId.HasValue ? db.MerchantWallets.Where(w => w.MerchantId == x.MerchantId && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() : null, requiredMinimum = x.Role == UserRole.MerchantAdmin && x.MerchantId.HasValue ? minimum : (decimal?)null, fundingStatus = x.Role != UserRole.MerchantAdmin || !x.MerchantId.HasValue ? null : x.Status == AccountStatus.Suspended ? "Suspended" : x.Status == AccountStatus.Closed ? "Deactivated" : x.Status != AccountStatus.Active ? "Pending Approval" : (db.MerchantWallets.Where(w => w.MerchantId == x.MerchantId && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() ?? 0m) < minimum ? "Insufficient Funds" : "Active" }), page, pageSize, ct));
+    }
     private static Task<IResult> Cashiers(int page, int pageSize, ApplicationDbContext db, CancellationToken ct) => CashierPage(null, page, pageSize, db, ct);
     private static Task<IResult> MerchantCashiers(Guid merchantId, int page, int pageSize, ApplicationDbContext db, CancellationToken ct) => CashierPage(merchantId, page, pageSize, db, ct);
     private static async Task<IResult> CashierPage(Guid? merchantId, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
@@ -225,7 +243,28 @@ public static class AdminEndpoints
     }
     private static async Task<IResult> Purchases(string? q, Guid? merchantId, Guid? creatorId, TransactionStatus? status, DateTime? from, DateTime? to, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
     { var query = db.PurchaseTransactions.AsNoTracking(); if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => x.PublicTransactionId.Contains(q)); if (merchantId.HasValue) query = query.Where(x => x.MerchantId == merchantId); if (creatorId.HasValue) query = query.Where(x => x.CreatorId == creatorId); if (status.HasValue) query = query.Where(x => x.Status == status); if (from.HasValue) query = query.Where(x => x.TransactionDateUtc >= Normalize(from, null)); if (to.HasValue) query = query.Where(x => x.TransactionDateUtc <= Normalize(to, null)); return Results.Ok(await Page(query.OrderByDescending(x => x.TransactionDateUtc).Select(x => new { x.Id, x.PublicTransactionId, x.MerchantId, x.CreatorId, x.MerchantLocationId, x.CashierId, actorRole = x.CashierId.HasValue ? "Cashier" : "Business Owner", actorName = x.CashierId.HasValue ? db.Cashiers.Where(c => c.Id == x.CashierId).Select(c => c.FirstName + " " + c.LastName).FirstOrDefault() : db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.PrimaryContactName).FirstOrDefault(), x.CreatedByUserId, x.PurchaseAmount, x.CurrencyCode, status = x.Status.ToString(), x.TransactionDateUtc, x.CorrelationId, idempotencyKey = MaskKey(x.IdempotencyKey) }), page, pageSize, ct)); }
-    private static async Task<IResult> Wallets(string? q, int page, int pageSize, ApplicationDbContext db, CancellationToken ct) { var minimum = await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m; var query = from w in db.MerchantWallets.AsNoTracking() join m in db.Merchants.AsNoTracking() on w.MerchantId equals m.Id select new { id = w.Id, business = m.TradingName, w.AvailableBalance, requiredMinimum = minimum, fundingStatus = m.Status == MerchantStatus.Suspended ? "Suspended" : m.Status == MerchantStatus.Closed ? "Deactivated" : m.Status != MerchantStatus.Active ? "Pending Approval" : w.AvailableBalance < minimum ? "Insufficient Funds" : "Active", lastDeposit = db.MerchantDeposits.Where(d => d.MerchantId == m.Id && d.Status == MerchantDepositStatus.Completed).Max(d => (DateTime?)d.VerifiedAtUtc), status = w.Status.ToString() }; if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => x.business.Contains(q)); return Results.Ok(await Page(query.OrderBy(x => x.business), page, pageSize, ct)); }
+    private static async Task<IResult> Wallets(string? q, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
+    {
+        var minimum = await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m;
+        var query = from w in db.MerchantWallets.AsNoTracking()
+                    join m in db.Merchants.AsNoTracking() on w.MerchantId equals m.Id
+                    select new
+                    {
+                        id = w.Id,
+                        business = m.TradingName,
+                        w.AvailableBalance,
+                        requiredMinimum = minimum,
+                        fundingStatus = m.Status == MerchantStatus.Suspended ? "Suspended" : m.Status == MerchantStatus.Closed ? "Deactivated" : m.Status != MerchantStatus.Active ? "Pending Approval" : w.AvailableBalance < minimum ? "Insufficient Funds" : "Active",
+                        lastDeposit = db.MerchantDeposits
+                            .Where(d => d.MerchantId == m.Id && d.Status == MerchantDepositStatus.Completed)
+                            .OrderByDescending(d => d.VerifiedAtUtc)
+                            .Select(d => (DateTime?)d.VerifiedAtUtc)
+                            .FirstOrDefault(),
+                        status = w.Status.ToString()
+                    };
+        if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => x.business.Contains(q));
+        return Results.Ok(await Page(query.OrderBy(x => x.business), page, pageSize, ct));
+    }
     private static async Task<IResult> Partnerships(Guid? merchantId, Guid? creatorId, PartnershipStatus? status, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
     { var q = db.MerchantCreatorPartnerships.AsNoTracking(); if (merchantId.HasValue) q = q.Where(x => x.MerchantId == merchantId); if (creatorId.HasValue) q = q.Where(x => x.CreatorId == creatorId); if (status.HasValue) q = q.Where(x => x.Status == status); return Results.Ok(await Page(q.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.MerchantId, x.CreatorId, status = x.Status.ToString(), x.CreatedAtUtc, x.UpdatedAtUtc }), page, pageSize, ct)); }
     private static async Task<IResult> OfflineSync(string? q, Guid? merchantId, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
@@ -263,6 +302,7 @@ public static class AdminEndpoints
     private static async Task<IResult> CreateAccount(CreateAccountRequest request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, IPasswordHasher passwords, PasswordPolicyValidator policy, CancellationToken ct)
     {
         if (user.UserAccountId is null) return Results.Problem(statusCode: 401, detail: "Authentication required.");
+        if (user.Role != nameof(UserRole.PlatformAdmin)) return Results.Forbid();
         if (request.Password != request.Confirmation) return Results.Problem(detail: "Password confirmation does not match.", statusCode: StatusCodes.Status400BadRequest);
         var passwordErrors = policy.Validate(request.Password); if (passwordErrors.Count > 0) return Results.Problem(detail: string.Join(" ", passwordErrors), statusCode: StatusCodes.Status400BadRequest);
         var now = DateTime.UtcNow; var actor = user.UserAccountId.Value;
@@ -283,6 +323,15 @@ public static class AdminEndpoints
                     {
                         if (string.IsNullOrWhiteSpace(email)) return Results.Problem(detail: "Email is required for PlatformAdmin.", statusCode: StatusCodes.Status400BadRequest);
                         var account = new UserAccount { Id = Guid.NewGuid(), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.PlatformAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        account.PasswordHash = passwords.Hash(account, request.Password);
+                        db.Add(account);
+                        createdAccounts.Add(account.Id);
+                        break;
+                    }
+                case UserRole.OperationsAdmin:
+                    {
+                        if (string.IsNullOrWhiteSpace(email)) return Results.Problem(detail: "Email is required for OperationsAdmin.", statusCode: StatusCodes.Status400BadRequest);
+                        var account = new UserAccount { Id = Guid.NewGuid(), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.OperationsAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
                         account.PasswordHash = passwords.Hash(account, request.Password);
                         db.Add(account);
                         createdAccounts.Add(account.Id);
@@ -382,10 +431,11 @@ public static class AdminEndpoints
         }
     }
 
-    private static async Task<IResult> UnlockAccount(Guid id, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound(); account.FailedLoginCount = 0; account.LockoutEndUtc = null; await AddAudit(db, user.UserAccountId!.Value, "AdminAccountUnlocked", id, request.Reason, h.TraceIdentifier, ct); return Results.NoContent(); }
+    private static async Task<IResult> UnlockAccount(Guid id, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound(); if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid(); account.FailedLoginCount = 0; account.LockoutEndUtc = null; await AddAudit(db, user.UserAccountId!.Value, "AdminAccountUnlocked", id, request.Reason, h.TraceIdentifier, ct); return Results.NoContent(); }
     private static async Task<IResult> ChangeAccountStatus(Guid id, string action, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct)
     {
         var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound();
+        if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
         if (string.IsNullOrWhiteSpace(request.Reason)) return Results.BadRequest(new { error = "A reason is required." });
         var normalized = action.Trim().ToLowerInvariant(); var before = account.Status;
         if (normalized == "lock") { account.LockoutEndUtc = DateTime.UtcNow.AddYears(100); account.FailedLoginCount = Math.Max(account.FailedLoginCount, 5); }
@@ -399,9 +449,20 @@ public static class AdminEndpoints
         if (account.Role == UserRole.Cashier && account.CashierId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var cashier = await db.Cashiers.SingleAsync(x => x.Id == account.CashierId, ct); cashier.IsActive = normalized == "reactivate"; cashier.UpdatedAtUtc = DateTime.UtcNow; }
         account.UpdatedAtUtc = DateTime.UtcNow; await AddAudit(db, user.UserAccountId!.Value, $"AdminAccount{char.ToUpperInvariant(normalized[0]) + normalized[1..]}", id, $"{request.Reason}; PreviousStatus={before}; NewStatus={account.Status}", h.TraceIdentifier, ct); return Results.NoContent();
     }
-    private static async Task<IResult> RevokeSessions(Guid id, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { if (!await db.UserAccounts.AnyAsync(x => x.Id == id, ct)) return Results.NotFound(); var tokens = await db.RefreshTokens.Where(x => x.UserAccountId == id && x.RevokedAtUtc == null).ToListAsync(ct); foreach (var token in tokens) token.RevokedAtUtc = DateTime.UtcNow; await AddAudit(db, user.UserAccountId!.Value, "AdminSessionsRevoked", id, request.Reason, h.TraceIdentifier, ct); return Results.NoContent(); }
+    private static async Task<IResult> RevokeSessions(Guid id, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound(); if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid(); var tokens = await db.RefreshTokens.Where(x => x.UserAccountId == id && x.RevokedAtUtc == null).ToListAsync(ct); foreach (var token in tokens) token.RevokedAtUtc = DateTime.UtcNow; await AddAudit(db, user.UserAccountId!.Value, "AdminSessionsRevoked", id, request.Reason, h.TraceIdentifier, ct); return Results.NoContent(); }
     private static async Task<IResult> ChangeAlert(Guid id, string status, string reason, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var alert = await db.OperationalAlerts.SingleOrDefaultAsync(x => x.Id == id, ct); if (alert is null) return Results.NotFound(); var old = alert.Status; alert.Status = status; alert.UpdatedAtUtc = DateTime.UtcNow; if (status == "Acknowledged") { alert.AcknowledgedAtUtc = DateTime.UtcNow; alert.AcknowledgedByUserId = user.UserAccountId; } if (status == "Resolved") alert.ResolvedAtUtc = DateTime.UtcNow; db.OperationalAlertHistories.Add(new() { Id = Guid.NewGuid(), OperationalAlertId = id, PreviousStatus = old, NewStatus = status, ActorUserId = user.UserAccountId!.Value, Reason = reason, ChangedAtUtc = DateTime.UtcNow, CreatedAtUtc = DateTime.UtcNow }); await AddAudit(db, user.UserAccountId.Value, $"OperationalAlert{status}", id, reason, h.TraceIdentifier, ct); return Results.NoContent(); }
-    private static async Task AddAudit(ApplicationDbContext db, Guid actor, string eventType, Guid subject, string reason, string correlation, CancellationToken ct) { db.OperationalAuditEvents.Add(new() { Id = Guid.NewGuid(), EventType = eventType, ActorUserId = actor, SubjectId = subject, MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { reason }), CorrelationId = correlation, CreatedAtUtc = DateTime.UtcNow }); await db.SaveChangesAsync(ct); }
+    private static void AddPasswordResetAudit(ApplicationDbContext db, Guid actor, Guid subject, string eventType, string reference, string contact, string status, string correlation, DateTime now)
+        => db.OperationalAuditEvents.Add(new()
+        {
+            Id = Guid.NewGuid(),
+            EventType = eventType,
+            ActorUserId = actor,
+            SubjectId = subject,
+            MetadataJson = JsonSerializer.Serialize(new { publicReference = reference, contact, status }),
+            CorrelationId = correlation,
+            CreatedAtUtc = now
+        });
+    private static async Task AddAudit(ApplicationDbContext db, Guid actor, string eventType, Guid subject, string reason, string correlation, CancellationToken ct) { db.OperationalAuditEvents.Add(new() { Id = Guid.NewGuid(), EventType = eventType, ActorUserId = actor, SubjectId = subject, MetadataJson = JsonSerializer.Serialize(new { reason }), CorrelationId = correlation, CreatedAtUtc = DateTime.UtcNow }); await db.SaveChangesAsync(ct); }
     private static async Task<object> Page<T>(IQueryable<T> query, int page, int pageSize, CancellationToken ct) { page = Math.Max(page, 1); pageSize = Math.Clamp(pageSize == 0 ? 25 : pageSize, 1, MaxPageSize); var total = await query.CountAsync(ct); var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct); return new { items, page, pageSize, total, totalPages = (int)Math.Ceiling(total / (double)pageSize) }; }
     private static DateTime Normalize(DateTime? value, DateTime? fallback) => value.HasValue ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc) : fallback!.Value;
     private static string CleanEmail(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();

@@ -1,5 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { api, ApiError } from "./apiClient";
+import { ApiError, api } from "./apiClient";
+
+type AdminRole =
+  | "PlatformAdmin"
+  | "OperationsAdmin"
+  | "MerchantAdmin"
+  | "Cashier"
+  | "Creator"
+  | "Customer";
 
 type MerchantOption = {
   id: string;
@@ -12,48 +20,69 @@ type Page<T = Record<string, unknown>> = {
   items: T[];
 };
 
-const roles = [
-  { value: "PlatformAdmin", label: "PlatformAdmin" },
-  { value: "MerchantAdmin", label: "MerchantAdmin / Business" },
-  { value: "Cashier", label: "Cashier" },
-  { value: "Creator", label: "Creator" },
-  { value: "Customer", label: "Customer" },
-] as const;
+const roleLabels: Record<AdminRole, string> = {
+  PlatformAdmin: "PlatformAdmin",
+  OperationsAdmin: "OperationsAdmin",
+  MerchantAdmin: "MerchantAdmin / Business",
+  Cashier: "Cashier",
+  Creator: "Creator",
+  Customer: "Customer",
+};
 
-export function AdminAccountCreate({ onCreated }: { onCreated: () => void }) {
-  const [role, setRole] = useState<(typeof roles)[number]["value"]>("PlatformAdmin");
+const defaultForm = {
+  email: "",
+  phoneNumber: "",
+  password: "",
+  confirmation: "",
+  firstName: "",
+  lastName: "",
+  displayName: "",
+  legalBusinessName: "",
+  tradingName: "",
+  businessType: "Other",
+  primaryContactName: "",
+  businessAddress: "",
+  city: "Addis Ababa",
+  region: "Addis Ababa",
+  country: "Ethiopia",
+  timeZone: "Africa/Addis_Ababa",
+  preferredLanguage: "en",
+  biography: "",
+  contentCategories: "",
+  zone: "",
+};
+
+export function AdminAccountCreate({
+  title,
+  description,
+  roles,
+  fixedRole,
+  onCreated,
+}: {
+  title: string;
+  description: string;
+  roles: AdminRole[];
+  fixedRole?: AdminRole;
+  onCreated: () => void;
+}) {
+  const initialRole = fixedRole ?? roles[0] ?? "PlatformAdmin";
+  const [role, setRole] = useState<AdminRole>(initialRole);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [businesses, setBusinesses] = useState<MerchantOption[]>([]);
   const [merchantId, setMerchantId] = useState("");
-  const [form, setForm] = useState({
-    email: "",
-    phoneNumber: "",
-    password: "",
-    confirmation: "",
-    firstName: "",
-    lastName: "",
-    displayName: "",
-    legalBusinessName: "",
-    tradingName: "",
-    businessType: "Other",
-    primaryContactName: "",
-    businessAddress: "",
-    city: "Addis Ababa",
-    region: "Addis Ababa",
-    country: "Ethiopia",
-    timeZone: "Africa/Addis_Ababa",
-    preferredLanguage: "en",
-    biography: "",
-    contentCategories: "",
-    zone: "",
-  });
+  const [form, setForm] = useState(defaultForm);
 
   useEffect(() => {
+    if (fixedRole) setRole(fixedRole);
+  }, [fixedRole]);
+
+  useEffect(() => {
+    if (role !== "MerchantAdmin" && role !== "Cashier") return;
     api<Page<MerchantOption>>("/api/v1/admin/merchants?page=1&pageSize=100")
       .then((value) => setBusinesses(value.items))
       .catch(() => setBusinesses([]));
-  }, []);
+  }, [role]);
 
   const activeBusinesses = useMemo(
     () =>
@@ -65,6 +94,8 @@ export function AdminAccountCreate({ onCreated }: { onCreated: () => void }) {
     [businesses],
   );
 
+  const showRoleSelect = !fixedRole && roles.length > 1;
+  const showAdminFields = role === "PlatformAdmin" || role === "OperationsAdmin";
   const showCreatorFields = role === "Creator";
   const showCustomerFields = role === "Customer";
   const showCashierFields = role === "Cashier";
@@ -104,6 +135,8 @@ export function AdminAccountCreate({ onCreated }: { onCreated: () => void }) {
         }),
       });
       setMessage("Account created and audited.");
+      setForm(defaultForm);
+      setMerchantId("");
       onCreated();
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : (error as Error).message);
@@ -113,32 +146,36 @@ export function AdminAccountCreate({ onCreated }: { onCreated: () => void }) {
   }
 
   function changeRole(next: string) {
-    setRole(next as (typeof roles)[number]["value"]);
+    setRole(next as AdminRole);
     setMerchantId("");
     setMessage("");
   }
 
   return (
-    <section className="panel form" aria-labelledby="create-account-title">
-      <h2 id="create-account-title">Create Account</h2>
-      <p>PlatformAdmin only. Temporary credentials are created directly and audited.</p>
+    <section className="panel form admin-create-card" aria-labelledby="create-account-title">
+      <h2 id="create-account-title">{title}</h2>
+      <p>{description}</p>
       {message && <aside role="status">{message}</aside>}
       <form onSubmit={submit}>
-        <label>
-          Role
-          <select value={role} onChange={(e) => changeRole(e.target.value)}>
-            {roles.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {showRoleSelect ? (
+          <label>
+            Role
+            <select value={role} onChange={(e) => changeRole(e.target.value)}>
+              {roles.map((item) => (
+                <option key={item} value={item}>
+                  {roleLabels[item]}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <input type="hidden" value={role} readOnly />
+        )}
 
         <label>
           Email
           <input
-            required={role === "PlatformAdmin"}
+            required={showAdminFields}
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
@@ -149,7 +186,7 @@ export function AdminAccountCreate({ onCreated }: { onCreated: () => void }) {
           <input
             value={form.phoneNumber}
             onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-            required={role !== "PlatformAdmin"}
+            required={!showAdminFields}
           />
         </label>
 

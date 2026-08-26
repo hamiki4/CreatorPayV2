@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "./apiClient";
 import { daysLeftText, relationshipState } from "./relationshipTime";
 import { currentPartnerships } from "./partnershipState";
@@ -68,6 +68,13 @@ function SocialMediaLink({ platform, profileUrl }: { platform?: string; profileU
     <span className="social-media-link">{link.label}</span>
   );
 }
+function CreatorMeta({ platform, profileUrl }: { platform?: string; profileUrl?: string }) {
+  return (
+    <span className="creator-meta">
+      <SocialMediaLink platform={platform} profileUrl={profileUrl} />
+    </span>
+  );
+}
 const status = (value: string) =>
   value === "Approved"
     ? "Active"
@@ -80,8 +87,7 @@ const status = (value: string) =>
           : "Inactive";
 
 export function FindCreators({ refresh }: { refresh: () => void }) {
-  const [q, setQ] = useState(""),
-    [items, setItems] = useState<Creator[]>([]),
+  const [items, setItems] = useState<Creator[]>([]),
     [relationships, setRelationships] = useState<BusinessRelationship[]>([]),
     [message, setMessage] = useState(""),
     [loading, setLoading] = useState(true);
@@ -108,11 +114,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
       setLoading(false);
     }
   };
-  useTypeahead(q, find, setItems);
-  const search = async (e?: FormEvent) => {
-    e?.preventDefault();
-    setItems(await find(q));
-  };
+  useTypeahead("", find, setItems);
   useEffect(() => {
     void load();
   }, []);
@@ -174,18 +176,6 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
     <section className="creator-section business-find-creators">
       <h2>Find Creators</h2>
       <p>Search approved Creators and invite them to advertise.</p>
-      <form className="business-search" onSubmit={search}>
-        <label>
-          Creator name or public ID
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name or public ID"
-          />
-        </label>
-        <button disabled={loading}>{loading ? "Searching…" : "Search"}</button>
-      </form>
       {message && (
         <p
           className={
@@ -199,17 +189,10 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
         <p className="compact-empty">No approved Creators found.</p>
       ) : (
         <div className="discovery-list">
-          <div className="discovery-row discovery-headings business-discovery-row business-discovery-headings">
-            <span>Creator</span>
-            <span>Social Media</span>
-            <span>Status</span>
-            <span>Days Left</span>
-            <span>Action</span>
-          </div>
           {items.map((x) => {
             const state = stateFor(x);
             return (
-              <article className="discovery-row business-discovery-row" key={x.id}>
+              <article className="business-card business-discovery-card" key={x.id}>
                 <div className="creator-card">
                   <div className="creator-heading">
                     <ProfileAvatar
@@ -222,21 +205,12 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                     </div>
                   </div>
                 </div>
-                <span data-label="Social Media">
-                  <SocialMediaLink
-                    platform={x.socialPlatform}
-                    profileUrl={x.socialProfileUrl}
-                  />
-                </span>
-                <span>
+                <div className="business-card-meta">
+                  <CreatorMeta platform={x.socialPlatform} profileUrl={x.socialProfileUrl} />
                   <span className="status-badge">{state.label}</span>
-                </span>
-                {state.daysText !== null && (
-                  <span>
-                    {state.daysText}
-                  </span>
-                )}
-                <span data-label="Action">
+                  {state.daysText !== null && <small className="business-card-days">{state.daysText}</small>}
+                </div>
+                <div className="business-card-actions">
                   {state.canInvite && (
                     <button onClick={() => void invite(x)}>
                       {state.label === "Declined" ? "Request Again" : "Invite to Advertise"}
@@ -247,7 +221,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                       Reactivate
                     </button>
                   )}
-                </span>
+                </div>
               </article>
             );
           })}
@@ -318,13 +292,6 @@ export function ActiveCreators({
         </p>
       ) : (
         <div className="active-ads">
-          <div className="active-ad business-table-row business-active-grid headings">
-            <span>Creator</span>
-            <span>Social Media</span>
-            <span>Status</span>
-            <span>Days Left</span>
-            <span>Action</span>
-          </div>
           {visible.map((x) => {
             const state = relationshipState(x);
             return (
@@ -339,11 +306,11 @@ export function ActiveCreators({
                       photoUrl={x.creatorProfileImageUrl}
                     />
                     <div>
-                      <strong data-label="Creator">{x.creatorName}</strong>
+                      <strong>{x.creatorName}</strong>
                     </div>
                   </div>
                 </div>
-                <span data-label="Social Media">
+                <span className="creator-meta">
                   <SocialMediaLink
                     platform={x.creatorSocialPlatform}
                     profileUrl={x.creatorSocialProfileUrl}
@@ -355,7 +322,7 @@ export function ActiveCreators({
                 {state.daysLeft !== null && (
                   <span className="days-left">{daysLeftText(state.daysLeft, state.tone)}</span>
                 )}
-                <span className="table-action" data-label="Action">
+                <span className="table-action">
                   {state.label === "Active" ? (
                     <button
                       className="danger compact-action"

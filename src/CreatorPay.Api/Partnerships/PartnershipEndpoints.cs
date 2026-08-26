@@ -54,7 +54,7 @@ public static class PartnershipEndpoints
         merchant.MapPut("/partnerships/{id:guid}/locations", SetLocations);
         merchant.MapPut("/partnerships/{id:guid}/dates", SetDates);
 
-        var admin = endpoints.MapGroup("/api/v1/admin/partnerships").WithTags("Partnership support").RequireAuthorization("PlatformAdminOnly");
+        var admin = endpoints.MapGroup("/api/v1/admin/partnerships").WithTags("Partnership support").RequireAuthorization("AdminOperationsOnly");
         admin.MapGet("/", async (ApplicationDbContext db, CancellationToken ct) => Results.Ok((await Query(db).ToListAsync(ct)).Select(Item)));
         admin.MapGet("/{id:guid}", async (Guid id, ApplicationDbContext db, CancellationToken ct) => await Query(db).FirstOrDefaultAsync(x => x.Id == id, ct) is { } p ? Results.Ok(Item(p)) : NotFound());
         return endpoints;

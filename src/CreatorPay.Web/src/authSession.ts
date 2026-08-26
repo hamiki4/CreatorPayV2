@@ -1,6 +1,6 @@
 import {clearSession,getAccessToken} from './sessionStore'
 
-export const workspaceRoutes:Record<string,string>={Customer:'/shopper',Creator:'/creator',MerchantAdmin:'/business',Supervisor:'/supervisor',Cashier:'/cashier',PlatformAdmin:'/admin'}
+export const workspaceRoutes:Record<string,string>={Customer:'/shopper',Creator:'/creator',MerchantAdmin:'/business',Supervisor:'/supervisor',Cashier:'/cashier',PlatformAdmin:'/admin',OperationsAdmin:'/admin'}
 
 export function workspaceRoute(role:string){return workspaceRoutes[role]??'/'}
 export function isWorkspacePathAllowed(role:string,path:string){const route=workspaceRoute(role);return route!=='/'&&(path===route||path.startsWith(`${route}/`))}

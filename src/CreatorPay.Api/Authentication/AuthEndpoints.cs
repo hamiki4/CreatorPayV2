@@ -1,10 +1,12 @@
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.CustomerVerification;
+using CreatorPay.Application.Notifications;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace CreatorPay.Api.Authentication;
 
@@ -38,7 +40,7 @@ public static class AuthEndpoints
 
     private sealed record PasswordResetHelpRequest(string PhoneNumber);
 
-    private static async Task<IResult> RequestPasswordReset(PasswordResetHelpRequest request, HttpContext h, ApplicationDbContext db, CancellationToken ct)
+    private static async Task<IResult> RequestPasswordReset(PasswordResetHelpRequest request, HttpContext h, ApplicationDbContext db, INotificationService notifications, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         string normalized;
@@ -50,19 +52,79 @@ public static class AuthEndpoints
         db.LoginAudits.Add(new LoginAudit { Id = Guid.NewGuid(), UserAccountId = eligible ? user!.Id : null, NormalizedEmail = normalized, WasSuccessful = eligible, FailureReason = eligible ? "PasswordResetHelpRequested" : "PasswordResetHelpDetailsMismatch", IpAddress = h.Connection.RemoteIpAddress?.ToString(), UserAgent = h.Request.Headers.UserAgent.ToString(), CorrelationId = h.TraceIdentifier, AttemptedAtUtc = now, CreatedAtUtc = now });
         if (eligible)
         {
-            var existing = await db.SupportRequests.SingleOrDefaultAsync(x => x.Subject == "Password Reset" && x.Contact == normalized && x.Status == "Pending", ct);
-            if (existing is not null) reference = existing.PublicReference;
-            else db.SupportRequests.Add(new SupportRequest { Id = Guid.NewGuid(), PublicReference = reference, Name = await DisplayName(user!, db, ct), Contact = normalized, UserType = user!.Role.ToString(), Subject = "Password Reset", Message = user.Id.ToString(), PreferredLanguage = "en", ConsentAcknowledged = true, Status = "Pending", CreatedAtUtc = now });
+            var pending = await db.SupportRequests.SingleOrDefaultAsync(x => x.Subject == "Password Reset" && x.Contact == normalized && x.Status == "Pending", ct);
+            if (pending is not null)
+            {
+                reference = pending.PublicReference;
+            }
+            else
+            {
+                var approved = await db.SupportRequests.SingleOrDefaultAsync(x => x.Subject == "Password Reset" && x.Contact == normalized && x.Status == "Approved", ct);
+                if (approved is not null)
+                {
+                    reference = approved.PublicReference;
+                }
+                else
+                {
+                    await db.SupportRequests.Where(x => x.Subject == "Password Reset" && x.Contact == normalized && (x.Status == "Rejected" || x.Status == "Completed")).ExecuteDeleteAsync(ct);
+                    var displayName = await DisplayName(user!, db, ct);
+                    var userType = user!.Role.ToString();
+                    db.SupportRequests.Add(new SupportRequest { Id = Guid.NewGuid(), PublicReference = reference, Name = displayName, Contact = normalized, UserType = userType, Subject = "Password Reset", Message = user.Id.ToString(), PreferredLanguage = "en", ConsentAcknowledged = true, Status = "Pending", CreatedAtUtc = now });
+                    await db.SaveChangesAsync(ct);
+                    var admins = await db.UserAccounts.AsNoTracking().Where(x => x.Role == UserRole.PlatformAdmin && x.Status == AccountStatus.Active).Select(x => new { x.Id }).ToListAsync(ct);
+                    if (admins.Count > 0)
+                    {
+                        var title = $"Password reset request pending for {displayName} ({ReadableRole(user.Role)})";
+                        var body = $"The {ReadableRole(user.Role)} account is waiting for admin approval.";
+                        await notifications.CreateAsync(new(
+                            NotificationType.SupportRequestReceived,
+                            $"password-reset-admin:{reference}",
+                            new Dictionary<string, string>
+                            {
+                                ["Title"] = title,
+                                ["Body"] = body,
+                                ["TargetPath"] = "/admin/accounts#password-reset-requests",
+                                ["RequesterName"] = displayName,
+                                ["RequesterRole"] = ReadableRole(user.Role),
+                                ["SupportReference"] = reference,
+                            },
+                            admins.Select(x => new NotificationRecipientRequest(x.Id, NotificationRecipientType.User, NotificationChannel.InApp, null, null)).ToList(),
+                            NotificationPriority.High,
+                            h.TraceIdentifier,
+                            nameof(SupportRequest),
+                            reference), ct);
+                    }
+                    return Results.Ok(new { reference, status = "Pending", message = PendingMessage() });
+                }
+            }
         }
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new { reference, status = "Pending", message = "Your password reset request is waiting for support approval." });
+        if (eligible && reference.Length > 0)
+        {
+            var active = await db.SupportRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Subject == "Password Reset" && x.PublicReference == reference, ct);
+            if (active is not null)
+            {
+                var status = active.Status == "Approved" ? "Approved" : active.Status == "Rejected" ? "Rejected" : active.Status == "Completed" ? "Completed" : "Pending";
+                return Results.Ok(new { reference, status, message = PasswordResetMessage(status) });
+            }
+            var archived = await ArchivedPasswordResetStatus(reference, db, ct);
+            if (archived is not null) return Results.Ok(new { reference, status = archived, message = PasswordResetMessage(archived) });
+        }
+        return Results.Ok(new { reference, status = "Pending", message = PendingMessage() });
     }
 
     private static async Task<IResult> PasswordResetStatus(string reference, ApplicationDbContext db, CancellationToken ct)
     {
         var request = await db.SupportRequests.AsNoTracking().SingleOrDefaultAsync(x => x.PublicReference == reference && x.Subject == "Password Reset", ct);
-        var status = request?.Status == "Approved" ? "Approved" : request?.Status == "Completed" ? "Completed" : request?.Status == "Rejected" ? "Rejected" : "Pending";
-        return Results.Ok(new { status, message = status == "Approved" ? "Your request was approved. Create a new password." : status == "Completed" ? "Password reset completed." : status == "Rejected" ? "Please contact Weymela Support for help." : "Your password reset request is waiting for support approval." });
+        if (request is not null)
+        {
+            var status = request.Status == "Approved" ? "Approved" : request.Status == "Completed" ? "Completed" : request.Status == "Rejected" ? "Rejected" : "Pending";
+            return Results.Ok(new { status, message = PasswordResetMessage(status) });
+        }
+        var archived = await ArchivedPasswordResetStatus(reference, db, ct);
+        return archived is null
+            ? Results.NotFound(new { detail = "Password reset request not found." })
+            : Results.Ok(new { status = archived, message = PasswordResetMessage(archived) });
     }
 
     private static async Task<IResult> CompletePasswordReset(ResetPasswordRequest request, HttpContext h, IAuthenticationService service, ApplicationDbContext db, CancellationToken ct)
@@ -70,11 +132,46 @@ public static class AuthEndpoints
         var result = await service.ResetPasswordAsync(request, Context(h), ct);
         if (result.Succeeded)
         {
+            var now = DateTime.UtcNow;
             var support = await db.SupportRequests.SingleOrDefaultAsync(x => x.PublicReference == request.ResetToken && x.Subject == "Password Reset" && x.Status == "Approved", ct);
-            if (support is not null) { support.Status = "Completed"; support.UpdatedAtUtc = DateTime.UtcNow; await db.SaveChangesAsync(ct); }
+            if (support is not null)
+            {
+                AddPasswordResetAudit(db, "PasswordResetCompleted", support.Id, support.PublicReference, support.Contact, support.Status, h.TraceIdentifier, now);
+                db.SupportRequests.Remove(support);
+                await db.SaveChangesAsync(ct);
+            }
         }
         return ToHttp(result);
     }
+
+    private static async Task<string?> ArchivedPasswordResetStatus(string reference, ApplicationDbContext db, CancellationToken ct)
+    {
+        var eventType = (await db.OperationalAuditEvents.AsNoTracking()
+            .Where(x => x.EventType == "PasswordResetAuthorized" || x.EventType == "PasswordResetRejected" || x.EventType == "PasswordResetCompleted")
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Select(x => new { x.EventType, x.MetadataJson })
+            .ToListAsync(ct))
+            .FirstOrDefault(x => x.MetadataJson.Contains(reference))
+            ?.EventType;
+        return eventType switch
+        {
+            "PasswordResetAuthorized" => "Approved",
+            "PasswordResetRejected" => "Rejected",
+            "PasswordResetCompleted" => "Completed",
+            _ => null
+        };
+    }
+
+    private static void AddPasswordResetAudit(ApplicationDbContext db, string eventType, Guid subjectId, string reference, string contact, string status, string correlationId, DateTime now)
+        => db.OperationalAuditEvents.Add(new OperationalAuditEvent
+        {
+            Id = Guid.NewGuid(),
+            EventType = eventType,
+            SubjectId = subjectId,
+            MetadataJson = JsonSerializer.Serialize(new { publicReference = reference, contact, status }),
+            CorrelationId = correlationId,
+            CreatedAtUtc = now
+        });
 
     private static async Task<string> DisplayName(UserAccount user, ApplicationDbContext db, CancellationToken ct)
     {
@@ -84,6 +181,24 @@ public static class AuthEndpoints
         if (user.CashierId.HasValue) return await db.Cashiers.Where(x => x.Id == user.CashierId).Select(x => (x.FirstName + " " + x.LastName).Trim()).SingleOrDefaultAsync(ct) ?? "Cashier";
         return "Weymela User";
     }
+    private static string ReadableRole(UserRole role) => role switch
+    {
+        UserRole.Customer => "Customer",
+        UserRole.Creator => "Creator",
+        UserRole.MerchantAdmin => "Business",
+        UserRole.Cashier => "Cashier",
+        UserRole.Supervisor => "Supervisor",
+        UserRole.PlatformAdmin => "Platform Admin",
+        _ => role.ToString(),
+    };
+    private static string PendingMessage() => "Your password reset request is waiting for admin approval.";
+    private static string PasswordResetMessage(string status) => status switch
+    {
+        "Approved" => "Your request was approved. Create a new password.",
+        "Completed" => "Password reset completed.",
+        "Rejected" => "Your password reset request was rejected. Please contact Weymela Support or submit a new request.",
+        _ => PendingMessage(),
+    };
     private static RequestContext Context(HttpContext h) => new(h.Connection.RemoteIpAddress?.ToString(), h.Request.Headers.UserAgent.ToString(), h.TraceIdentifier);
     private static IResult ToHttp<T>(Result<T> result) => result.Succeeded ? Results.Ok(result.Value) : Problem(result.Error!, result.Code);
     private static IResult ToHttp(OperationResult result) => result.Succeeded ? Results.Ok(new { succeeded = true }) : Problem(result.Error!, result.Code);

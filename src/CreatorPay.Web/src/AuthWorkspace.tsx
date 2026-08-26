@@ -72,6 +72,21 @@ export function normalizeEthiopianPhone(value: string) {
   if (/^251[79]\d{8}$/.test(compact)) return `+${compact}`;
   return null;
 }
+type PasswordResetStatus = "Pending" | "Approved" | "Rejected" | "Completed";
+const passwordResetStatusMessages: Record<PasswordResetStatus, string> = {
+  Pending: "Your password reset request is waiting for admin approval.",
+  Approved: "Your request was approved. Create a new password.",
+  Rejected: "Your password reset request was rejected.",
+  Completed: "Password reset completed.",
+};
+function normalizePasswordResetStatus(value: unknown): PasswordResetStatus {
+  const status = String(value ?? "Pending");
+  if (status === "Approved" || status === "Rejected" || status === "Completed") return status;
+  return "Pending";
+}
+function passwordResetStatusText(status: PasswordResetStatus) {
+  return passwordResetStatusMessages[status];
+}
 const loginBlank = () => ({ email: "", password: "" }),
   shopperBlank = () => ({
     displayName: "",
@@ -124,8 +139,9 @@ export function AuthWorkspace() {
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [forgot, setForgot] = useState(false),
-    [resetStage, setResetStage] = useState<"request"|"waiting"|"approved">("request"),
     [resetReference,setResetReference]=useState(""),
+    [resetStatus,setResetStatus]=useState<PasswordResetStatus>("Pending"),
+    [resetStatusMessage,setResetStatusMessage]=useState(""),
     [reset, setReset] = useState({
       phoneNumber: "",
       newPassword: "",
@@ -161,7 +177,7 @@ export function AuthWorkspace() {
     setBusiness(businessBlank());
     setMessage("");
     setForgot(false);
-    setResetStage("request");setResetReference("");
+    setResetReference("");setResetStatus("Pending");setResetStatusMessage("");
     setReset({ phoneNumber: "", newPassword: "", confirmation: "" });
     setPinValue(""); setForgotPin(false);
     shopperSubmitting.current = false;
@@ -170,7 +186,7 @@ export function AuthWorkspace() {
   useEffect(()=>{
     const back=(event:Event)=>{
       if(forgotPin){event.preventDefault();setForgotPin(false);return}
-      if(forgot){event.preventDefault();setForgot(false);setResetStage("request");setResetReference("");return}
+      if(forgot){event.preventDefault();setForgot(false);setResetReference("");setResetStatus("Pending");setResetStatusMessage("");setReset({ phoneNumber: "", newPassword: "", confirmation: "" });setMessage("");return}
       if(mode==="customer"||mode==="creator"||mode==="merchant"||mode==="signup"){
         event.preventDefault();changeMode("login")
       }
@@ -193,6 +209,37 @@ export function AuthWorkspace() {
         return false;
       }
       return v as { message?: string; reference?:string; status?:string };
+    } catch (error) {
+      console.error(error);
+      setMessage(text.failed);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  function clearPasswordResetRequest() {
+    setResetReference("");
+    setResetStatus("Pending");
+    setResetStatusMessage("");
+    setReset({ phoneNumber: "", newPassword: "", confirmation: "" });
+  }
+  async function refreshPasswordResetStatus(reference: string) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`${base}/api/v1/auth/password-reset-requests/${encodeURIComponent(reference)}`);
+      const value = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage((value as { detail?: string }).detail ?? text.failed);
+        return false;
+      }
+      const status = normalizePasswordResetStatus((value as { status?: unknown }).status);
+      const backendMessage = typeof (value as { message?: unknown }).message === "string"
+        ? (value as { message: string }).message
+        : "";
+      setResetStatus(status);
+      setResetStatusMessage(backendMessage || passwordResetStatusText(status));
+      return true;
     } catch (error) {
       console.error(error);
       setMessage(text.failed);
@@ -321,22 +368,42 @@ export function AuthWorkspace() {
               className="form"
               onSubmit={async (e) => {
                 e.preventDefault();
-                if(resetStage==="request"){
-                  const result=await post("/api/v1/auth/password-reset-requests",{phoneNumber:reset.phoneNumber});
-                  if(result){setResetReference(result.reference??"");setResetStage("waiting");setMessage("Your password reset request is waiting for support approval.")}
+                if (!resetReference) {
+                  const result = await post("/api/v1/auth/password-reset-requests", { phoneNumber: reset.phoneNumber });
+                  if (result) {
+                    const status = normalizePasswordResetStatus(result.status);
+                    setResetReference(result.reference ?? "");
+                    setResetStatus(status);
+                    setResetStatusMessage(result.message ?? passwordResetStatusText(status));
+                  }
                   return;
                 }
-                if(resetStage==="waiting"){
-                  setBusy(true);const r=await fetch(`${base}/api/v1/auth/password-reset-requests/${encodeURIComponent(resetReference)}`);const v=await r.json().catch(()=>({}));setBusy(false);if(v.status==="Approved"){setResetStage("approved");setMessage("Your request was approved. Create a new password.")}else setMessage(v.message??"Your password reset request is waiting for support approval.");return
+                if (resetStatus !== "Approved") {
+                  await refreshPasswordResetStatus(resetReference);
+                  return;
                 }
-                if(!validPassword({password:reset.newPassword,confirmation:reset.confirmation}))return;
-                if(await post("/api/v1/auth/reset-password",{resetToken:resetReference,newPassword:reset.newPassword,confirmation:reset.confirmation})){setMessage("Password reset. You can sign in now.");setResetStage("request")}
+                if (!validPassword({ password: reset.newPassword, confirmation: reset.confirmation })) return;
+                if (await post("/api/v1/auth/reset-password", { resetToken: resetReference, newPassword: reset.newPassword, confirmation: reset.confirmation })) {
+                  setMessage("Password reset. You can sign in now.");
+                  clearPasswordResetRequest();
+                }
               }}
             >
               <h2>Forgot Password</h2>
               <p className="full">Request help resetting your password.</p>
-              {resetStage==="request"&&field(reset, setReset, "phoneNumber", "Phone Number", "tel")}
-              {resetStage==="approved" && (
+              {resetReference && (
+                <aside className="full" role="status" aria-live="polite">
+                  <strong>Status: {resetStatus}</strong>
+                  <p>{resetStatusMessage || passwordResetStatusText(resetStatus)}</p>
+                  {resetStatus === "Rejected" && (
+                    <button type="button" className="quiet" onClick={clearPasswordResetRequest}>
+                      Request New Password Reset
+                    </button>
+                  )}
+                </aside>
+              )}
+              {!resetReference && field(reset, setReset, "phoneNumber", "Phone Number", "tel")}
+              {resetStatus === "Approved" && (
                 <>
                   {field(
                     reset,
@@ -355,15 +422,14 @@ export function AuthWorkspace() {
                 </>
               )}
               <button disabled={busy}>
-                {resetStage==="request"?"Request Password Reset":resetStage==="waiting"?"Check Approval Status":"Reset Password"}
+                {!resetReference ? "Request Password Reset" : resetStatus === "Approved" ? "Reset Password" : "Check Approval Status"}
               </button>
               <button
                 type="button"
                 className="quiet"
                 onClick={() => {
                   setForgot(false);
-                  setResetStage("request");setResetReference("");
-                  setReset({ phoneNumber: "", newPassword: "", confirmation: "" });
+                  clearPasswordResetRequest();
                   setMessage("");
                 }}
               >
@@ -386,7 +452,7 @@ export function AuthWorkspace() {
                 className="quiet"
                 onClick={() => {
                   setForgot(true);
-                  setResetStage("request");setResetReference("");
+                  setResetReference("");setResetStatus("Pending");
                   setReset({ phoneNumber: "", newPassword: "", confirmation: "" });
                   setMessage("");
                 }}
