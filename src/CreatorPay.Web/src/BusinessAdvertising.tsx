@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { api } from "./apiClient";
 import { daysLeftText, relationshipState } from "./relationshipTime";
 import { currentPartnerships } from "./partnershipState";
@@ -9,6 +9,7 @@ type Creator = {
   publicCreatorId: string;
   displayName: string;
   city: string;
+  phoneNumber?: string;
   biography: string;
   contentCategories: string;
   socialPlatform?: string;
@@ -32,7 +33,9 @@ export type BusinessRelationship = {
   relationshipState?: string;
   activationRequired?: boolean;
   initiatedBy: "Business" | "Creator" | "Unknown";
+  creatorCity?: string;
   creatorProfileImageUrl?: string;
+  creatorPhoneNumber?: string;
 };
 const socialPlatforms = new Map([
   ["tiktok", "TikTok"],
@@ -75,6 +78,28 @@ function CreatorMeta({ platform, profileUrl }: { platform?: string; profileUrl?:
     </span>
   );
 }
+function CreatorIdentity({
+  name,
+  photoUrl,
+  phoneNumber,
+  city,
+}: {
+  name: string;
+  photoUrl?: string;
+  phoneNumber?: string;
+  city?: string;
+}) {
+  return (
+    <div className="creator-heading">
+      <ProfileAvatar name={name} photoUrl={photoUrl} />
+      <div className="creator-identity-text">
+        <strong>{name}</strong>
+        {phoneNumber && <small style={{ display: 'block' }}>{phoneNumber}</small>}
+        {city && <small style={{ display: 'block' }}>📍 {city}</small>}
+      </div>
+    </div>
+  );
+}
 const status = (value: string) =>
   value === "Approved"
     ? "Active"
@@ -87,7 +112,8 @@ const status = (value: string) =>
           : "Inactive";
 
 export function FindCreators({ refresh }: { refresh: () => void }) {
-  const [items, setItems] = useState<Creator[]>([]),
+  const [q, setQ] = useState(""),
+    [items, setItems] = useState<Creator[]>([]),
     [relationships, setRelationships] = useState<BusinessRelationship[]>([]),
     [message, setMessage] = useState(""),
     [loading, setLoading] = useState(true);
@@ -114,7 +140,11 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
       setLoading(false);
     }
   };
-  useTypeahead("", find, setItems);
+  useTypeahead(q, find, setItems);
+  const search = async (e?: FormEvent) => {
+    e?.preventDefault();
+    setItems(await find(q));
+  };
   useEffect(() => {
     void load();
   }, []);
@@ -176,6 +206,18 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
     <section className="creator-section business-find-creators">
       <h2>Find Creators</h2>
       <p>Search approved Creators and invite them to advertise.</p>
+      <form className="business-search" onSubmit={search}>
+        <label>
+          Creator name or public ID
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name or public ID"
+          />
+        </label>
+        <button disabled={loading}>{loading ? "Searching…" : "Search"}</button>
+      </form>
       {message && (
         <p
           className={
@@ -194,16 +236,12 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
             return (
               <article className="business-card business-discovery-card" key={x.id}>
                 <div className="creator-card">
-                  <div className="creator-heading">
-                    <ProfileAvatar
-                      name={x.displayName}
-                      photoUrl={x.profileImageUrl}
-                    />
-                    <div>
-                      <strong>{x.displayName}</strong>
-                      <small>{x.city}</small>
-                    </div>
-                  </div>
+                  <CreatorIdentity
+                    name={x.displayName}
+                    photoUrl={x.profileImageUrl}
+                    phoneNumber={x.phoneNumber}
+                    city={x.city}
+                  />
                 </div>
                 <div className="business-card-meta">
                   <CreatorMeta platform={x.socialPlatform} profileUrl={x.socialProfileUrl} />
@@ -300,18 +338,15 @@ export function ActiveCreators({
               key={x.id}
             >
                 <div className="creator-card">
-                  <div className="creator-heading">
-                    <ProfileAvatar
-                      name={x.creatorName}
-                      photoUrl={x.creatorProfileImageUrl}
-                    />
-                    <div>
-                      <strong>{x.creatorName}</strong>
-                    </div>
-                  </div>
+                  <CreatorIdentity
+                    name={x.creatorName}
+                    photoUrl={x.creatorProfileImageUrl}
+                    phoneNumber={x.creatorPhoneNumber}
+                    city={x.creatorCity}
+                  />
                 </div>
                 <span className="creator-meta">
-                  <SocialMediaLink
+                  <CreatorMeta
                     platform={x.creatorSocialPlatform}
                     profileUrl={x.creatorSocialProfileUrl}
                   />
@@ -401,20 +436,15 @@ export function AdvertisingRequests({
               .filter((x) => x.initiatedBy === "Creator")
               .map((x) => (
                 <article key={x.id}>
-                  <div className="creator-card">
-                    <div className="creator-heading">
-                      <ProfileAvatar
-                        name={x.creatorName}
-                        photoUrl={x.creatorProfileImageUrl}
-                      />
-                      <div>
-                        <strong>{x.creatorName}</strong>
-                        <small>
-                          {new Date(x.requestedAtUtc).toLocaleDateString()}
-                        </small>
-                      </div>
-                    </div>
-                  </div>
+                <div className="creator-card">
+                  <CreatorIdentity
+                    name={x.creatorName}
+                    photoUrl={x.creatorProfileImageUrl}
+                    phoneNumber={x.creatorPhoneNumber}
+                    city={x.creatorCity}
+                  />
+                  <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
                       platform={x.creatorSocialPlatform}
@@ -444,20 +474,15 @@ export function AdvertisingRequests({
               .filter((x) => x.initiatedBy === "Business")
               .map((x) => (
                 <article key={x.id}>
-                  <div className="creator-card">
-                    <div className="creator-heading">
-                      <ProfileAvatar
-                        name={x.creatorName}
-                        photoUrl={x.creatorProfileImageUrl}
-                      />
-                      <div>
-                        <strong>{x.creatorName}</strong>
-                        <small>
-                          {new Date(x.requestedAtUtc).toLocaleDateString()}
-                        </small>
-                      </div>
-                    </div>
-                  </div>
+                <div className="creator-card">
+                  <CreatorIdentity
+                    name={x.creatorName}
+                    photoUrl={x.creatorProfileImageUrl}
+                    phoneNumber={x.creatorPhoneNumber}
+                    city={x.creatorCity}
+                  />
+                  <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
                       platform={x.creatorSocialPlatform}
