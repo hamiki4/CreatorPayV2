@@ -17,6 +17,22 @@ public sealed class ProductionConfigurationTests
     }
 
     [Fact]
+    public void ProductionAcceptsExplicitProductionOriginsAndExternalFirebaseConfigValues()
+    {
+        var values = ValidProductionValues();
+        values["Cors:AllowedOrigins:0"] = "https://weymela.com";
+        values["PublicAppBaseUrl"] = "https://weymela.com";
+        values["FirebaseAuth:Enabled"] = "true";
+        values["FirebaseAuth:ProjectId"] = "weymela-production";
+        values["FirebaseAuth:ServiceAccountPath"] = "/run/secrets/weymela-firebase-admin.json";
+        values["FirebaseAuth:AuthorizedOrigin"] = "https://weymela.com";
+        values["FirebaseMessaging:Enabled"] = "true";
+        values["FirebaseMessaging:ProjectId"] = "weymela-production";
+        values["FirebaseMessaging:ServiceAccountPath"] = "/run/secrets/weymela-fcm.json";
+        ProductionConfiguration.Validate(new ConfigurationBuilder().AddInMemoryCollection(values).Build(), new EnvironmentStub());
+    }
+
+    [Fact]
     public void PilotRejectsUnsafeFlagsAndNonHttpsOrigin()
     {
         var values = ValidPilotValues();
@@ -105,6 +121,14 @@ public sealed class ProductionConfigurationTests
         ["Pilot:MaximumCreators"] = "25",
         ["Pilot:PayoutHoldDays"] = "7"
     };
+
+    private static Dictionary<string, string?> ValidProductionValues()
+    {
+        var values = ValidPilotValues();
+        values["SmsOtp:SmsProvider"] = "Disabled";
+        values.Remove("SmsOtp:TestCode");
+        return values;
+    }
 
     private sealed class EnvironmentStub : IHostEnvironment { public string EnvironmentName { get; set; } = Environments.Production; public string ApplicationName { get; set; } = "tests"; public string ContentRootPath { get; set; } = "."; public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider(); }
 }

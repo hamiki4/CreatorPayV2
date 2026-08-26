@@ -107,6 +107,7 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         var publicPhoto = await GetAnon($"/api/v1/discovery/creators/{Uri.EscapeDataString(creator.PublicCreatorId)}/photo?v={Uri.EscapeDataString(firstFile!)}");
         Assert.Equal(HttpStatusCode.OK, publicPhoto.StatusCode);
         Assert.StartsWith("image/png", publicPhoto.Content.Headers.ContentType?.MediaType ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("cross-origin", publicPhoto.Headers.GetValues("Cross-Origin-Resource-Policy").Single());
         var photoBytes = await publicPhoto.Content.ReadAsByteArrayAsync();
         Assert.True(photoBytes.AsSpan(0, PngSignature().Length).SequenceEqual(PngSignature()));
 

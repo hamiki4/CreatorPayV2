@@ -42,7 +42,7 @@ public static class CheckoutEndpoints
         var repeat = e.MapGroup("/api/v1/merchant/repeat-use-approvals").RequireAuthorization("AuthenticatedUser");
         repeat.MapPost("/{id:guid}/approve", (Guid id, DecideRepeatUseApprovalRequest r, HttpContext h, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => DecideRepeatUseApproval(id, true, r, h, u, db, ct));
         repeat.MapPost("/{id:guid}/reject", (Guid id, DecideRepeatUseApprovalRequest r, HttpContext h, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => DecideRepeatUseApproval(id, false, r, h, u, db, ct));
-        var a = e.MapGroup("/api/v1/admin/customer-payouts").RequireAuthorization("PlatformAdminOnly");
+        var a = e.MapGroup("/api/v1/admin/customer-payouts").RequireAuthorization("AdminOperationsOnly");
         a.MapGet("/", (ICheckoutService s, CancellationToken ct) => Run(() => s.GetPayoutsAsync(null, ct)));
         a.MapPost("/{id:guid}/processing", (Guid id, ICurrentUserService u, ICheckoutService s, CancellationToken ct) => Run(() => s.MarkPayoutProcessingAsync(id, u.UserAccountId!.Value, ct)));
         a.MapPost("/{id:guid}/mark-paid", (Guid id, MarkCustomerPayoutPaidRequest r, HttpRequest h, ICurrentUserService u, ICheckoutService s, CancellationToken ct) => Run(() => s.MarkPayoutPaidAsync(id, u.UserAccountId!.Value, Key(h), r, ct)));

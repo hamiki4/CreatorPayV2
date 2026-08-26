@@ -80,7 +80,9 @@ public static class DependencyInjection
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
         services.Configure<ObservabilityOptions>(configuration.GetSection(ObservabilityOptions.SectionName));
         services.Configure<FeatureFlagOptions>(configuration.GetSection(FeatureFlagOptions.SectionName));
-        services.AddDataProtection().SetApplicationName("Weymela.PushNotifications").PersistKeysToFileSystem(new DirectoryInfo(configuration["DataProtection:KeyRingPath"] ?? "/app/data/data-protection-keys"));
+        var depositProofRoot = configuration["DepositProofStorage:RootPath"] ?? "/app/data/deposit-proofs";
+        var dataProtectionKeyRingPath = configuration["DataProtection:KeyRingPath"] ?? Path.Combine(depositProofRoot, "data-protection-keys");
+        services.AddDataProtection().SetApplicationName("Weymela.PushNotifications").PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyRingPath));
         services.AddSingleton<INotificationTemplateRenderer, SafeNotificationTemplateRenderer>();
         services.AddSingleton<DevelopmentNotificationProvider>();
         services.AddSingleton<IEmailNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>()); services.AddSingleton<ISmsNotificationProvider>(s => s.GetRequiredService<DevelopmentNotificationProvider>());

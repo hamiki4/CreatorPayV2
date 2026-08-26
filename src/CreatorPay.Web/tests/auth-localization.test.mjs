@@ -53,7 +53,7 @@ test('Shopper registration submits synchronized password confirmation exactly on
 })
 
 test('authenticated roles route only to their assigned dashboard',()=>{
-  for(const [role,path] of Object.entries({Customer:'/shopper',Creator:'/creator',MerchantAdmin:'/business',Supervisor:'/supervisor',Cashier:'/cashier',PlatformAdmin:'/admin'}))assert.ok(sessionCompact.includes(`${role}:'${path}'`)||sessionCompact.includes(`${role}:"${path}"`))
+  for(const [role,path] of Object.entries({Customer:'/shopper',Creator:'/creator',MerchantAdmin:'/business',Supervisor:'/supervisor',Cashier:'/cashier',PlatformAdmin:'/admin',OperationsAdmin:'/admin'}))assert.ok(sessionCompact.includes(`${role}:'${path}'`)||sessionCompact.includes(`${role}:"${path}"`))
   assert.match(auth,/takeCreatorQrPath/)
   assert.match(auth,/location\.assign\(continuation\?\?workspaceRoute\(x\.user\.role\)\)/)
   assert.match(mainCompact,/isWorkspacePathAllowed\(user\.role,location\.pathname\)/)
@@ -79,6 +79,11 @@ test('notifications use the shared configured base and reject non-JSON safely',(
   assert.match(notificationsCompact,/constapiBase=\(import\.meta\.env\.VITE_API_URL/)
   assert.match(notifications,/content-type/)
   assert.match(notifications,/This section is temporarily unavailable/)
+})
+
+test('admin portal is mounted for both PlatformAdmin and OperationsAdmin',()=>{
+  assert.match(main,/user\.role === "PlatformAdmin" \|\| user\.role === "OperationsAdmin"/)
+  assert.match(main,/<AdminPortal/)
 })
 
 test('service worker JavaScript is valid',()=>{

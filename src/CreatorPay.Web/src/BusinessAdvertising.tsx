@@ -71,7 +71,13 @@ function SocialMediaLink({ platform, profileUrl }: { platform?: string; profileU
     <span className="social-media-link">{link.label}</span>
   );
 }
-
+function CreatorMeta({ platform, profileUrl }: { platform?: string; profileUrl?: string }) {
+  return (
+    <span className="creator-meta">
+      <SocialMediaLink platform={platform} profileUrl={profileUrl} />
+    </span>
+  );
+}
 function CreatorIdentity({
   name,
   photoUrl,
@@ -225,17 +231,10 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
         <p className="compact-empty">No approved Creators found.</p>
       ) : (
         <div className="discovery-list">
-          <div className="discovery-row discovery-headings business-discovery-row business-discovery-headings">
-            <span>Creator</span>
-            <span>Social Media</span>
-            <span>Status</span>
-            <span>Days Left</span>
-            <span>Action</span>
-          </div>
           {items.map((x) => {
             const state = stateFor(x);
             return (
-              <article className="discovery-row business-discovery-row" key={x.id}>
+              <article className="business-card business-discovery-card" key={x.id}>
                 <div className="creator-card">
                   <CreatorIdentity
                     name={x.displayName}
@@ -244,21 +243,12 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                     city={x.city}
                   />
                 </div>
-                <span data-label="Social Media">
-                  <SocialMediaLink
-                    platform={x.socialPlatform}
-                    profileUrl={x.socialProfileUrl}
-                  />
-                </span>
-                <span>
+                <div className="business-card-meta">
+                  <CreatorMeta platform={x.socialPlatform} profileUrl={x.socialProfileUrl} />
                   <span className="status-badge">{state.label}</span>
-                </span>
-                {state.daysText !== null && (
-                  <span>
-                    {state.daysText}
-                  </span>
-                )}
-                <span>
+                  {state.daysText !== null && <small className="business-card-days">{state.daysText}</small>}
+                </div>
+                <div className="business-card-actions">
                   {state.canInvite && (
                     <button onClick={() => void invite(x)}>
                       {state.label === "Declined" ? "Request Again" : "Invite to Advertise"}
@@ -269,7 +259,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
                       Reactivate
                     </button>
                   )}
-                </span>
+                </div>
               </article>
             );
           })}
@@ -340,13 +330,6 @@ export function ActiveCreators({
         </p>
       ) : (
         <div className="active-ads">
-          <div className="active-ad business-table-row business-active-grid headings">
-            <span>Creator</span>
-            <span>Social Media</span>
-            <span>Status</span>
-            <span>Days Left</span>
-            <span>Action</span>
-          </div>
           {visible.map((x) => {
             const state = relationshipState(x);
             return (
@@ -362,8 +345,8 @@ export function ActiveCreators({
                     city={x.creatorCity}
                   />
                 </div>
-                <span data-label="Social Media">
-                  <SocialMediaLink
+                <span className="creator-meta">
+                  <CreatorMeta
                     platform={x.creatorSocialPlatform}
                     profileUrl={x.creatorSocialProfileUrl}
                   />

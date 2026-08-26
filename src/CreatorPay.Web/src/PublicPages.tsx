@@ -10,7 +10,7 @@ const faqs = [
   ['Content Creators', 'How do I use My QR?', 'Show or share your Creator QR when promoting an approved Business. Do not alter the QR.'],
   ['Businesses', 'How are Creators approved?', 'The Business reviews Creator advertising requests and approves or rejects them.'],
   ['Customers', 'How does a Customer earn cashback?', 'Use active Creator advertising at a participating Business and confirm the checkout.'],
-  ['Account and Security', 'How can suspicious activity be reported?', 'Stop the transaction, retain the public reference, and contact support. Never send passwords, one-time codes, or full QR tokens.'],
+  ['Accounts', 'How can suspicious activity be reported?', 'Stop the transaction, retain the public reference, and contact support. Never send passwords, one-time codes, or full QR tokens.'],
 ] as const
 
 type LegalSection = [string, ReactNode]
@@ -91,7 +91,6 @@ export function PublicShell({ children }: { children: ReactNode }) {
               {label}
             </a>
           ))}
-          <a href="/">Sign In</a>
         </nav>
       </header>
       <div id="public-content">{children}</div>
@@ -104,22 +103,14 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
 export function HelpCenter() {
   const [category, setCategory] = useState('All')
-  const [search, setSearch] = useState('')
-  const categories = ['All', ...Array.from(new Set(faqs.map((x) => x[0])))]
-  const shown = useMemo(
-    () => faqs.filter((x) => (category === 'All' || x[0] === category) && `${x[1]} ${x[2]}`.toLowerCase().includes(search.toLowerCase())),
-    [category, search],
-  )
+  const categories = ['All', 'General', 'Content Creators', 'Businesses', 'Customers', 'Accounts']
+  const shown = useMemo(() => faqs.filter((x) => category === 'All' || x[0] === category), [category])
   return (
     <PublicShell>
       <section className="public-hero">
         <p className="eyebrow">Weymela</p>
         <h1>Help Center</h1>
         <p>Clear answers for using Weymela safely.</p>
-        <label>
-          Search help
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </label>
         <div className="category-filter">
           {categories.map((x) => (
             <button className={category === x ? '' : 'quiet'} onClick={() => setCategory(x)} key={x}>
@@ -128,12 +119,20 @@ export function HelpCenter() {
           ))}
         </div>
       </section>
-      <section className="faq-list">
+      <section className="faq-list help-card-list">
         {shown.map((x) => (
-          <details key={x[1]}>
-            <summary>{x[1]}</summary>
-            <p>{x[2]}</p>
-          </details>
+          <article className="help-card" key={x[1]}>
+            <span className="help-card-icon" aria-hidden="true">
+              ?
+            </span>
+            <div>
+              <strong>{x[1]}</strong>
+              <p>{x[2]}</p>
+            </div>
+            <span className="help-card-chevron" aria-hidden="true">
+              ›
+            </span>
+          </article>
         ))}
         {shown.length === 0 && <p>No matching help articles.</p>}
       </section>

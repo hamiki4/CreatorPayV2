@@ -1,3 +1,3 @@
 namespace CreatorPay.Domain.Enums;
 
-public enum UserRole { PlatformAdmin, Creator, Customer, MerchantAdmin, Supervisor, Cashier }
+public enum UserRole { PlatformAdmin, OperationsAdmin, Creator, Customer, MerchantAdmin, Supervisor, Cashier }

@@ -801,7 +801,105 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal("Approved", (await client.GetFromJsonAsync<JsonElement>($"/api/v1/auth/password-reset-requests/{reference}")).GetProperty("status").GetString());
         const string replacement = "Replacement-password-2!"; Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/reset-password", new { resetToken = reference, newPassword = replacement, confirmation = replacement })).StatusCode); Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/reset-password", new { resetToken = reference, newPassword = "Another-password-3!", confirmation = "Another-password-3!" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "0911000001", password = "E2e-test-password-1!" })).StatusCode); Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "0911000001", password = replacement })).StatusCode); Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = oldRefresh })).StatusCode);
-        await using var verify = Db(); Assert.Equal("Completed", (await verify.SupportRequests.SingleAsync(x => x.PublicReference == reference)).Status); Assert.Single(await verify.PasswordResetTokens.Where(x => x.UserAccountId == Guid.Parse("10000000-0000-0000-0000-000000000002")).ToListAsync()); Assert.Contains(await verify.LoginAudits.ToListAsync(), x => x.FailureReason == "PasswordResetHelpRequested"); Assert.Contains(await verify.OperationalAuditEvents.ToListAsync(), x => x.EventType == "PasswordResetAuthorized");
+        await using var verify = Db(); Assert.False(await verify.SupportRequests.AnyAsync(x => x.PublicReference == reference)); Assert.Single(await verify.PasswordResetTokens.Where(x => x.UserAccountId == Guid.Parse("10000000-0000-0000-0000-000000000002")).ToListAsync()); Assert.Contains(await verify.LoginAudits.ToListAsync(), x => x.FailureReason == "PasswordResetHelpRequested"); Assert.Contains(await verify.OperationalAuditEvents.ToListAsync(), x => x.EventType == "PasswordResetAuthorized" && x.MetadataJson.Contains(reference)); Assert.Contains(await verify.OperationalAuditEvents.ToListAsync(), x => x.EventType == "PasswordResetCompleted" && x.MetadataJson.Contains(reference));
+    }
+
+    [DockerFact]
+    public async Task Password_reset_requests_publish_admin_notifications_and_surface_pending_approved_and_rejected_states()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var seed = await seeded.Content.ReadFromJsonAsync<JsonElement>();
+        var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
+        var shopperPhone = seed.GetProperty("shopperPhone").GetString()!;
+        var creatorPhone = seed.GetProperty("creatorPhone").GetString()!;
+        var ownerPhone = seed.GetProperty("ownerPhone").GetString()!;
+        const string originalPassword = "E2e-test-password-1!";
+        const string replacementPassword = "Replacement-password-2!";
+
+        var summary0 = await (await Get(client, "/api/v1/admin/dashboard/summary", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, summary0!.GetProperty("openSupportRequests").GetInt32());
+        var unread0 = await (await Get(client, "/api/v1/notifications/unread-count", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, unread0!.GetProperty("count").GetInt32());
+
+        var customerReset = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = shopperPhone });
+        Assert.Equal(HttpStatusCode.OK, customerReset.StatusCode);
+        var customerBody = await customerReset.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Pending", customerBody!.GetProperty("status").GetString());
+        Assert.Equal("Your password reset request is waiting for admin approval.", customerBody.GetProperty("message").GetString());
+        var customerReference = customerBody.GetProperty("reference").GetString()!;
+
+        var summary1 = await (await Get(client, "/api/v1/admin/dashboard/summary", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, summary1!.GetProperty("openSupportRequests").GetInt32());
+        var unread1 = await (await Get(client, "/api/v1/notifications/unread-count", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, unread1!.GetProperty("count").GetInt32());
+        var inbox1 = await (await Get(client, "/api/v1/notifications?page=1&pageSize=10", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        var customerNotice = Assert.Single(inbox1!.GetProperty("items").EnumerateArray(), x => x.GetProperty("type").GetString() == "SupportRequestReceived" && x.GetProperty("data").GetProperty("SupportReference").GetString() == customerReference);
+        Assert.Equal("/admin/accounts#password-reset-requests", customerNotice.GetProperty("data").GetProperty("TargetPath").GetString());
+        Assert.Equal("Customer", customerNotice.GetProperty("data").GetProperty("RequesterRole").GetString());
+        Assert.Contains("Password reset request pending for", customerNotice.GetProperty("title").GetString(), StringComparison.Ordinal);
+        Assert.Contains("waiting for admin approval", customerNotice.GetProperty("body").GetString(), StringComparison.Ordinal);
+        var customerNoticeJson = customerNotice.GetRawText();
+        Assert.DoesNotContain(originalPassword, customerNoticeJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("resetToken", customerNoticeJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("newPassword", customerNoticeJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("confirmation", customerNoticeJson, StringComparison.OrdinalIgnoreCase);
+
+        var queue = await (await Get(client, "/api/v1/admin/password-reset-requests", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        var customerItem = Assert.Single(queue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == shopperPhone);
+        Assert.Equal("Pending", customerItem.GetProperty("status").GetString());
+        Assert.True(customerItem.GetProperty("canApprove").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/admin/password-reset-requests/{customerItem.GetProperty("id").GetGuid()}/approve", admin, new { })).StatusCode);
+        var approvedStatus = await client.GetFromJsonAsync<JsonElement>($"/api/v1/auth/password-reset-requests/{customerReference}");
+        Assert.Equal("Approved", approvedStatus!.GetProperty("status").GetString());
+        Assert.Equal("Your request was approved. Create a new password.", approvedStatus.GetProperty("message").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/reset-password", new { resetToken = customerReference, newPassword = replacementPassword, confirmation = replacementPassword })).StatusCode);
+        var completedStatus = await client.GetFromJsonAsync<JsonElement>($"/api/v1/auth/password-reset-requests/{customerReference}");
+        Assert.Equal("Completed", completedStatus!.GetProperty("status").GetString());
+        Assert.Equal("Password reset completed.", completedStatus.GetProperty("message").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = shopperPhone, password = originalPassword })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = shopperPhone, password = replacementPassword })).StatusCode);
+
+        var creatorReset = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = creatorPhone });
+        Assert.Equal(HttpStatusCode.OK, creatorReset.StatusCode);
+        var creatorBody = await creatorReset.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Pending", creatorBody!.GetProperty("status").GetString());
+        var creatorReference = creatorBody.GetProperty("reference").GetString()!;
+        queue = await (await Get(client, "/api/v1/admin/password-reset-requests", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        var creatorItem = Assert.Single(queue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == creatorPhone);
+        Assert.Equal("Pending", creatorItem.GetProperty("status").GetString());
+        Assert.True(creatorItem.GetProperty("canApprove").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/admin/password-reset-requests/{creatorItem.GetProperty("id").GetGuid()}/reject", admin, new { })).StatusCode);
+        var rejectedStatus = await client.GetFromJsonAsync<JsonElement>($"/api/v1/auth/password-reset-requests/{creatorReference}");
+        Assert.Equal("Rejected", rejectedStatus!.GetProperty("status").GetString());
+        Assert.Equal("Your password reset request was rejected. Please contact Weymela Support or submit a new request.", rejectedStatus.GetProperty("message").GetString());
+
+        var creatorRetry = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = creatorPhone });
+        Assert.Equal(HttpStatusCode.OK, creatorRetry.StatusCode);
+        var creatorRetryBody = await creatorRetry.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Pending", creatorRetryBody!.GetProperty("status").GetString());
+        Assert.Equal("Your password reset request is waiting for admin approval.", creatorRetryBody.GetProperty("message").GetString());
+        queue = await (await Get(client, "/api/v1/admin/password-reset-requests", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Single(queue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == creatorPhone && x.GetProperty("status").GetString() == "Pending");
+        Assert.DoesNotContain(queue.EnumerateArray(), x => x.GetProperty("phone").GetString() == creatorPhone && x.GetProperty("status").GetString() == "Rejected");
+
+        var ownerReset = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = ownerPhone });
+        Assert.Equal(HttpStatusCode.OK, ownerReset.StatusCode);
+        var ownerBody = await ownerReset.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Pending", ownerBody!.GetProperty("status").GetString());
+        var ownerReference = ownerBody.GetProperty("reference").GetString()!;
+        queue = await (await Get(client, "/api/v1/admin/password-reset-requests", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        var ownerItem = Assert.Single(queue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == ownerPhone);
+        Assert.Equal("Pending", ownerItem.GetProperty("status").GetString());
+        Assert.True(ownerItem.GetProperty("canApprove").GetBoolean());
+        summary1 = await (await Get(client, "/api/v1/admin/dashboard/summary", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, summary1!.GetProperty("openSupportRequests").GetInt32());
+        unread1 = await (await Get(client, "/api/v1/notifications/unread-count", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(4, unread1!.GetProperty("count").GetInt32());
+        inbox1 = await (await Get(client, "/api/v1/notifications?page=1&pageSize=10", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(4, inbox1!.GetProperty("items").GetArrayLength());
+        Assert.Contains(inbox1.GetProperty("items").EnumerateArray(), x => x.GetProperty("data").GetProperty("SupportReference").GetString() == ownerReference);
     }
 
     [DockerFact]
@@ -828,6 +926,164 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var allowed = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = seed.GetProperty("offerQrPayload").GetString(), shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "threshold-allowed"); Assert.Equal(HttpStatusCode.OK, allowed.StatusCode); Assert.Equal("awaiting_shopper_confirmation", (await allowed.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("code").GetString()); Assert.Equal((0, 0, 0, 0, 0, 0, 0), await Snapshot());
         var ownerAccountId = Guid.Parse("20000000-0000-0000-0000-000000000008"); Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{ownerAccountId}/suspend", admin, new { reason = "Security review" })).StatusCode); Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{ownerAccountId}/reactivate", admin, new { reason = "Review complete" })).StatusCode);
         await using var db = Db(); Assert.Equal(1000m, await db.PlatformFinancialSettings.Select(x => x.MinimumBusinessWalletBalance).SingleAsync()); Assert.True(await db.CommissionAuditEvents.CountAsync(x => x.EventType == "FinancialSettingsChanged") >= 2); Assert.Equal(AccountStatus.Active, (await db.UserAccounts.SingleAsync(x => x.Id == ownerAccountId)).Status); Assert.True(await db.OperationalAuditEvents.CountAsync(x => x.SubjectId == ownerAccountId) >= 2);
+    }
+
+    [DockerFact]
+    public async Task Platform_admin_can_query_operations_admin_accounts_and_operations_admin_cannot_create_accounts()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
+
+        var operationsList = await Get(client, "/api/v1/admin/accounts?page=1&pageSize=100&role=OperationsAdmin", admin);
+        Assert.Equal(HttpStatusCode.OK, operationsList.StatusCode);
+        _ = await operationsList.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+
+        var created = await Post(client, "/api/v1/admin/accounts/create", admin, new
+        {
+            role = "OperationsAdmin",
+            email = "ops-admin@e2e.invalid",
+            phoneNumber = "0911000999",
+            password = "E2e-test-password-1!",
+            confirmation = "E2e-test-password-1!"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var page = await (await Get(client, "/api/v1/admin/accounts?page=1&pageSize=100&role=OperationsAdmin", admin)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains(page!.GetProperty("items").EnumerateArray(), x => x.GetProperty("email").GetString() == "ops-admin@e2e.invalid" && x.GetProperty("role").GetString() == "OperationsAdmin");
+
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ops-admin@e2e.invalid", password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var loginBody = await login.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var opsToken = loginBody!.GetProperty("accessToken").GetString()!;
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Get(client, "/api/v1/admin/dashboard/trends", opsToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Get(client, "/api/v1/admin/accounts?page=1&pageSize=100&role=PlatformAdmin", opsToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, "/api/v1/admin/accounts/create", opsToken, new
+        {
+            role = "Customer",
+            email = "should-not-create@e2e.invalid",
+            phoneNumber = "0911000777",
+            password = "E2e-test-password-1!",
+            confirmation = "E2e-test-password-1!"
+        })).StatusCode);
+    }
+
+    [DockerFact]
+    public async Task Operations_admin_can_login_and_bootstrap_its_session()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
+
+        var created = await Post(client, "/api/v1/admin/accounts/create", admin, new
+        {
+            role = "OperationsAdmin",
+            email = "session-ops-admin@e2e.invalid",
+            phoneNumber = "0911000888",
+            password = "E2e-test-password-1!",
+            confirmation = "E2e-test-password-1!"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "session-ops-admin@e2e.invalid", password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var body = await login.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("OperationsAdmin", body!.GetProperty("user").GetProperty("role").GetString());
+
+        var opsToken = body.GetProperty("accessToken").GetString()!;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", opsToken);
+        var me = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/auth/me");
+        Assert.Equal("OperationsAdmin", me!.GetProperty("role").GetString());
+        Assert.Equal("Active", me.GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, "/api/v1/admin/accounts/create", opsToken, new
+        {
+            role = "Customer",
+            email = "ops-cannot-create@e2e.invalid",
+            phoneNumber = "0911000666",
+            password = "E2e-test-password-1!",
+            confirmation = "E2e-test-password-1!"
+        })).StatusCode);
+    }
+
+    [DockerFact]
+    public async Task Operations_admin_can_access_operational_admin_endpoints_but_not_platform_only_pages()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
+        var created = await Post(client, "/api/v1/admin/accounts/create", admin, new
+        {
+            role = "OperationsAdmin",
+            email = "ops-access@e2e.invalid",
+            phoneNumber = "0911000667",
+            password = "E2e-test-password-1!",
+            confirmation = "E2e-test-password-1!"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ops-access@e2e.invalid", password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var body = await login.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var opsToken = body!.GetProperty("accessToken").GetString()!;
+
+        foreach (var path in new[]
+        {
+            "/api/v1/admin/dashboard/summary",
+            "/api/v1/creators/pending",
+            "/api/v1/admin/merchants/pending",
+            "/api/v1/admin/financial-settings",
+            "/api/v1/admin/payout-cycles/creators",
+            "/api/v1/admin/payout-cycles/shoppers",
+            "/api/v1/admin/payout-cycles/platform-revenue",
+            "/api/v1/admin/payout-history/creators?page=1&pageSize=25",
+            "/api/v1/admin/payout-history/shoppers?page=1&pageSize=25",
+            "/api/v1/admin/deposits",
+            "/api/v1/admin/wallets?page=1&pageSize=25",
+            "/api/v1/admin/fraud-alerts",
+            "/api/v1/admin/disputes",
+            "/api/v1/admin/reversals",
+            "/api/v1/admin/system"
+        })
+        {
+            var response = await Get(client, path, opsToken);
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == HttpStatusCode.OK, $"Path failed: {path} returned {response.StatusCode}. Body: {responseBody}");
+        }
+
+        foreach (var path in new[]
+        {
+            "/api/v1/admin/accounts?page=1&pageSize=25&role=MerchantAdmin",
+            "/api/v1/admin/accounts?page=1&pageSize=25&role=Creator",
+            "/api/v1/admin/accounts?page=1&pageSize=25&role=Customer",
+            "/api/v1/admin/accounts?page=1&pageSize=25&role=Cashier"
+        })
+        {
+            var response = await Get(client, path, opsToken);
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == HttpStatusCode.OK, $"Path failed: {path} returned {response.StatusCode}. Body: {responseBody}");
+        }
+
+        foreach (var path in new[]
+        {
+            "/api/v1/admin/dashboard/trends",
+            "/api/v1/admin/reports/financial-summary",
+            "/api/v1/admin/accounts?page=1&pageSize=25&role=PlatformAdmin"
+        })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await Get(client, path, opsToken)).StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, "/api/v1/admin/accounts/create", opsToken, new
+        {
+            role = "Customer",
+            email = "should-not-create@e2e.invalid",
+            phoneNumber = "0911000777",
+            password = "E2e-test-password-1!",
+            confirmation = "E2e-test-password-1!"
+        })).StatusCode);
     }
 
     [DockerFact]

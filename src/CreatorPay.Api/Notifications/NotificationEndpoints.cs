@@ -50,7 +50,7 @@ public static class NotificationEndpoints
     }
     static void MapAdmin(IEndpointRouteBuilder app)
     {
-        var a = app.MapGroup("/api/v1/admin").RequireAuthorization("PlatformAdminOnly").WithTags("Notification administration");
+        var a = app.MapGroup("/api/v1/admin").RequireAuthorization("AdminOperationsOnly").WithTags("Notification administration");
         a.MapGet("/notifications", async (int page, int pageSize, ApplicationDbContext db, CancellationToken ct) => Results.Ok(await db.Notifications.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize == 0 ? 25 : pageSize, 1, 100)).Take(Math.Clamp(pageSize == 0 ? 25 : pageSize, 1, 100)).Select(x => new { x.PublicNotificationId, x.NotificationType, x.Priority, x.Status, x.CreatedAtUtc, x.CompletedAtUtc }).ToListAsync(ct)));
         a.MapGet("/notifications/{id}", async (string id, ApplicationDbContext db, CancellationToken ct) => await db.Notifications.AsNoTracking().Where(x => x.PublicNotificationId == id).Select(x => new { x.PublicNotificationId, x.NotificationType, x.Title, x.Body, x.Priority, x.Status, x.CreatedAtUtc, x.CompletedAtUtc, Recipients = x.Recipients.Select(r => new { r.Channel, r.MaskedDestination, r.Status, r.DeliveredAtUtc, r.FailedAtUtc, r.FailureReason }) }).SingleOrDefaultAsync(ct) is { } x ? Results.Ok(x) : Results.NotFound());
         a.MapGet("/notification-outbox", async (ApplicationDbContext db, CancellationToken ct) => Results.Ok(await db.NotificationOutboxMessages.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(200).Select(x => new { x.Id, x.NotificationId, x.Status, x.AvailableAtUtc, x.AttemptCount, x.LastAttemptAtUtc, x.LastError }).ToListAsync(ct)));

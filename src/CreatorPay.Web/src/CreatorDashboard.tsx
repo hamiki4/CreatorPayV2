@@ -138,7 +138,7 @@ function ProfilePanel({
               <span className="status-badge">{statusLabel(profile.creatorStatus)}</span>
             </div>
           </div>
-          <div className="actions">
+          <div className="actions creator-photo-actions">
             <input
               ref={input}
               type="file"
@@ -161,7 +161,7 @@ function ProfilePanel({
           <strong>{profile.creatorCode}</strong>
           <small>{profile.publicCreatorId}</small>
           <button
-            className="quiet"
+            className="quiet copy-creator-id"
             onClick={async () => {
               await navigator.clipboard.writeText(profile.creatorCode)
               setCopy('Copied')
@@ -229,6 +229,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
 
   const pending = requests.filter((x) => x.status === 'Pending').length
   const date = (value?: string) => (value ? new Intl.DateTimeFormat('en-GB').format(new Date(value)) : '—')
+  const photo = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
   const tabs: [Tab, string][] = [
     ['find', 'Find Businesses'],
     ['ads', 'Active Ads'],
@@ -259,6 +260,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
       role="Creator"
       name={profile?.displayName}
       status={profile ? statusLabel(profile.creatorStatus) : 'Active'}
+      photoUrl={photo}
       identityMedia={profile ? <ProfileAvatar name={profile.displayName} photoUrl={headerPhoto} style={{ width: '2.5rem', height: '2.5rem', fontSize: '1rem' }} /> : undefined}
       onProfile={() => setTab('profile')}
       onHelp={() => location.assign('/help')}

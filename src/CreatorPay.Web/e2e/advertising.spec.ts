@@ -31,8 +31,8 @@ test('Admin payout cycles use readable summaries and compact searches',async({pa
 test('Platform Admin approves a pending Creator',async({page},testInfo)=>{
   const n=suffix(testInfo.project.name),name=`${n==='1'?'Desktop':'Mobile'} Pending Creator`
   await login(page,'admin@e2e.invalid')
-  await page.locator('nav[aria-label="Admin navigation"] a[href="/admin/creators"]').click()
-  await expect(page.getByRole('heading',{name:'Creator review'})).toBeVisible()
+  await page.locator('nav[aria-label="Admin navigation"] a[href="/admin/creator-review"]').click()
+  await expect(page.getByRole('heading',{name:'Creator Review'})).toBeVisible()
   const card=page.locator('article').filter({hasText:name})
   await expect(card.getByText('Pending Approval')).toBeVisible()
   await card.getByRole('button',{name:'Review'}).click()

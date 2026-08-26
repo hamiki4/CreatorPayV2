@@ -171,9 +171,8 @@ test("Shopper phone registration, activation, login, and supported password rese
   await page.getByRole("button", { name: "Forgot Password" }).click();
   await page.getByLabel("Phone Number").fill(phone);
   await page.getByRole("button", { name: "Request Password Reset" }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "waiting for support approval",
-  );
+  await expect(page.getByRole("status")).toContainText("Status: Pending");
+  await expect(page.getByRole("status")).toContainText("waiting for admin approval");
   const adminHeaders = await admin(request);
   const queue = await request.get(`${api}/api/v1/admin/password-reset-requests`, { headers: adminHeaders });
   expect(queue.ok()).toBeTruthy();
@@ -184,8 +183,16 @@ test("Shopper phone registration, activation, login, and supported password rese
   expect(resetRequest).toBeTruthy();
   const approval = await request.post(`${api}/api/v1/admin/password-reset-requests/${resetRequest.id}/approve`, { headers: adminHeaders, data: {} });
   expect(approval.ok()).toBeTruthy();
-  await page.getByRole("button", { name: "Check Approval Status" }).click();
-  await expect(page.getByRole("status")).toContainText("approved", { ignoreCase: true });
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.request().method() === "GET" &&
+      response.url().includes("/api/v1/auth/password-reset-requests/") &&
+      response.ok(),
+    ),
+    page.getByRole("button", { name: "Check Approval Status" }).click(),
+  ]);
+  await expect(page.getByRole("status")).toContainText("Status: Approved");
+  await expect(page.getByRole("status")).toContainText("Your request was approved. Create a new password.");
   await page.getByLabel("New Password").fill(nextPassword);
   await page.getByLabel("Confirm Password").fill(nextPassword);
   await page.getByRole("button", { name: "Reset Password" }).click();
@@ -196,6 +203,35 @@ test("Shopper phone registration, activation, login, and supported password rese
   await expect(
     page.getByRole("heading", { name: "Shopper" }),
   ).toBeVisible();
+  await reset(page);
+  const signInTransitionAgain = page.getByRole("button", { name: "Already have an account? Sign In" });
+  if (await signInTransitionAgain.isVisible()) await signInTransitionAgain.click();
+  await expect(page.getByRole("button", { name: "Forgot Password" })).toBeVisible();
+  await page.getByRole("button", { name: "Forgot Password" }).click();
+  await page.getByLabel("Phone Number").fill(phone);
+  await page.getByRole("button", { name: "Request Password Reset" }).click();
+  await expect(page.getByRole("status")).toContainText("waiting for admin approval");
+  const rejectedQueue = await request.get(`${api}/api/v1/admin/password-reset-requests`, { headers: adminHeaders });
+  expect(rejectedQueue.ok()).toBeTruthy();
+  const rejectedRequest = (await rejectedQueue.json()).find((x: any) =>
+    String(x.phone ?? x.phoneNumber ?? "").replace(/\D/g, "").slice(-9) === phone.replace(/\D/g, "").slice(-9) &&
+    x.status === "Pending",
+  );
+  expect(rejectedRequest).toBeTruthy();
+  const rejection = await request.post(`${api}/api/v1/admin/password-reset-requests/${rejectedRequest.id}/reject`, { headers: adminHeaders, data: {} });
+  expect(rejection.ok()).toBeTruthy();
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.request().method() === "GET" &&
+      response.url().includes("/api/v1/auth/password-reset-requests/") &&
+      response.ok(),
+    ),
+    page.getByRole("button", { name: "Check Approval Status" }).click(),
+  ]);
+  await expect(page.getByRole("status")).toContainText("Status: Rejected");
+  await expect(page.getByRole("status")).toContainText("Your password reset request was rejected.");
+  await expect(page.getByLabel("New Password")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Request New Password Reset" })).toBeVisible();
   await noOverflow(page);
 });
 

@@ -18,8 +18,9 @@ ENV VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID
 ENV VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID
 ENV VITE_FIREBASE_VAPID_PUBLIC_KEY=$VITE_FIREBASE_VAPID_PUBLIC_KEY
 RUN npm run build
+RUN node ./scripts/render-nginx-config.mjs --template ./nginx.conf --output /tmp/default.conf --api-url "$VITE_API_URL"
 FROM nginxinc/nginx-unprivileged:1.27-alpine
-COPY src/CreatorPay.Web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /tmp/default.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
 HEALTHCHECK CMD wget -q -O - http://127.0.0.1:8080/healthz || exit 1

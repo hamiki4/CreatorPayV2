@@ -627,12 +627,6 @@ function AcceptInvitation() {
         {message && (
           <aside role="status">
             {message}
-            {message.includes("now sign in") && (
-              <>
-                {" "}
-                <a href="/">Sign In</a>
-              </>
-            )}
           </aside>
         )}
       </form>
@@ -790,7 +784,7 @@ function Root() {
         </div>
       </main></PinEnrollmentGate>
     );
-  return user.role === "PlatformAdmin" ? (
+  return user.role === "PlatformAdmin" || user.role === "OperationsAdmin" ? (
     <AdminPortal
       operations={{
         commission: <CommissionWorkspace role={user.role} />,
@@ -802,7 +796,7 @@ function Root() {
         reversals: <AdminRiskWorkspace />,
       }}
     />
-  ) : user.role === "Supervisor" ? (
+    ) : user.role === "Supervisor" ? (
     <App />
   ) : (
     <PinEnrollmentGate><App /></PinEnrollmentGate>
