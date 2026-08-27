@@ -35,7 +35,9 @@ public static class RewardEligibilityQueries
             wallet.AvailableBalance >= transactionAmount && (transactionAmount > 0 || wallet.AvailableBalance > 0), ct);
     }
 
-    public static async Task<decimal> CurrentMinimumAsync(ApplicationDbContext db, string currencyCode, CancellationToken ct) =>
-        await db.PlatformFinancialSettings.AsNoTracking().Where(setting => setting.CurrencyCode == currencyCode)
-            .Select(setting => (decimal?)setting.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m;
+    public static Task<decimal> CurrentMinimumAsync(ApplicationDbContext db, string currencyCode, CancellationToken ct) =>
+        BusinessWalletMinimumQueries.CurrentMinimumAsync(db, currencyCode, "Other", ct);
+
+    public static Task<decimal> CurrentMinimumAsync(ApplicationDbContext db, string currencyCode, string? businessType, CancellationToken ct) =>
+        BusinessWalletMinimumQueries.CurrentMinimumAsync(db, currencyCode, businessType, ct);
 }

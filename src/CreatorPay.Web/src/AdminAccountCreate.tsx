@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "./apiClient";
+import { businessTypes } from "./AuthWorkspace";
 
 type AdminRole =
   | "PlatformAdmin"
@@ -296,11 +297,17 @@ export function AdminAccountCreate({
             </label>
             <label>
               Business type
-              <input
+              <select
                 required
                 value={form.businessType}
                 onChange={(e) => setForm({ ...form, businessType: e.target.value })}
-              />
+              >
+                {businessTypes.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.en}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Primary contact name

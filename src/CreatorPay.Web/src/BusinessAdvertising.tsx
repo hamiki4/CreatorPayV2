@@ -180,7 +180,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
   function stateFor(creator: Creator) {
     const relationship = currentRelationships.find((x) => x.creatorId === creator.id);
     if (!relationship)
-      return { label: "No Relationship", daysText: null, canInvite: true };
+      return { label: "NO RELATIONSHIP", daysText: null, canInvite: true };
     if (relationship.status === "Pending")
       return { label: "Invitation Pending", daysText: null, canInvite: false };
     if (relationship.status === "Approved") {
@@ -287,44 +287,11 @@ export function ActiveCreators({
       .then(refresh)
       .catch((error) => console.error("Partnership readiness reconciliation failed", error));
   }, [items, reconciledId, refresh]);
-  async function change(
-    x: BusinessRelationship,
-    action: "activate" | "deactivate" | "reactivate",
-  ) {
-    if (
-      action === "deactivate" &&
-      !confirm(
-        "Deactivate this advertising relationship? New attributed sales will stop immediately.",
-      )
-    )
-      return;
-    const endpoint = action === "deactivate" ? "suspend" : action;
-    try {
-      await api(`/api/v1/merchant/partnerships/${x.id}/${endpoint}`, {
-        method: "POST",
-        body: JSON.stringify({
-          reason:
-            action === "deactivate"
-              ? "Deactivated by Business"
-              : action === "reactivate"
-                ? "Reactivated by Business"
-                : "Activated by Business",
-        }),
-      });
-      setMessage(
-        `${x.creatorName} ad is now ${action === "deactivate" ? "deactivated" : "active"}.`,
-      );
-      refresh();
-    } catch (error) {
-      console.error(error);
-      setMessage((error as Error).message);
-    }
-  }
   return (
     <section className="creator-section">
       <h2>Active Ads</h2>
       {message && <p role="status">{message}</p>}
-          {visible.length === 0 ? (
+      {visible.length === 0 ? (
         <p className="compact-empty">
           No Creator advertising relationships yet.
         </p>
@@ -334,9 +301,9 @@ export function ActiveCreators({
             const state = relationshipState(x);
             return (
               <article
-              className={`active-ad business-table-row business-active-grid relationship-${state.tone}`}
-              key={x.id}
-            >
+                className={`active-ad business-table-row business-active-grid relationship-${state.tone}`}
+                key={x.id}
+              >
                 <div className="creator-card">
                   <CreatorIdentity
                     name={x.creatorName}
@@ -357,16 +324,6 @@ export function ActiveCreators({
                 {state.daysLeft !== null && (
                   <span className="days-left">{daysLeftText(state.daysLeft, state.tone)}</span>
                 )}
-                <span className="table-action">
-                  {state.label === "Active" ? (
-                    <button
-                      className="danger compact-action"
-                      onClick={() => void change(x, "deactivate")}
-                    >
-                      Deactivate Ad
-                    </button>
-                  ) : null}
-                </span>
                 <small>
                   {x.activatedAtUtc
                     ? `Activated ${new Date(x.activatedAtUtc).toLocaleDateString()}`

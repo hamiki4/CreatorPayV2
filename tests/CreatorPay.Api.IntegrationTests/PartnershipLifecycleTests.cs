@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
@@ -126,8 +127,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         await using (var db = Db())
         {
             var wallet = await db.MerchantWallets.SingleAsync(x => x.MerchantId == MerchantId);
-            var settings = await db.PlatformFinancialSettings.SingleAsync();
-            settings.MinimumBusinessWalletBalance = wallet.AvailableBalance + 1m;
+            await SetBusinessTypeMinimumAsync("Other", wallet.AvailableBalance + 1m);
             var partnership = new MerchantCreatorPartnership { Id = Guid.NewGuid(), MerchantId = MerchantId, CreatorId = creator.CreatorId, RequestedAtUtc = DateTime.UtcNow, CreatedAtUtc = DateTime.UtcNow, RequestedByUserId = creator.UserId };
             partnership.Approve(DateTime.UtcNow, MerchantUserId);
             db.MerchantCreatorPartnerships.Add(partnership);
@@ -159,8 +159,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 0 WHERE \"MerchantId\" = {MerchantId}");
-            var settings = await db.PlatformFinancialSettings.SingleAsync();
-            settings.MinimumBusinessWalletBalance = 1000m;
+            await SetBusinessTypeMinimumAsync("Other", 1000m);
             await db.SaveChangesAsync();
         }
         var walletResponse = await Get(merchant, "/api/v1/merchant/wallet");
@@ -183,7 +182,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
-            (await db.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance = 1000m;
+            await SetBusinessTypeMinimumAsync("Other", 1000m);
             await db.SaveChangesAsync();
         }
         creatorRows = await (await Get(seededCreator, "/api/v1/creator/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -204,7 +203,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
-            (await db.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance = 1000m;
+            await SetBusinessTypeMinimumAsync("Other", 1000m);
             await db.SaveChangesAsync();
         }
         var funded = await Get(client, "/api/v1/creator/merchants/search?q=Active E2E");
@@ -215,7 +214,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 350 WHERE \"MerchantId\" = {MerchantId}");
-            (await db.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance = 1000m;
+            await SetBusinessTypeMinimumAsync("Other", 1000m);
             await db.SaveChangesAsync();
         }
         var underfunded = await Get(client, "/api/v1/creator/merchants/search?q=Active E2E");
@@ -354,4 +353,24 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
     }
     private static Task<HttpResponseMessage> Post(HttpClient client, string path, object body) => client.PostAsJsonAsync(path, body);
     private static Task<HttpResponseMessage> Get(HttpClient client, string path) => client.GetAsync(path);
+
+    private async Task SetBusinessTypeMinimumAsync(string businessType, decimal minimum)
+    {
+        await using var db = Db();
+        var now = DateTime.UtcNow;
+        var version = (await db.BusinessTypeWalletMinimumVersions.Where(x => x.CurrencyCode == "ETB" && x.BusinessType == businessType).MaxAsync(x => (int?)x.VersionNumber)) ?? 0;
+        db.BusinessTypeWalletMinimumVersions.Add(new BusinessTypeWalletMinimumVersion
+        {
+            Id = Guid.NewGuid(),
+            CurrencyCode = "ETB",
+            BusinessType = businessType,
+            VersionNumber = version + 1,
+            MinimumBusinessWalletBalance = minimum,
+            EffectiveFromUtc = now,
+            ChangedByUserId = MerchantUserId,
+            CreatedAtUtc = now,
+            CreatedBy = MerchantUserId.ToString()
+        });
+        await db.SaveChangesAsync();
+    }
 }

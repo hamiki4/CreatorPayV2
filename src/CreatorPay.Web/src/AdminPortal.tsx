@@ -5,6 +5,7 @@ import { getAccessToken } from "./sessionStore";
 import { rankMatches, useTypeahead } from "./typeahead";
 import { api as authenticatedApi } from "./apiClient";
 import { AdminAccountCreate } from "./AdminAccountCreate";
+import { businessTypes } from "./AuthWorkspace";
 
 type Row = Record<string, unknown>;
 type Page<T = Row> = { items: T[]; page: number; total: number; totalPages: number };
@@ -18,6 +19,7 @@ type PageId =
   | "creator-review"
   | "business-review"
   | "admin-accounts"
+  | "password-reset-requests"
   | "business-accounts"
   | "creator-accounts"
   | "customer-accounts"
@@ -63,9 +65,11 @@ type AccountPageProps = {
   description: string;
   roles: AccountRole[];
   createRoles: CreateRole[];
+  columns: string[];
   fixedRole?: CreateRole;
   allowCreate?: boolean;
   allowRemove?: boolean;
+  allowBusinessTypeEdit?: boolean;
   showPasswordResets?: boolean;
 };
 
@@ -73,13 +77,14 @@ const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const token = getAccessToken;
 const adminRoles: AdminRole[] = ["PlatformAdmin", "OperationsAdmin"];
 const hiddenPages: PageId[] = ["notifications", "disputes", "reversals"];
-const operationsBlockedPages: PageId[] = ["dashboard", "reports", "admin-accounts"];
+const operationsBlockedPages: PageId[] = ["dashboard", "reports", "admin-accounts", "commission", "system"];
 const supportedPages = new Set<PageId>([
   "dashboard",
   "reports",
   "creator-review",
   "business-review",
   "admin-accounts",
+  "password-reset-requests",
   "business-accounts",
   "creator-accounts",
   "customer-accounts",
@@ -99,16 +104,17 @@ const platformNav: NavItem[] = [
   { id: "creator-review", label: "Creator Review", roles: adminRoles, countKey: "pendingCreatorApprovals" },
   { id: "business-review", label: "Business Review", roles: adminRoles, countKey: "pendingMerchantApprovals" },
   { id: "admin-accounts", label: "Admin Accounts", roles: ["PlatformAdmin"], countKey: "openSupportRequests" },
+  { id: "password-reset-requests", label: "Password Reset Requests", roles: adminRoles, countKey: "openSupportRequests" },
   { id: "business-accounts", label: "Business Accounts", roles: adminRoles },
   { id: "creator-accounts", label: "Creator Accounts", roles: adminRoles },
   { id: "customer-accounts", label: "Customer Accounts", roles: adminRoles },
   { id: "cashier-accounts", label: "Cashier Accounts", roles: adminRoles },
-  { id: "commission", label: "Commission", roles: adminRoles },
+  { id: "commission", label: "Commission", roles: ["PlatformAdmin"] },
   { id: "deposits", label: "Deposits", roles: adminRoles, countKey: "pendingDeposits" },
   { id: "wallets", label: "Wallets", roles: adminRoles },
   { id: "payouts", label: "Payouts", roles: adminRoles, countKey: "pendingPayouts" },
   { id: "fraud", label: "Fraud", roles: adminRoles, countKey: "openFraudAlerts" },
-  { id: "system", label: "System", roles: adminRoles },
+  { id: "system", label: "System", roles: ["PlatformAdmin"] },
 ];
 
 async function api<T>(path: string): Promise<T> {
@@ -308,6 +314,8 @@ export function AdminPortal({ operations }: { operations: Ops }) {
             <CreatorReview />
           ) : page === "business-review" ? (
             <BusinessReview />
+          ) : page === "password-reset-requests" ? (
+            <PasswordResetRequests />
           ) : page === "admin-accounts" ? (
             <AdminAccountsPage />
           ) : page === "business-accounts" ? (
@@ -316,9 +324,11 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Business owners and supervisors."
               roles={["MerchantAdmin", "Supervisor"]}
               createRoles={["MerchantAdmin"]}
+              columns={["name", "email", "phone", "businessName", "publicBusinessId", "merchantBusinessType", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="MerchantAdmin"
               allowCreate={role === "PlatformAdmin"}
-              allowRemove
+              allowRemove={role === "PlatformAdmin"}
+              allowBusinessTypeEdit={role === "PlatformAdmin"}
             />
           ) : page === "creator-accounts" ? (
             <AccountPage
@@ -326,9 +336,10 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Creator accounts and profile access."
               roles={["Creator"]}
               createRoles={["Creator"]}
+              columns={["name", "publicCreatorId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Creator"
               allowCreate={role === "PlatformAdmin"}
-              allowRemove
+              allowRemove={role === "PlatformAdmin"}
             />
           ) : page === "customer-accounts" ? (
             <AccountPage
@@ -336,9 +347,10 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Customer accounts and wallet access."
               roles={["Customer"]}
               createRoles={["Customer"]}
+              columns={["name", "publicCustomerId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Customer"
               allowCreate={role === "PlatformAdmin"}
-              allowRemove
+              allowRemove={role === "PlatformAdmin"}
             />
           ) : page === "cashier-accounts" ? (
             <AccountPage
@@ -346,9 +358,10 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Cashier accounts and assignments."
               roles={["Cashier"]}
               createRoles={["Cashier"]}
+              columns={["name", "email", "phone", "businessName", "publicBusinessId", "assignedLocation", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Cashier"
               allowCreate={role === "PlatformAdmin"}
-              allowRemove
+              allowRemove={role === "PlatformAdmin"}
             />
           ) : page === "commission" ? (
             operations.commission ?? <Empty />
@@ -1023,15 +1036,20 @@ function AccountPage({
   description,
   roles,
   createRoles,
+  columns,
   fixedRole,
   allowCreate = false,
   allowRemove = true,
+  allowBusinessTypeEdit = false,
   showPasswordResets = false,
 }: AccountPageProps) {
   const [data, setData] = useState<Page>();
   const [message, setMessage] = useState("");
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({ q: "", status: "", business: "" });
+  const [editing, setEditing] = useState<{ merchantId: string; name: string; businessType: string } | null>(null);
+  const [editingBusinessType, setEditingBusinessType] = useState("Other");
+  const [savingBusinessType, setSavingBusinessType] = useState(false);
   const pageSize = 25;
 
   const load = async (nextPage = 1, nextFilters = filters) => {
@@ -1086,8 +1104,46 @@ function AccountPage({
     await load(page, filters);
   }
 
-  const visibleCols = ["cashierName", "email", "phone", "businessName", "publicBusinessId", "assignedLocation", "role", "status", "isLocked", "lastLoginAtUtc", "walletBalance", "fundingStatus"];
-  const header = (value: string) => (value === "cashierName" ? "Name" : label(value));
+  async function saveBusinessType() {
+    if (!editing || savingBusinessType) return;
+    if (!editingBusinessType.trim()) {
+      setMessage("Business type is required.");
+      return;
+    }
+    setSavingBusinessType(true);
+    try {
+      const response = await fetch(`${apiBase}/api/v1/admin/merchants/${editing.merchantId}/business-type`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ businessType: editingBusinessType }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage((body as { detail?: string }).detail ?? "Unable to update business type.");
+        return;
+      }
+      setMessage("Business type updated and audited.");
+      setEditing(null);
+      await load(page, filters);
+    } finally {
+      setSavingBusinessType(false);
+    }
+  }
+
+  const visibleCols = columns;
+  const header = (value: string) =>
+    value === "cashierName" || value === "name"
+      ? "Name"
+      : value === "merchantBusinessType"
+        ? "Business Type"
+        : value === "publicCreatorId"
+          ? "Public Creator ID"
+          : value === "publicCustomerId"
+            ? "Public Customer ID"
+            : label(value);
 
   return (
     <section>
@@ -1102,6 +1158,39 @@ function AccountPage({
           fixedRole={fixedRole}
           onCreated={() => void load(1, filters)}
         />
+      )}
+      {editing && (
+        <section className="panel form">
+          <h2>Edit Business Type</h2>
+          <p>
+            {editing.name} · {editing.merchantId}
+          </p>
+          <label>
+            Business Type
+            <select value={editingBusinessType} onChange={(e) => setEditingBusinessType(e.target.value)}>
+              {businessTypes.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.en}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="actions">
+            <button type="button" onClick={() => void saveBusinessType()} disabled={savingBusinessType}>
+              {savingBusinessType ? "Saving…" : "Save Business Type"}
+            </button>
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => {
+                setEditing(null);
+                setEditingBusinessType("Other");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
       )}
       <form
         className="panel form account-filters"
@@ -1174,6 +1263,22 @@ function AccountPage({
                           Delete Account
                         </button>
                       )}
+                      {allowBusinessTypeEdit && x.role === "MerchantAdmin" && Boolean(x.merchantId) && (
+                        <button
+                          type="button"
+                          className="quiet"
+                          onClick={() => {
+                            setEditing({
+                              merchantId: String(x.merchantId),
+                              name: String(x.name ?? x.businessName ?? x.publicBusinessId ?? "Business"),
+                              businessType: String(x.merchantBusinessType ?? "Other"),
+                            });
+                            setEditingBusinessType(String(x.merchantBusinessType ?? "Other"));
+                          }}
+                        >
+                          Edit Business Type
+                        </button>
+                      )}
                       {x.status === "Active" ? (
                         x.role === "Cashier" ? (
                           <button type="button" className="danger" onClick={() => void action(x.id, "deactivate")}>
@@ -1223,9 +1328,10 @@ function AdminAccountsPage() {
   return (
     <AccountPage
       title="Admin Accounts"
-      description="PlatformAdmin and OperationsAdmin accounts and password-reset reviews."
-      roles={["PlatformAdmin", "OperationsAdmin"]}
-      createRoles={["PlatformAdmin", "OperationsAdmin"]}
+      description="PlatformAdmin accounts and password-reset reviews."
+      roles={["PlatformAdmin"]}
+      createRoles={["PlatformAdmin"]}
+      columns={["name", "email", "phone", "role", "status", "isLocked", "lastLoginAtUtc"]}
       allowCreate
       allowRemove={false}
       showPasswordResets
@@ -1260,6 +1366,26 @@ function PasswordResetRequests() {
     void load();
   }
 
+  async function deleteRequest(id: unknown) {
+    const reason = prompt("Reason for deleting this password reset request")?.trim();
+    if (!reason) return;
+    const response = await fetch(`${apiBase}/api/v1/admin/password-reset-requests/${id}/delete`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ reason }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setMessage((body as { detail?: string }).detail ?? "Unable to delete this request.");
+      return;
+    }
+    setMessage("Password reset request deleted.");
+    void load();
+  }
+
   return (
     <section id="password-reset-requests" className="admin-reset-requests">
       <h2>Password Reset Requests</h2>
@@ -1291,6 +1417,11 @@ function PasswordResetRequests() {
                             Reject
                           </button>
                         </>
+                      )}
+                      {x.canDelete === true && (
+                        <button className="quiet" onClick={() => void deleteRequest(x.id)}>
+                          Delete Request
+                        </button>
                       )}
                     </div>
                   </td>

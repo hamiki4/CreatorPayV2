@@ -1,4 +1,5 @@
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Application.CustomerVerification;
 using CreatorPay.Application.Qr;
 using CreatorPay.Domain.Entities;
@@ -42,7 +43,21 @@ public static class E2eSeedEndpoints
         if (request.Password.Length < 12) return Results.BadRequest();
         if (await db.UserAccounts.AnyAsync(x => x.Email == "shopper@e2e.invalid", ct)) return Results.Conflict();
         var now = DateTime.UtcNow; Guid Id(string value) => Guid.Parse(value);
-        await db.Database.ExecuteSqlInterpolatedAsync($"""UPDATE platform_financial_settings SET "MinimumBusinessWalletBalance" = 0, "ChangedAtUtc" = {now} WHERE "CurrencyCode" = 'ETB'""", ct);
+        foreach (var businessType in BusinessTypes.Values)
+        {
+            db.BusinessTypeWalletMinimumVersions.Add(new BusinessTypeWalletMinimumVersion
+            {
+                Id = Guid.NewGuid(),
+                CurrencyCode = "ETB",
+                BusinessType = businessType,
+                VersionNumber = 1,
+                MinimumBusinessWalletBalance = 0m,
+                EffectiveFromUtc = now,
+                ChangedByUserId = Id("90000000-0000-0000-0000-000000000001"),
+                CreatedAtUtc = now,
+                CreatedBy = "90000000-0000-0000-0000-000000000001"
+            });
+        }
         var shopper = new Customer { Id = Id("10000000-0000-0000-0000-000000000001"), PublicCustomerId = "CUS-E2E", DisplayName = "E2E Shopper", PhoneNumber = "+251911000001", NormalizedPhoneNumber = "+251911000001", CreatedAtUtc = now };
         var user = new UserAccount { Id = Id("10000000-0000-0000-0000-000000000002"), Email = "shopper@e2e.invalid", NormalizedEmail = "SHOPPER@E2E.INVALID", PhoneNumber = shopper.PhoneNumber, NormalizedPhoneNumber = shopper.NormalizedPhoneNumber, Role = UserRole.Customer, Status = AccountStatus.Active, CustomerId = shopper.Id, IsEmailVerified = true, IsPhoneVerified = true, CreatedAtUtc = now }; user.PasswordHash = passwords.Hash(user, request.Password);
         var merchant = Merchant(Id("20000000-0000-0000-0000-000000000001"), "Active E2E Business", MerchantStatus.Active, now); merchant.PhoneNumber = merchant.NormalizedPhoneNumber = "+251933000001";

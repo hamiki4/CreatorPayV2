@@ -17,3 +17,18 @@ test('admin account deletion keeps the delete action and success copy wired in t
   assert.match(adminPortal,/Unable to change this account\./)
   assert.match(adminPortal,/delete/);
 })
+
+test('admin cleanup keeps password reset tools and business type correction wired in the frontend',()=>{
+  assert.match(adminPortal,/password-reset-requests/)
+  assert.match(adminPortal,/Delete Request/)
+  assert.match(adminPortal,/Edit Business Type/)
+  assert.match(adminPortal,/allowBusinessTypeEdit=\{role === "PlatformAdmin"\}/)
+  assert.match(adminPortal,/columns=\{\["name", "email", "phone", "role", "status", "isLocked", "lastLoginAtUtc"\]\}/)
+  assert.match(adminPortal,/columns=\{\["name", "email", "phone", "businessName", "publicBusinessId", "merchantBusinessType", "status", "isLocked", "lastLoginAtUtc"\]\}/)
+  assert.match(adminPortal,/columns=\{\["name", "publicCreatorId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"\]\}/)
+  assert.match(adminPortal,/columns=\{\["name", "publicCustomerId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"\]\}/)
+  assert.doesNotMatch(adminPortal,/walletBalance/)
+  assert.doesNotMatch(adminPortal,/fundingStatus/)
+  assert.doesNotMatch(adminPortal,/isEmailVerified/)
+  assert.doesNotMatch(adminPortal,/isPhoneVerified/)
+})

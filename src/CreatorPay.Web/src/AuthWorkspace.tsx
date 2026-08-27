@@ -369,7 +369,11 @@ export function AuthWorkspace() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!resetReference) {
-                  const result = await post("/api/v1/auth/password-reset-requests", { phoneNumber: reset.phoneNumber });
+                  const contact = reset.phoneNumber.trim();
+                  const result = await post("/api/v1/auth/password-reset-requests", {
+                    phoneNumber: contact.includes("@") ? null : contact,
+                    email: contact.includes("@") ? contact : null,
+                  });
                   if (result) {
                     const status = normalizePasswordResetStatus(result.status);
                     setResetReference(result.reference ?? "");
@@ -402,7 +406,7 @@ export function AuthWorkspace() {
                   )}
                 </aside>
               )}
-              {!resetReference && field(reset, setReset, "phoneNumber", "Phone Number", "tel")}
+              {!resetReference && field(reset, setReset, "phoneNumber", "Phone Number or Email")}
               {resetStatus === "Approved" && (
                 <>
                   {field(

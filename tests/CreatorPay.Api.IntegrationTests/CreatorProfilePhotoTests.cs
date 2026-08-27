@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
@@ -79,7 +80,7 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
-            await db.Database.ExecuteSqlInterpolatedAsync($"""UPDATE platform_financial_settings SET "MinimumBusinessWalletBalance" = 1000, "ChangedAtUtc" = {DateTime.UtcNow} WHERE "CurrencyCode" = 'ETB'""");
+            await db.SaveChangesAsync();
         }
 
         var first = await Upload(client, png, "photo.png", "image/png");
@@ -137,7 +138,7 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
-            await db.Database.ExecuteSqlInterpolatedAsync($"""UPDATE platform_financial_settings SET "MinimumBusinessWalletBalance" = 1000, "ChangedAtUtc" = {DateTime.UtcNow} WHERE "CurrencyCode" = 'ETB'""");
+            await db.SaveChangesAsync();
         }
         using var activeClient = Client(activeCreator.UserId, activeCreator.CreatorId);
         var png = PngBytes();

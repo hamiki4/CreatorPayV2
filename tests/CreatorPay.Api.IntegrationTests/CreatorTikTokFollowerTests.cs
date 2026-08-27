@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
@@ -193,6 +194,22 @@ public sealed class CreatorTikTokFollowerTests : IAsyncLifetime
         setting.UpdatedAtUtc = DateTime.UtcNow;
         setting.UpdatedBy = "90000000-0000-0000-0000-000000000001";
         if (db.Entry(setting).State == EntityState.Detached) db.Add(setting);
+        var otherVersion = await db.BusinessTypeWalletMinimumVersions.SingleOrDefaultAsync(x => x.CurrencyCode == "ETB" && x.BusinessType == "Other");
+        otherVersion ??= new BusinessTypeWalletMinimumVersion
+        {
+            Id = Guid.NewGuid(),
+            CurrencyCode = "ETB",
+            BusinessType = "Other",
+            VersionNumber = 1,
+            MinimumBusinessWalletBalance = 0m,
+            EffectiveFromUtc = DateTime.UtcNow,
+            ChangedByUserId = Guid.Parse("90000000-0000-0000-0000-000000000001"),
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedBy = "90000000-0000-0000-0000-000000000001"
+        };
+        otherVersion.MinimumBusinessWalletBalance = 0m;
+        otherVersion.EffectiveFromUtc = DateTime.UtcNow;
+        if (db.Entry(otherVersion).State == EntityState.Detached) db.BusinessTypeWalletMinimumVersions.Add(otherVersion);
         await db.SaveChangesAsync();
     }
 

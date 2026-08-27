@@ -9,6 +9,7 @@ using System.Text;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Checkout;
 using CreatorPay.Application.Earnings;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
@@ -643,9 +644,9 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         await using (var db = Db()) { await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE merchant_creator_partnerships SET \"EndDateUtc\" = {DateTime.UtcNow.AddDays(20)} WHERE \"Id\" = {Guid.Parse("40000000-0000-0000-0000-000000000002")}"); var second = await db.MerchantCreatorPartnerships.SingleAsync(x => x.Id == Guid.Parse("40000000-0000-0000-0000-000000000002")); second.Revoke(DateTime.UtcNow, Guid.Parse("10000000-0000-0000-0000-000000000002")); await db.SaveChangesAsync(); }
         body = await (await Get(client, $"/api/v1/customer/discovery/businesses/{id}", shopper)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); Assert.Single(body.GetProperty("creators").EnumerateArray());
         advertising = await (await Get(client, "/api/v1/customer/discovery/advertising", shopper)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); Assert.Single(advertising.EnumerateArray()); Assert.DoesNotContain(advertising.EnumerateArray(), x => x.GetProperty("creatorName").GetString() == "Mimi Active");
+        await SetBusinessTypeMinimumAsync("Other", 1000m);
         await using (var db = Db())
         {
-            var setting = await db.PlatformFinancialSettings.SingleAsync(); setting.MinimumBusinessWalletBalance = 1000m;
             await db.Database.ExecuteSqlRawAsync("UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = '20000000-0000-0000-0000-000000000001'");
             await db.Database.ExecuteSqlRawAsync("UPDATE merchant_locations SET \"IsActive\" = FALSE WHERE \"MerchantId\" = '20000000-0000-0000-0000-000000000001'");
             await db.SaveChangesAsync();
@@ -659,7 +660,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal("Business is unavailable.", hiddenDetailBody.GetProperty("detail").GetString());
         advertising = await (await Get(client, "/api/v1/customer/discovery/advertising", shopper)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.DoesNotContain(advertising.EnumerateArray(), x => x.GetProperty("businessId").GetGuid() == id);
-        await using (var db = Db()) { var setting = await db.PlatformFinancialSettings.SingleAsync(); setting.MinimumBusinessWalletBalance = 0m; await db.SaveChangesAsync(); }
+        await SetBusinessTypeMinimumAsync("Other", 0m);
     }
 
     [DockerFact]
@@ -709,7 +710,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         {
             var activeCampaign = await db.CreatorMerchantCampaigns.SingleAsync(x => x.MerchantCreatorPartnershipId == Guid.Parse("40000000-0000-0000-0000-000000000001") && x.Status == CampaignStatus.Active);
             var wallet = await db.MerchantWallets.SingleAsync(x => x.MerchantId == activeCampaign.MerchantId);
-            var setting = await db.PlatformFinancialSettings.SingleAsync(); setting.MinimumBusinessWalletBalance = wallet.AvailableBalance + 1m; await db.SaveChangesAsync();
+            await SetBusinessTypeMinimumAsync("Other", wallet.AvailableBalance + 1m);
         }
         var activeRows = await (await Get(client, "/api/v1/merchant/partnerships", owner)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.False(activeRows.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == Guid.Parse("40000000-0000-0000-0000-000000000001")).GetProperty("promotionActive").GetBoolean());
@@ -734,11 +735,11 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         using var client = factory!.CreateClient(); Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" })).StatusCode);
         await using (var db = Db()) { db.PlatformCommissionAssignments.RemoveRange(db.PlatformCommissionAssignments); await db.SaveChangesAsync(); }
         var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001"); var owner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000008", merchantId: "20000000-0000-0000-0000-000000000001");
-        var loaded = await Get(client, "/api/v1/admin/financial-settings", admin); Assert.Equal(HttpStatusCode.OK, loaded.StatusCode); var settings = await loaded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); Assert.Equal(10m, settings.GetProperty("merchantCommissionRatePercent").GetDecimal()); Assert.Equal(0m, settings.GetProperty("minimumBusinessWalletBalance").GetDecimal());
-        var valid = new { merchantCommissionRatePercent = 12m, creatorSharePercent = 45m, shopperSharePercent = 25m, platformSharePercent = 30m, minimumBusinessWalletBalance = 2000m }; Assert.Equal(HttpStatusCode.Forbidden, (await Put(client, "/api/v1/admin/financial-settings", owner, valid)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Put(client, "/api/v1/admin/financial-settings", admin, new { valid.merchantCommissionRatePercent, creatorSharePercent = 45m, shopperSharePercent = 25m, platformSharePercent = 20m, valid.minimumBusinessWalletBalance })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Put(client, "/api/v1/admin/financial-settings", admin, valid)).StatusCode);
-        await using var verify = Db(); var platform = await verify.PlatformCommissionAssignments.SingleAsync(); Assert.Equal(12m, (await verify.CommissionRuleVersions.SingleAsync(x => x.CommissionRuleId == platform.CommissionRuleId)).MerchantCommissionRatePercent); Assert.Equal(2000m, (await verify.PlatformFinancialSettings.SingleAsync()).MinimumBusinessWalletBalance); var payoutSchedule = await verify.PayoutScheduleVersions.SingleAsync(); Assert.Equal(1, payoutSchedule.VersionNumber); Assert.Equal(DayOfWeek.Friday, payoutSchedule.CreatorCutoffDay); Assert.Equal(DayOfWeek.Saturday, payoutSchedule.CreatorPayoutDay); Assert.Empty(await verify.CommissionCalculationSnapshots.ToListAsync()); Assert.Contains(await verify.CommissionAuditEvents.ToListAsync(), x => x.EventType == "FinancialSettingsChanged");
+        var loaded = await Get(client, "/api/v1/admin/financial-settings", admin); Assert.Equal(HttpStatusCode.OK, loaded.StatusCode); var settings = await loaded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); Assert.Equal(10m, settings.GetProperty("merchantCommissionRatePercent").GetDecimal()); Assert.Equal(9, settings.GetProperty("businessTypeMinimumWalletBalances").GetArrayLength()); Assert.All(settings.GetProperty("businessTypeMinimumWalletBalances").EnumerateArray(), x => Assert.Equal(0m, x.GetProperty("minimumBusinessWalletBalance").GetDecimal()));
+        var valid = FinancialSettingsRequest(12m, 45m, 25m, 30m, 2000m); Assert.Equal(HttpStatusCode.Forbidden, (await Put(client, "/api/v1/admin/financial-settings", owner, valid)).StatusCode);
+        var invalid = FinancialSettingsRequest(12m, 45m, 25m, 20m, 2000m); Assert.Equal(HttpStatusCode.BadRequest, (await Put(client, "/api/v1/admin/financial-settings", admin, invalid)).StatusCode);
+        var applied = await Put(client, "/api/v1/admin/financial-settings", admin, valid); Assert.Equal(HttpStatusCode.OK, applied.StatusCode); var appliedBody = await applied.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); Assert.True((DateTime.UtcNow - appliedBody!.GetProperty("effectiveAtUtc").GetDateTime()).Duration() < TimeSpan.FromSeconds(5));
+        await using var verify = Db(); var platform = await verify.PlatformCommissionAssignments.SingleAsync(); Assert.Equal(12m, (await verify.CommissionRuleVersions.SingleAsync(x => x.CommissionRuleId == platform.CommissionRuleId)).MerchantCommissionRatePercent); Assert.Equal(2000m, await verify.BusinessTypeWalletMinimumVersions.Where(x => x.BusinessType == "Other").OrderByDescending(x => x.VersionNumber).Select(x => x.MinimumBusinessWalletBalance).FirstAsync()); var payoutSchedule = await verify.PayoutScheduleVersions.SingleAsync(); Assert.Equal(1, payoutSchedule.VersionNumber); Assert.Equal(DayOfWeek.Friday, payoutSchedule.CreatorCutoffDay); Assert.Equal(DayOfWeek.Saturday, payoutSchedule.CreatorPayoutDay); Assert.Empty(await verify.CommissionCalculationSnapshots.ToListAsync()); Assert.Contains(await verify.CommissionAuditEvents.ToListAsync(), x => x.EventType == "FinancialSettingsChanged");
     }
 
     [DockerFact]
@@ -747,7 +748,9 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         using var client = factory!.CreateClient(); Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" })).StatusCode);
         var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001"); var creator = Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001");
         var before = await (await Get(client, "/api/v1/creator/earnings/summary", creator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); var beforeDate = before.GetProperty("nextEstimatedPayoutAtUtc").GetDateTime(); var effective = DateTime.UtcNow.AddDays(2);
-        var request = new { merchantCommissionRatePercent = 10m, creatorSharePercent = 40m, shopperSharePercent = 30m, platformSharePercent = 30m, minimumBusinessWalletBalance = 0m, creatorCutoffDay = "Sunday", creatorCutoffTime = "03:30:00", creatorPayoutDay = "Monday", shopperCutoffDay = 20, shopperCutoffTime = "04:00:00", shopperPayoutDay = 21, payoutScheduleEffectiveFromUtc = effective };
+        var request = new { merchantCommissionRatePercent = 10m, creatorSharePercent = 40m, shopperSharePercent = 30m, platformSharePercent = 30m, businessTypeMinimumWalletBalances = BusinessTypes.Values.Select(type => new { businessType = type, minimumBusinessWalletBalance = 0m }).ToArray(), minimumTikTokFollowers = 0, applyNow = false, effectiveFromUtc = effective, creatorCutoffDay = "Sunday", creatorCutoffTime = "03:30:00", creatorPayoutDay = "Monday", shopperCutoffDay = 20, shopperCutoffTime = "04:00:00", shopperPayoutDay = 21 };
+        var rejectedPast = new { merchantCommissionRatePercent = 10m, creatorSharePercent = 40m, shopperSharePercent = 30m, platformSharePercent = 30m, businessTypeMinimumWalletBalances = BusinessTypes.Values.Select(type => new { businessType = type, minimumBusinessWalletBalance = 0m }).ToArray(), minimumTikTokFollowers = 0, applyNow = false, effectiveFromUtc = DateTime.UtcNow.AddMinutes(-5), creatorCutoffDay = "Sunday", creatorCutoffTime = "03:30:00", creatorPayoutDay = "Monday", shopperCutoffDay = 20, shopperCutoffTime = "04:00:00", shopperPayoutDay = 21 };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(client, "/api/v1/admin/financial-settings", admin, rejectedPast)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Put(client, "/api/v1/admin/financial-settings", admin, request)).StatusCode);
         var unchanged = await (await Get(client, "/api/v1/creator/earnings/summary", creator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); Assert.Equal(beforeDate, unchanged.GetProperty("nextEstimatedPayoutAtUtc").GetDateTime());
         using var scope = factory.Services.CreateScope(); var service = scope.ServiceProvider.GetRequiredService<ICreatorEarningsService>(); var future = await service.GetSummaryAsync(Guid.Parse("30000000-0000-0000-0000-000000000001"), effective.AddMinutes(1), CancellationToken.None); Assert.Equal(DayOfWeek.Monday, future.NextEstimatedPayoutAtUtc!.Value.DayOfWeek);
@@ -836,7 +839,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(1, unread1!.GetProperty("count").GetInt32());
         var inbox1 = await (await Get(client, "/api/v1/notifications?page=1&pageSize=10", admin)).Content.ReadFromJsonAsync<JsonElement>();
         var customerNotice = Assert.Single(inbox1!.GetProperty("items").EnumerateArray(), x => x.GetProperty("type").GetString() == "SupportRequestReceived" && x.GetProperty("data").GetProperty("SupportReference").GetString() == customerReference);
-        Assert.Equal("/admin/accounts#password-reset-requests", customerNotice.GetProperty("data").GetProperty("TargetPath").GetString());
+        Assert.Equal("/admin/password-reset-requests#password-reset-requests", customerNotice.GetProperty("data").GetProperty("TargetPath").GetString());
         Assert.Equal("Customer", customerNotice.GetProperty("data").GetProperty("RequesterRole").GetString());
         Assert.Contains("Password reset request pending for", customerNotice.GetProperty("title").GetString(), StringComparison.Ordinal);
         Assert.Contains("waiting for admin approval", customerNotice.GetProperty("body").GetString(), StringComparison.Ordinal);
@@ -850,6 +853,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var customerItem = Assert.Single(queue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == shopperPhone);
         Assert.Equal("Pending", customerItem.GetProperty("status").GetString());
         Assert.True(customerItem.GetProperty("canApprove").GetBoolean());
+        Assert.True(customerItem.GetProperty("canDelete").GetBoolean());
         Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/admin/password-reset-requests/{customerItem.GetProperty("id").GetGuid()}/approve", admin, new { })).StatusCode);
         var approvedStatus = await client.GetFromJsonAsync<JsonElement>($"/api/v1/auth/password-reset-requests/{customerReference}");
         Assert.Equal("Approved", approvedStatus!.GetProperty("status").GetString());
@@ -903,6 +907,98 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Password_reset_help_for_unknown_email_or_phone_returns_not_found_without_creating_requests()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        await using var beforeDb = Db();
+        var before = await beforeDb.SupportRequests.CountAsync(x => x.Subject == "Password Reset");
+
+        var missingPhone = "0911777888";
+        var missingEmail = "missing-reset@e2e.invalid";
+
+        var phoneResponse = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = missingPhone });
+        Assert.Equal(HttpStatusCode.NotFound, phoneResponse.StatusCode);
+        Assert.Contains("No account was found with that phone number or email. Please create a new account.", await phoneResponse.Content.ReadAsStringAsync());
+
+        var emailResponse = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { email = missingEmail });
+        Assert.Equal(HttpStatusCode.NotFound, emailResponse.StatusCode);
+        Assert.Contains("No account was found with that phone number or email. Please create a new account.", await emailResponse.Content.ReadAsStringAsync());
+
+        await using var afterDb = Db();
+        Assert.Equal(before, await afterDb.SupportRequests.CountAsync(x => x.Subject == "Password Reset"));
+        Assert.Equal(2, await afterDb.LoginAudits.CountAsync(x => x.FailureReason == "PasswordResetHelpNoAccount"));
+        Assert.DoesNotContain(await afterDb.SupportRequests.Where(x => x.Subject == "Password Reset").Select(x => x.Contact).ToListAsync(), x => x == missingPhone || x == missingEmail);
+    }
+
+    [DockerFact]
+    public async Task Password_reset_request_delete_is_available_to_platform_and_operations_admins_without_deleting_user_accounts()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var seed = await seeded.Content.ReadFromJsonAsync<JsonElement>();
+        var platformAdmin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
+        var creatorToken = Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001");
+
+        var opsCreate = await Post(client, "/api/v1/admin/accounts/create", platformAdmin, new
+        {
+            role = "OperationsAdmin",
+            email = "ops-reset-delete@e2e.invalid",
+            phoneNumber = "0911000887",
+            password = "E2e-test-password-1!",
+            confirmation = "E2e-test-password-1!"
+        });
+        Assert.Equal(HttpStatusCode.Created, opsCreate.StatusCode);
+        var opsLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ops-reset-delete@e2e.invalid", password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, opsLogin.StatusCode);
+        var opsToken = (await opsLogin.Content.ReadFromJsonAsync<JsonElement>())!.GetProperty("accessToken").GetString()!;
+
+        var customerReset = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = seed.GetProperty("shopperPhone").GetString() });
+        Assert.Equal(HttpStatusCode.OK, customerReset.StatusCode);
+        var customerBody = await customerReset.Content.ReadFromJsonAsync<JsonElement>();
+        var customerReference = customerBody!.GetProperty("reference").GetString()!;
+        var customerQueue = await (await Get(client, "/api/v1/admin/password-reset-requests", platformAdmin)).Content.ReadFromJsonAsync<JsonElement>();
+        var customerItem = Assert.Single(customerQueue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == seed.GetProperty("shopperPhone").GetString());
+        Assert.True(customerItem.GetProperty("canDelete").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/admin/password-reset-requests/{customerItem.GetProperty("id").GetGuid()}/approve", opsToken, new { })).StatusCode);
+        Assert.Equal("Approved", (await client.GetFromJsonAsync<JsonElement>($"/api/v1/auth/password-reset-requests/{customerReference}")).GetProperty("status").GetString());
+
+        var creatorReset = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = seed.GetProperty("creatorPhone").GetString() });
+        Assert.Equal(HttpStatusCode.OK, creatorReset.StatusCode);
+        var creatorBody = await creatorReset.Content.ReadFromJsonAsync<JsonElement>();
+        var creatorReference = creatorBody!.GetProperty("reference").GetString()!;
+        var creatorQueue = await (await Get(client, "/api/v1/admin/password-reset-requests", platformAdmin)).Content.ReadFromJsonAsync<JsonElement>();
+        var creatorItem = Assert.Single(creatorQueue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == seed.GetProperty("creatorPhone").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/admin/password-reset-requests/{creatorItem.GetProperty("id").GetGuid()}/reject", opsToken, new { })).StatusCode);
+        Assert.Equal("Rejected", (await client.GetFromJsonAsync<JsonElement>($"/api/v1/auth/password-reset-requests/{creatorReference}")).GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/password-reset-requests/{creatorItem.GetProperty("id").GetGuid()}/delete", opsToken, new { reason = "Remove stale rejected request" })).StatusCode);
+
+        var ownerReset = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = seed.GetProperty("ownerPhone").GetString() });
+        Assert.Equal(HttpStatusCode.OK, ownerReset.StatusCode);
+        var ownerBody = await ownerReset.Content.ReadFromJsonAsync<JsonElement>();
+        var ownerReference = ownerBody!.GetProperty("reference").GetString()!;
+        var ownerQueue = await (await Get(client, "/api/v1/admin/password-reset-requests", platformAdmin)).Content.ReadFromJsonAsync<JsonElement>();
+        var ownerItem = Assert.Single(ownerQueue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == seed.GetProperty("ownerPhone").GetString());
+        var creatorAttempt = await Post(client, $"/api/v1/admin/password-reset-requests/{ownerItem.GetProperty("id").GetGuid()}/delete", creatorToken, new { reason = "Creators cannot delete reset requests" });
+        Assert.Equal(HttpStatusCode.Forbidden, creatorAttempt.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/password-reset-requests/{ownerItem.GetProperty("id").GetGuid()}/delete", platformAdmin, new { reason = "Cancel stale pending request" })).StatusCode);
+
+        await using var db = Db();
+        Assert.False(await db.SupportRequests.AnyAsync(x => x.PublicReference == creatorReference));
+        Assert.False(await db.SupportRequests.AnyAsync(x => x.PublicReference == ownerReference));
+        Assert.True(await db.UserAccounts.AnyAsync(x => x.Email == seed.GetProperty("ownerEmail").GetString()));
+        Assert.True(await db.UserAccounts.AnyAsync(x => x.Email == seed.GetProperty("creatorEmail").GetString()));
+
+        var freshRetry = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = seed.GetProperty("ownerPhone").GetString() });
+        Assert.Equal(HttpStatusCode.OK, freshRetry.StatusCode);
+        var freshRetryBody = await freshRetry.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Pending", freshRetryBody!.GetProperty("status").GetString());
+    }
+
+    [DockerFact]
     public async Task Platform_admin_contact_visibility_and_persistent_funding_threshold_are_enforced()
     {
         using var client = factory!.CreateClient(); var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" }); Assert.Equal(HttpStatusCode.OK, seeded.StatusCode); var seed = await seeded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -914,18 +1010,89 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await Get(client, "/api/v1/admin/accounts", owner)).StatusCode);
 
         var settings = await Get(client, "/api/v1/admin/financial-settings", admin); Assert.Equal(HttpStatusCode.OK, settings.StatusCode); var current = await settings.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        var raised = new { merchantCommissionRatePercent = current.GetProperty("merchantCommissionRatePercent").GetDecimal(), creatorSharePercent = current.GetProperty("creatorSharePercent").GetDecimal(), shopperSharePercent = current.GetProperty("shopperSharePercent").GetDecimal(), platformSharePercent = current.GetProperty("platformSharePercent").GetDecimal(), minimumBusinessWalletBalance = 1000.01m };
+        var raised = FinancialSettingsRequest(current.GetProperty("merchantCommissionRatePercent").GetDecimal(), current.GetProperty("creatorSharePercent").GetDecimal(), current.GetProperty("shopperSharePercent").GetDecimal(), current.GetProperty("platformSharePercent").GetDecimal(), 1000.01m);
         Assert.Equal(HttpStatusCode.Forbidden, (await Put(client, "/api/v1/admin/financial-settings", owner, raised)).StatusCode);
-        var negative = new { raised.merchantCommissionRatePercent, raised.creatorSharePercent, raised.shopperSharePercent, raised.platformSharePercent, minimumBusinessWalletBalance = -1m }; Assert.Equal(HttpStatusCode.BadRequest, (await Put(client, "/api/v1/admin/financial-settings", admin, negative)).StatusCode);
+        var negative = FinancialSettingsRequest(current.GetProperty("merchantCommissionRatePercent").GetDecimal(), current.GetProperty("creatorSharePercent").GetDecimal(), current.GetProperty("shopperSharePercent").GetDecimal(), current.GetProperty("platformSharePercent").GetDecimal(), -1m); Assert.Equal(HttpStatusCode.BadRequest, (await Put(client, "/api/v1/admin/financial-settings", admin, negative)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Put(client, "/api/v1/admin/financial-settings", admin, raised)).StatusCode);
         // The configured minimum is a warning threshold, not a transaction gate.
         var belowWarning = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = seed.GetProperty("offerQrPayload").GetString(), shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "threshold-warning");
         Assert.Equal(HttpStatusCode.OK, belowWarning.StatusCode);
         Assert.Equal("awaiting_shopper_confirmation", (await belowWarning.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("code").GetString());
-        var lowered = new { raised.merchantCommissionRatePercent, raised.creatorSharePercent, raised.shopperSharePercent, raised.platformSharePercent, minimumBusinessWalletBalance = 1000m }; Assert.Equal(HttpStatusCode.OK, (await Put(client, "/api/v1/admin/financial-settings", admin, lowered)).StatusCode);
+        var lowered = FinancialSettingsRequest(current.GetProperty("merchantCommissionRatePercent").GetDecimal(), current.GetProperty("creatorSharePercent").GetDecimal(), current.GetProperty("shopperSharePercent").GetDecimal(), current.GetProperty("platformSharePercent").GetDecimal(), 1000m); Assert.Equal(HttpStatusCode.OK, (await Put(client, "/api/v1/admin/financial-settings", admin, lowered)).StatusCode);
         var allowed = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = seed.GetProperty("offerQrPayload").GetString(), shopperPhoneNumber = "0911000001", purchaseAmount = 100m }, "threshold-allowed"); Assert.Equal(HttpStatusCode.OK, allowed.StatusCode); Assert.Equal("awaiting_shopper_confirmation", (await allowed.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("code").GetString()); Assert.Equal((0, 0, 0, 0, 0, 0, 0), await Snapshot());
         var ownerAccountId = Guid.Parse("20000000-0000-0000-0000-000000000008"); Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{ownerAccountId}/suspend", admin, new { reason = "Security review" })).StatusCode); Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{ownerAccountId}/reactivate", admin, new { reason = "Review complete" })).StatusCode);
-        await using var db = Db(); Assert.Equal(1000m, await db.PlatformFinancialSettings.Select(x => x.MinimumBusinessWalletBalance).SingleAsync()); Assert.True(await db.CommissionAuditEvents.CountAsync(x => x.EventType == "FinancialSettingsChanged") >= 2); Assert.Equal(AccountStatus.Active, (await db.UserAccounts.SingleAsync(x => x.Id == ownerAccountId)).Status); Assert.True(await db.OperationalAuditEvents.CountAsync(x => x.SubjectId == ownerAccountId) >= 2);
+        await using var db = Db(); Assert.Equal(1000m, await db.BusinessTypeWalletMinimumVersions.Where(x => x.BusinessType == "Other").OrderByDescending(x => x.VersionNumber).Select(x => x.MinimumBusinessWalletBalance).FirstAsync()); Assert.True(await db.CommissionAuditEvents.CountAsync(x => x.EventType == "FinancialSettingsChanged") >= 2); Assert.Equal(AccountStatus.Active, (await db.UserAccounts.SingleAsync(x => x.Id == ownerAccountId)).Status); Assert.True(await db.OperationalAuditEvents.CountAsync(x => x.SubjectId == ownerAccountId) >= 2);
+    }
+
+    [DockerFact]
+    public async Task Platform_admin_can_correct_business_type_and_business_profile_stays_read_only()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
+        var owner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000008", merchantId: "20000000-0000-0000-0000-000000000001");
+
+        var opsCreate = await Post(client, "/api/v1/admin/accounts/create", admin, new
+        {
+            role = "OperationsAdmin",
+            email = "ops-business-type@e2e.invalid",
+            phoneNumber = "0911000886",
+            password = "E2e-test-password-1!",
+            confirmation = "E2e-test-password-1!"
+        });
+        Assert.Equal(HttpStatusCode.Created, opsCreate.StatusCode);
+        var opsLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ops-business-type@e2e.invalid", password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, opsLogin.StatusCode);
+        var opsToken = (await opsLogin.Content.ReadFromJsonAsync<JsonElement>())!.GetProperty("accessToken").GetString()!;
+
+        await SetBusinessTypeMinimumAsync("Electronics", 2000m);
+        await SetBusinessTypeMinimumAsync("Other", 1200m);
+
+        var before = await Get(client, "/api/v1/admin/accounts?page=1&pageSize=100&role=MerchantAdmin", admin);
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        var beforeBody = await before.Content.ReadFromJsonAsync<JsonElement>();
+        var merchantRow = beforeBody!.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+        Assert.Equal("Other", merchantRow.GetProperty("merchantBusinessType").GetString());
+        Assert.Equal(1200m, merchantRow.GetProperty("requiredMinimum").GetDecimal());
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Put(client, "/api/v1/admin/merchants/20000000-0000-0000-0000-000000000001/business-type", opsToken, new { businessType = "Electronics" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(client, "/api/v1/admin/merchants/20000000-0000-0000-0000-000000000001/business-type", admin, new { businessType = "Electronics" })).StatusCode);
+
+        var after = await Get(client, "/api/v1/admin/accounts?page=1&pageSize=100&role=MerchantAdmin", admin);
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        var afterBody = await after.Content.ReadFromJsonAsync<JsonElement>();
+        var updatedRow = afterBody!.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+        Assert.Equal("Electronics", updatedRow.GetProperty("merchantBusinessType").GetString());
+        Assert.Equal(2000m, updatedRow.GetProperty("requiredMinimum").GetDecimal());
+
+        var profile = await Get(client, "/api/v1/merchants/me", owner);
+        Assert.Equal(HttpStatusCode.OK, profile.StatusCode);
+        var profileBody = await profile.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Electronics", profileBody!.GetProperty("businessType").GetString());
+
+        var updateAttempt = await Put(client, "/api/v1/merchants/me", owner, new
+        {
+            legalBusinessName = profileBody.GetProperty("legalBusinessName").GetString()!,
+            tradingName = profileBody.GetProperty("tradingName").GetString()!,
+            businessType = "Furniture",
+            taxRegistrationNumber = profileBody.GetProperty("taxRegistrationNumber").ValueKind == JsonValueKind.Null ? null : profileBody.GetProperty("taxRegistrationNumber").GetString(),
+            phoneNumber = profileBody.GetProperty("phoneNumber").GetString()!,
+            email = profileBody.GetProperty("email").GetString()!,
+            businessAddress = profileBody.GetProperty("businessAddress").GetString()!,
+            city = profileBody.GetProperty("city").GetString()!,
+            region = profileBody.GetProperty("region").GetString()!,
+            country = profileBody.GetProperty("country").GetString()!,
+            timeZone = profileBody.GetProperty("timeZone").GetString()!,
+            logo = (object?)null,
+            documents = Array.Empty<object>()
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, updateAttempt.StatusCode);
+        Assert.Contains("Business type cannot be changed after registration.", await updateAttempt.Content.ReadAsStringAsync());
+
+        var refreshedProfile = await Get(client, "/api/v1/merchants/me", owner);
+        Assert.Equal(HttpStatusCode.OK, refreshedProfile.StatusCode);
+        Assert.Equal("Electronics", (await refreshedProfile.Content.ReadFromJsonAsync<JsonElement>())!.GetProperty("businessType").GetString());
     }
 
     [DockerFact]
@@ -1032,10 +1199,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
 
         foreach (var path in new[]
         {
-            "/api/v1/admin/dashboard/summary",
             "/api/v1/creators/pending",
             "/api/v1/admin/merchants/pending",
-            "/api/v1/admin/financial-settings",
             "/api/v1/admin/payout-cycles/creators",
             "/api/v1/admin/payout-cycles/shoppers",
             "/api/v1/admin/payout-cycles/platform-revenue",
@@ -1045,13 +1210,24 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
             "/api/v1/admin/wallets?page=1&pageSize=25",
             "/api/v1/admin/fraud-alerts",
             "/api/v1/admin/disputes",
-            "/api/v1/admin/reversals",
-            "/api/v1/admin/system"
+            "/api/v1/admin/reversals"
         })
         {
             var response = await Get(client, path, opsToken);
             var responseBody = await response.Content.ReadAsStringAsync();
             Assert.True(response.StatusCode == HttpStatusCode.OK, $"Path failed: {path} returned {response.StatusCode}. Body: {responseBody}");
+        }
+
+        foreach (var path in new[]
+        {
+            "/api/v1/admin/dashboard/summary",
+            "/api/v1/admin/financial-settings",
+            "/api/v1/admin/system"
+        })
+        {
+            var response = await Get(client, path, opsToken);
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == HttpStatusCode.Forbidden, $"Path failed: {path} returned {response.StatusCode}. Body: {responseBody}");
         }
 
         foreach (var path in new[]
@@ -1344,6 +1520,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var operationsAdmin = Token(UserRole.OperationsAdmin, "90000000-0000-0000-0000-000000000002");
         var creatorEmail = "delete-creator@e2e.invalid";
         var customerEmail = "delete-customer@e2e.invalid";
+        var merchantEmail = "delete-business@e2e.invalid";
+        var cashierEmail = "delete-cashier@e2e.invalid";
 
         var creatorCreate = await Post(client, "/api/v1/admin/accounts/create", platformAdmin, new
         {
@@ -1372,15 +1550,59 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, customerCreate.StatusCode);
         var customerAccountId = (await customerCreate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accountId").GetGuid();
 
+        var merchantCreate = await Post(client, "/api/v1/admin/accounts/create", platformAdmin, new
+        {
+            role = "MerchantAdmin",
+            email = merchantEmail,
+            phoneNumber = "0911000335",
+            password = "Created-account-12!",
+            confirmation = "Created-account-12!",
+            legalBusinessName = "Delete Business LLC",
+            tradingName = "Delete Business",
+            businessType = "Other",
+            primaryContactName = "Delete Business Owner",
+            businessAddress = "123 Delete Street",
+            city = "Addis Ababa",
+            region = "Addis Ababa",
+            country = "Ethiopia",
+            timeZone = "Africa/Addis_Ababa"
+        }, "delete-business-create");
+        Assert.Equal(HttpStatusCode.Created, merchantCreate.StatusCode);
+        var merchantBody = await merchantCreate.Content.ReadFromJsonAsync<JsonElement>();
+        var merchantAccountId = merchantBody!.GetProperty("accountId").GetGuid();
+        var createdMerchantId = merchantBody.GetProperty("merchantId").GetGuid();
+
+        var cashierCreate = await Post(client, "/api/v1/admin/accounts/create", platformAdmin, new
+        {
+            role = "Cashier",
+            email = cashierEmail,
+            phoneNumber = "0911000336",
+            password = "Created-account-13!",
+            confirmation = "Created-account-13!",
+            firstName = "Delete",
+            lastName = "Cashier",
+            merchantId = createdMerchantId
+        }, "delete-cashier-create");
+        Assert.Equal(HttpStatusCode.Created, cashierCreate.StatusCode);
+        var cashierAccountId = (await cashierCreate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accountId").GetGuid();
+
         await using (var created = Db())
         {
             Assert.Equal(AccountStatus.Active, await created.UserAccounts.Where(x => x.Id == creatorAccountId).Select(x => x.Status).SingleAsync());
             Assert.Equal(AccountStatus.Active, await created.UserAccounts.Where(x => x.Id == customerAccountId).Select(x => x.Status).SingleAsync());
+            Assert.Equal(AccountStatus.Active, await created.UserAccounts.Where(x => x.Id == merchantAccountId).Select(x => x.Status).SingleAsync());
+            Assert.Equal(AccountStatus.Active, await created.UserAccounts.Where(x => x.Id == cashierAccountId).Select(x => x.Status).SingleAsync());
         }
 
-        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{creatorAccountId}/delete", operationsAdmin, new { reason = "Creator account deleted for test" }, "delete-creator")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, $"/api/v1/admin/accounts/{creatorAccountId}/delete", operationsAdmin, new { reason = "Operations admin cannot delete creator accounts" }, "delete-creator-forbidden")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, $"/api/v1/admin/accounts/{customerAccountId}/delete", operationsAdmin, new { reason = "Operations admin cannot delete customer accounts" }, "delete-customer-forbidden")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, $"/api/v1/admin/accounts/{merchantAccountId}/delete", operationsAdmin, new { reason = "Operations admin cannot delete business accounts" }, "delete-business-forbidden")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, $"/api/v1/admin/accounts/{cashierAccountId}/delete", operationsAdmin, new { reason = "Operations admin cannot delete cashier accounts" }, "delete-cashier-forbidden")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{cashierAccountId}/delete", platformAdmin, new { reason = "Cashier account deleted for test" }, "delete-cashier")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{merchantAccountId}/delete", platformAdmin, new { reason = "Business account deleted for test" }, "delete-business")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{creatorAccountId}/delete", platformAdmin, new { reason = "Creator account deleted for test" }, "delete-creator")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{customerAccountId}/delete", platformAdmin, new { reason = "Customer account deleted for test" }, "delete-customer")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{creatorAccountId}/delete", operationsAdmin, new { reason = "Repeat delete is safe" }, "delete-creator-repeat")).StatusCode);
 
         var creatorAttempt = await Post(client, $"/api/v1/admin/accounts/{customerAccountId}/delete", Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001"), new { reason = "Creator cannot delete accounts" }, "delete-customer-forbidden");
         Assert.Equal(HttpStatusCode.Forbidden, creatorAttempt.StatusCode);
@@ -1388,31 +1610,57 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         await using var db = Db();
         var creator = await db.UserAccounts.SingleAsync(x => x.Id == creatorAccountId);
         var customer = await db.UserAccounts.SingleAsync(x => x.Id == customerAccountId);
+        var merchantAccount = await db.UserAccounts.SingleAsync(x => x.Id == merchantAccountId);
+        var cashierAccount = await db.UserAccounts.SingleAsync(x => x.Id == cashierAccountId);
         Assert.Equal(AccountStatus.Closed, creator.Status);
         Assert.Equal(AccountStatus.Closed, customer.Status);
+        Assert.Equal(AccountStatus.Closed, merchantAccount.Status);
+        Assert.Equal(AccountStatus.Closed, cashierAccount.Status);
         Assert.StartsWith($"deleted+{creatorAccountId:N}@", creator.Email);
         Assert.StartsWith($"deleted+{customerAccountId:N}@", customer.Email);
+        Assert.StartsWith($"deleted+{merchantAccountId:N}@", merchantAccount.Email);
+        Assert.StartsWith($"deleted+{cashierAccountId:N}@", cashierAccount.Email);
         Assert.Null(creator.PhoneNumber);
         Assert.Null(customer.PhoneNumber);
+        Assert.Null(merchantAccount.PhoneNumber);
+        Assert.Null(cashierAccount.PhoneNumber);
         Assert.Equal(string.Empty, creator.PasswordHash);
         Assert.Equal(string.Empty, customer.PasswordHash);
+        Assert.Equal(string.Empty, merchantAccount.PasswordHash);
+        Assert.Equal(string.Empty, cashierAccount.PasswordHash);
         Assert.False(creator.IsEmailVerified);
         Assert.False(customer.IsEmailVerified);
+        Assert.False(merchantAccount.IsEmailVerified);
+        Assert.False(cashierAccount.IsEmailVerified);
         Assert.False(creator.IsPhoneVerified);
         Assert.False(customer.IsPhoneVerified);
+        Assert.False(merchantAccount.IsPhoneVerified);
+        Assert.False(cashierAccount.IsPhoneVerified);
         Assert.Equal("admin-delete", creator.UpdatedBy);
         Assert.Equal("admin-delete", customer.UpdatedBy);
+        Assert.Equal("admin-delete", merchantAccount.UpdatedBy);
+        Assert.Equal("admin-delete", cashierAccount.UpdatedBy);
         Assert.Equal(0, await db.RefreshTokens.CountAsync(x => x.UserAccountId == creatorAccountId && x.RevokedAtUtc == null));
         Assert.Equal(0, await db.RefreshTokens.CountAsync(x => x.UserAccountId == customerAccountId && x.RevokedAtUtc == null));
+        Assert.Equal(0, await db.RefreshTokens.CountAsync(x => x.UserAccountId == merchantAccountId && x.RevokedAtUtc == null));
+        Assert.Equal(0, await db.RefreshTokens.CountAsync(x => x.UserAccountId == cashierAccountId && x.RevokedAtUtc == null));
         Assert.Equal(CreatorStatus.Closed, (await db.Creators.SingleAsync(x => x.Id == creator.CreatorId!.Value)).Status);
         Assert.Equal(CustomerStatus.Closed, (await db.Customers.SingleAsync(x => x.Id == customer.CustomerId!.Value)).Status);
+        Assert.Equal(MerchantStatus.Closed, (await db.Merchants.SingleAsync(x => x.Id == merchantAccount.MerchantId!.Value)).Status);
+        Assert.False((await db.Cashiers.SingleAsync(x => x.Id == cashierAccount.CashierId!.Value)).IsActive);
         Assert.True(await db.OperationalAuditEvents.AnyAsync(x => x.EventType == "AdminAccountDelete" && x.SubjectId == creatorAccountId));
         Assert.True(await db.OperationalAuditEvents.AnyAsync(x => x.EventType == "AdminAccountDelete" && x.SubjectId == customerAccountId));
+        Assert.True(await db.OperationalAuditEvents.AnyAsync(x => x.EventType == "AdminAccountDelete" && x.SubjectId == merchantAccountId));
+        Assert.True(await db.OperationalAuditEvents.AnyAsync(x => x.EventType == "AdminAccountDelete" && x.SubjectId == cashierAccountId));
 
         var creatorLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = creatorEmail, password = "Created-account-10!" });
         var customerLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = customerEmail, password = "Created-account-11!" });
+        var merchantLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = merchantEmail, password = "Created-account-12!" });
+        var cashierLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = cashierEmail, password = "Created-account-13!" });
         Assert.NotEqual(HttpStatusCode.OK, creatorLogin.StatusCode);
         Assert.NotEqual(HttpStatusCode.OK, customerLogin.StatusCode);
+        Assert.NotEqual(HttpStatusCode.OK, merchantLogin.StatusCode);
+        Assert.NotEqual(HttpStatusCode.OK, cashierLogin.StatusCode);
 
         var forbiddenDelete = await Post(client, $"/api/v1/admin/accounts/{creatorAccountId}/delete", Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001"), new { reason = "Creator cannot delete admin accounts" });
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenDelete.StatusCode);
@@ -1667,6 +1915,51 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         return client.SendAsync(request);
     }
     private static async Task<HttpResponseMessage> Put(HttpClient client, string path, string token, object body) { using var request = new HttpRequestMessage(HttpMethod.Put, path) { Content = JsonContent.Create(body) }; request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token); return await client.SendAsync(request); }
+
+    private static object FinancialSettingsRequest(decimal merchantCommissionRatePercent, decimal creatorSharePercent, decimal shopperSharePercent, decimal platformSharePercent, decimal minimumBusinessWalletBalance, bool applyNow = true, DateTime? effectiveFromUtc = null)
+        => new
+        {
+            merchantCommissionRatePercent,
+            creatorSharePercent,
+            shopperSharePercent,
+            platformSharePercent,
+            businessTypeMinimumWalletBalances = BusinessTypes.Values.Select(type => new { businessType = type, minimumBusinessWalletBalance }).ToArray(),
+            minimumTikTokFollowers = 0,
+            applyNow,
+            effectiveFromUtc,
+            creatorCutoffDay = "Friday",
+            creatorCutoffTime = "00:00:00",
+            creatorPayoutDay = "Saturday",
+            shopperCutoffDay = 0,
+            shopperCutoffTime = "00:00:00",
+            shopperPayoutDay = 1
+        };
+
+    private async Task SetBusinessTypeMinimumAsync(string businessType, decimal minimum)
+    {
+        await using var db = Db();
+        await db.Database.EnsureCreatedAsync();
+        var now = DateTime.UtcNow;
+        var version = (await db.BusinessTypeWalletMinimumVersions.Where(x => x.CurrencyCode == "ETB" && x.BusinessType == businessType).MaxAsync(x => (int?)x.VersionNumber)) ?? 0;
+        db.BusinessTypeWalletMinimumVersions.Add(new BusinessTypeWalletMinimumVersion
+        {
+            Id = Guid.NewGuid(),
+            CurrencyCode = "ETB",
+            BusinessType = businessType,
+            VersionNumber = version + 1,
+            MinimumBusinessWalletBalance = minimum,
+            EffectiveFromUtc = now,
+            ChangedByUserId = Guid.Parse("90000000-0000-0000-0000-000000000001"),
+            CreatedAtUtc = now,
+            CreatedBy = "90000000-0000-0000-0000-000000000001"
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SetAllBusinessTypeMinimumsAsync(decimal minimum)
+    {
+        foreach (var businessType in BusinessTypes.Values) await SetBusinessTypeMinimumAsync(businessType, minimum);
+    }
 
     private static string Token(UserRole role, string userId, string? customerId = null, string? merchantId = null, string? cashierId = null, string? creatorId = null, AccountStatus status = AccountStatus.Active)
     {

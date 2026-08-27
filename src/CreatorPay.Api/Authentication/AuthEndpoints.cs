@@ -38,16 +38,38 @@ public static class AuthEndpoints
         return endpoints;
     }
 
-    private sealed record PasswordResetHelpRequest(string PhoneNumber);
+    private sealed record PasswordResetHelpRequest(string? PhoneNumber, string? Email = null);
 
     private static async Task<IResult> RequestPasswordReset(PasswordResetHelpRequest request, HttpContext h, ApplicationDbContext db, INotificationService notifications, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
+        var rawPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        var rawEmail = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
         string normalized;
-        try { normalized = EthiopianMobileNumber.Normalize(request.PhoneNumber); }
-        catch (ArgumentException) { normalized = string.Empty; }
-        var user = normalized.Length == 0 ? null : await db.UserAccounts.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == normalized, ct);
-        var eligible = user is not null && user.Role != UserRole.PlatformAdmin && AuthenticationService.CanSignIn(user);
+        UserAccount? user;
+        if (rawPhone is not null)
+        {
+            try { normalized = EthiopianMobileNumber.Normalize(rawPhone); }
+            catch (ArgumentException) { normalized = string.Empty; }
+            user = normalized.Length == 0 ? null : await db.UserAccounts.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == normalized, ct);
+        }
+        else if (rawEmail is not null)
+        {
+            normalized = rawEmail.ToUpperInvariant();
+            user = await db.UserAccounts.SingleOrDefaultAsync(x => x.NormalizedEmail == normalized, ct);
+        }
+        else
+        {
+            normalized = string.Empty;
+            user = null;
+        }
+        if (user is null)
+        {
+            db.LoginAudits.Add(new LoginAudit { Id = Guid.NewGuid(), UserAccountId = null, NormalizedEmail = normalized, WasSuccessful = false, FailureReason = "PasswordResetHelpNoAccount", IpAddress = h.Connection.RemoteIpAddress?.ToString(), UserAgent = h.Request.Headers.UserAgent.ToString(), CorrelationId = h.TraceIdentifier, AttemptedAtUtc = now, CreatedAtUtc = now });
+            await db.SaveChangesAsync(ct);
+            return Results.NotFound(new { detail = "No account was found with that phone number or email. Please create a new account." });
+        }
+        var eligible = user.Role != UserRole.PlatformAdmin && AuthenticationService.CanSignIn(user);
         var reference = $"PWR-{now:yyyyMMdd}-{Guid.NewGuid():N}"[..25].ToUpperInvariant();
         db.LoginAudits.Add(new LoginAudit { Id = Guid.NewGuid(), UserAccountId = eligible ? user!.Id : null, NormalizedEmail = normalized, WasSuccessful = eligible, FailureReason = eligible ? "PasswordResetHelpRequested" : "PasswordResetHelpDetailsMismatch", IpAddress = h.Connection.RemoteIpAddress?.ToString(), UserAgent = h.Request.Headers.UserAgent.ToString(), CorrelationId = h.TraceIdentifier, AttemptedAtUtc = now, CreatedAtUtc = now });
         if (eligible)
@@ -83,7 +105,7 @@ public static class AuthEndpoints
                             {
                                 ["Title"] = title,
                                 ["Body"] = body,
-                                ["TargetPath"] = "/admin/accounts#password-reset-requests",
+                                ["TargetPath"] = "/admin/password-reset-requests#password-reset-requests",
                                 ["RequesterName"] = displayName,
                                 ["RequesterRole"] = ReadableRole(user.Role),
                                 ["SupportReference"] = reference,

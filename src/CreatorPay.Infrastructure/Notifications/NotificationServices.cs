@@ -42,7 +42,7 @@ public sealed class NotificationService(ApplicationDbContext db, IOptions<Wallet
     async Task AddLowBalanceNotificationAsync(Guid purchaseId, DateTime now, CancellationToken ct)
     {
         var entry = await db.MerchantWalletEntries.AsNoTracking().Where(x => x.RelatedTransactionId == purchaseId && x.EntryType == MerchantWalletEntryType.CommissionDebit).SingleOrDefaultAsync(ct);
-        var minimum = await RewardEligibilityQueries.CurrentMinimumAsync(db, walletOptions.CurrencyCode, ct);
+        var minimum = entry is null ? 0m : await BusinessWalletMinimumQueries.CurrentMinimumAsync(db, walletOptions.CurrencyCode, entry.MerchantId, ct);
         if (entry is null || minimum <= 0m || entry.BalanceBefore < minimum || entry.BalanceAfter >= minimum) return;
         var key = $"merchant-low-balance:{entry.Id}";
         if (await db.Notifications.AnyAsync(x => x.IdempotencyKey == key, ct)) return;
