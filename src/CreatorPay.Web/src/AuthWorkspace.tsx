@@ -230,6 +230,14 @@ export function AuthWorkspace() {
       const response = await fetch(`${base}/api/v1/auth/password-reset-requests/${encodeURIComponent(reference)}`);
       const value = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 404) {
+          clearPasswordResetRequest();
+          setMessage(
+            (value as { detail?: string }).detail ??
+              "Your previous password reset request is no longer active. Please request a new password reset.",
+          );
+          return false;
+        }
         setMessage((value as { detail?: string }).detail ?? text.failed);
         return false;
       }

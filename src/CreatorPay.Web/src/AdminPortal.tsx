@@ -102,7 +102,7 @@ const platformNav: NavItem[] = [
   { id: "reports", label: "Reports", roles: ["PlatformAdmin"] },
   { id: "creator-review", label: "Creator Review", roles: adminRoles, countKey: "pendingCreatorApprovals" },
   { id: "business-review", label: "Business Review", roles: adminRoles, countKey: "pendingMerchantApprovals" },
-  { id: "admin-accounts", label: "Admin Accounts", roles: ["PlatformAdmin"], countKey: "openSupportRequests" },
+  { id: "admin-accounts", label: "Admin Accounts", roles: ["PlatformAdmin"] },
   { id: "password-reset-requests", label: "Password Reset Requests", roles: adminRoles, countKey: "openSupportRequests" },
   { id: "business-accounts", label: "Business Accounts", roles: adminRoles },
   { id: "creator-accounts", label: "Creator Accounts", roles: adminRoles },
@@ -323,7 +323,7 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Business owners and supervisors."
               roles={["MerchantAdmin", "Supervisor"]}
               createRoles={["MerchantAdmin"]}
-              columns={["name", "email", "phone", "businessName", "publicBusinessId", "merchantBusinessType", "status", "isLocked", "lastLoginAtUtc"]}
+              columns={["name", "email", "phone", "businessName", "publicBusinessId", "merchantBusinessType", "isLocked", "lastLoginAtUtc"]}
               fixedRole="MerchantAdmin"
               allowCreate={role === "PlatformAdmin"}
               allowRemove={role === "PlatformAdmin"}
@@ -1260,7 +1260,7 @@ function AccountPage({
                           Delete Account
                         </button>
                       )}
-                      {allowBusinessTypeEdit && x.role === "MerchantAdmin" && Boolean(x.merchantId) && (
+                      {allowBusinessTypeEdit && Boolean(x.merchantId) && (
                         <button
                           type="button"
                           className="quiet"
@@ -1325,7 +1325,7 @@ function AdminAccountsPage() {
   return (
     <AccountPage
       title="Admin Accounts"
-      description="PlatformAdmin accounts and password-reset reviews."
+      description="PlatformAdmin accounts and management."
       roles={["PlatformAdmin"]}
       createRoles={["PlatformAdmin"]}
       columns={["name", "email", "phone", "role", "status", "isLocked", "lastLoginAtUtc"]}
