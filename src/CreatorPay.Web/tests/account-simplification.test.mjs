@@ -23,6 +23,8 @@ test('admin cleanup keeps password reset tools and business type correction wire
   assert.match(adminPortal,/Delete Request/)
   assert.match(adminPortal,/Edit Business Type/)
   assert.match(adminPortal,/allowBusinessTypeEdit=\{role === "PlatformAdmin"\}/)
+  assert.doesNotMatch(adminPortal,/showPasswordResets/)
+  assert.doesNotMatch(adminPortal,/showPasswordResets=\{true\}/)
   assert.match(adminPortal,/columns=\{\["name", "email", "phone", "role", "status", "isLocked", "lastLoginAtUtc"\]\}/)
   assert.match(adminPortal,/columns=\{\["name", "email", "phone", "businessName", "publicBusinessId", "merchantBusinessType", "status", "isLocked", "lastLoginAtUtc"\]\}/)
   assert.match(adminPortal,/columns=\{\["name", "publicCreatorId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"\]\}/)

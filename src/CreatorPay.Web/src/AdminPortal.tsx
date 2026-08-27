@@ -70,7 +70,6 @@ type AccountPageProps = {
   allowCreate?: boolean;
   allowRemove?: boolean;
   allowBusinessTypeEdit?: boolean;
-  showPasswordResets?: boolean;
 };
 
 const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
@@ -1041,7 +1040,6 @@ function AccountPage({
   allowCreate = false,
   allowRemove = true,
   allowBusinessTypeEdit = false,
-  showPasswordResets = false,
 }: AccountPageProps) {
   const [data, setData] = useState<Page>();
   const [message, setMessage] = useState("");
@@ -1149,7 +1147,6 @@ function AccountPage({
     <section>
       <Title text={title} />
       <p className="accounts-note">{description}</p>
-      {showPasswordResets && <PasswordResetRequests />}
       {allowCreate && (
         <AdminAccountCreate
           title="Create Account"
@@ -1334,7 +1331,6 @@ function AdminAccountsPage() {
       columns={["name", "email", "phone", "role", "status", "isLocked", "lastLoginAtUtc"]}
       allowCreate
       allowRemove={false}
-      showPasswordResets
     />
   );
 }
