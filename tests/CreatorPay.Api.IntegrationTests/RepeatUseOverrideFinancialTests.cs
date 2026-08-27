@@ -1334,6 +1334,92 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Admin_delete_anonymizes_creator_and_customer_accounts_without_breaking_financial_history()
+    {
+        using var client = factory!.CreateClient();
+        var seededResponse = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seededResponse.StatusCode);
+
+        var platformAdmin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
+        var operationsAdmin = Token(UserRole.OperationsAdmin, "90000000-0000-0000-0000-000000000002");
+        var creatorEmail = "delete-creator@e2e.invalid";
+        var customerEmail = "delete-customer@e2e.invalid";
+
+        var creatorCreate = await Post(client, "/api/v1/admin/accounts/create", platformAdmin, new
+        {
+            role = "Creator",
+            email = creatorEmail,
+            phoneNumber = "0911000333",
+            password = "Created-account-10!",
+            confirmation = "Created-account-10!",
+            firstName = "Delete",
+            lastName = "Creator",
+            displayName = "Delete Creator"
+        }, "delete-creator-create");
+        Assert.Equal(HttpStatusCode.Created, creatorCreate.StatusCode);
+        var creatorBody = await creatorCreate.Content.ReadFromJsonAsync<JsonElement>();
+        var creatorAccountId = creatorBody!.GetProperty("accountId").GetGuid();
+
+        var customerCreate = await Post(client, "/api/v1/admin/accounts/create", platformAdmin, new
+        {
+            role = "Customer",
+            email = customerEmail,
+            phoneNumber = "0911000334",
+            password = "Created-account-11!",
+            confirmation = "Created-account-11!",
+            displayName = "Delete Customer"
+        }, "delete-customer-create");
+        Assert.Equal(HttpStatusCode.Created, customerCreate.StatusCode);
+        var customerAccountId = (await customerCreate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accountId").GetGuid();
+
+        await using (var created = Db())
+        {
+            Assert.Equal(AccountStatus.Active, await created.UserAccounts.Where(x => x.Id == creatorAccountId).Select(x => x.Status).SingleAsync());
+            Assert.Equal(AccountStatus.Active, await created.UserAccounts.Where(x => x.Id == customerAccountId).Select(x => x.Status).SingleAsync());
+        }
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{creatorAccountId}/delete", operationsAdmin, new { reason = "Creator account deleted for test" }, "delete-creator")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{customerAccountId}/delete", platformAdmin, new { reason = "Customer account deleted for test" }, "delete-customer")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/admin/accounts/{creatorAccountId}/delete", operationsAdmin, new { reason = "Repeat delete is safe" }, "delete-creator-repeat")).StatusCode);
+
+        var creatorAttempt = await Post(client, $"/api/v1/admin/accounts/{customerAccountId}/delete", Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001"), new { reason = "Creator cannot delete accounts" }, "delete-customer-forbidden");
+        Assert.Equal(HttpStatusCode.Forbidden, creatorAttempt.StatusCode);
+
+        await using var db = Db();
+        var creator = await db.UserAccounts.SingleAsync(x => x.Id == creatorAccountId);
+        var customer = await db.UserAccounts.SingleAsync(x => x.Id == customerAccountId);
+        Assert.Equal(AccountStatus.Closed, creator.Status);
+        Assert.Equal(AccountStatus.Closed, customer.Status);
+        Assert.StartsWith($"deleted+{creatorAccountId:N}@", creator.Email);
+        Assert.StartsWith($"deleted+{customerAccountId:N}@", customer.Email);
+        Assert.Null(creator.PhoneNumber);
+        Assert.Null(customer.PhoneNumber);
+        Assert.Equal(string.Empty, creator.PasswordHash);
+        Assert.Equal(string.Empty, customer.PasswordHash);
+        Assert.False(creator.IsEmailVerified);
+        Assert.False(customer.IsEmailVerified);
+        Assert.False(creator.IsPhoneVerified);
+        Assert.False(customer.IsPhoneVerified);
+        Assert.Equal("admin-delete", creator.UpdatedBy);
+        Assert.Equal("admin-delete", customer.UpdatedBy);
+        Assert.Equal(0, await db.RefreshTokens.CountAsync(x => x.UserAccountId == creatorAccountId && x.RevokedAtUtc == null));
+        Assert.Equal(0, await db.RefreshTokens.CountAsync(x => x.UserAccountId == customerAccountId && x.RevokedAtUtc == null));
+        Assert.Equal(CreatorStatus.Closed, (await db.Creators.SingleAsync(x => x.Id == creator.CreatorId!.Value)).Status);
+        Assert.Equal(CustomerStatus.Closed, (await db.Customers.SingleAsync(x => x.Id == customer.CustomerId!.Value)).Status);
+        Assert.True(await db.OperationalAuditEvents.AnyAsync(x => x.EventType == "AdminAccountDelete" && x.SubjectId == creatorAccountId));
+        Assert.True(await db.OperationalAuditEvents.AnyAsync(x => x.EventType == "AdminAccountDelete" && x.SubjectId == customerAccountId));
+
+        var creatorLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = creatorEmail, password = "Created-account-10!" });
+        var customerLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = customerEmail, password = "Created-account-11!" });
+        Assert.NotEqual(HttpStatusCode.OK, creatorLogin.StatusCode);
+        Assert.NotEqual(HttpStatusCode.OK, customerLogin.StatusCode);
+
+        var forbiddenDelete = await Post(client, $"/api/v1/admin/accounts/{creatorAccountId}/delete", Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001"), new { reason = "Creator cannot delete admin accounts" });
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenDelete.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, $"/api/v1/admin/accounts/90000000-0000-0000-0000-000000000001/delete", platformAdmin, new { reason = "Platform admin self-delete blocked" })).StatusCode);
+    }
+
+    [DockerFact]
     public async Task Shopper_rejection_is_idempotent_and_posts_no_money()
     {
         using var client = factory!.CreateClient(); var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" }); Assert.Equal(HttpStatusCode.OK, seeded.StatusCode); var seed = await seeded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();

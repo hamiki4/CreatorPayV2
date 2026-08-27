@@ -435,19 +435,65 @@ public static class AdminEndpoints
     private static async Task<IResult> ChangeAccountStatus(Guid id, string action, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct)
     {
         var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound();
-        if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
         if (string.IsNullOrWhiteSpace(request.Reason)) return Results.BadRequest(new { error = "A reason is required." });
-        var normalized = action.Trim().ToLowerInvariant(); var before = account.Status;
-        if (normalized == "lock") { account.LockoutEndUtc = DateTime.UtcNow.AddYears(100); account.FailedLoginCount = Math.Max(account.FailedLoginCount, 5); }
-        else if (normalized == "unlock") { account.LockoutEndUtc = null; account.FailedLoginCount = 0; }
-        else if (normalized is "suspend" or "deactivate") account.Status = normalized == "deactivate" ? AccountStatus.Closed : AccountStatus.Suspended;
-        else if (normalized == "reactivate" && account.Status is AccountStatus.Suspended or AccountStatus.Closed) account.Status = AccountStatus.Active;
+        var normalized = action.Trim().ToLowerInvariant(); var before = account.Status; var now = DateTime.UtcNow;
+        if (normalized == "lock") { if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid(); account.LockoutEndUtc = now.AddYears(100); account.FailedLoginCount = Math.Max(account.FailedLoginCount, 5); }
+        else if (normalized == "unlock") { if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid(); account.LockoutEndUtc = null; account.FailedLoginCount = 0; }
+        else if (normalized is "suspend" or "deactivate")
+        {
+            if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
+            account.Status = normalized == "deactivate" ? AccountStatus.Closed : AccountStatus.Suspended;
+        }
+        else if (normalized == "reactivate" && account.Status is AccountStatus.Suspended or AccountStatus.Closed)
+        {
+            if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
+            account.Status = AccountStatus.Active;
+        }
+        else if (normalized == "delete")
+        {
+            if (account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
+            await DeleteAccount(account, db, now, ct);
+        }
         else if (normalized == "reactivate") return Results.Conflict(new { error = "Only a suspended or deactivated approved account can be reactivated." });
         else return Results.BadRequest(new { error = "Unsupported account action." });
-        if (account.CreatorId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var creator = await db.Creators.SingleAsync(x => x.Id == account.CreatorId, ct); creator.Status = normalized == "reactivate" ? CreatorStatus.Active : normalized == "deactivate" ? CreatorStatus.Closed : CreatorStatus.Suspended; creator.UpdatedAtUtc = DateTime.UtcNow; }
-        if (account.Role == UserRole.MerchantAdmin && account.MerchantId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var merchant = await db.Merchants.SingleAsync(x => x.Id == account.MerchantId, ct); merchant.Status = normalized == "reactivate" ? MerchantStatus.Active : normalized == "deactivate" ? MerchantStatus.Closed : MerchantStatus.Suspended; merchant.UpdatedAtUtc = DateTime.UtcNow; }
-        if (account.Role == UserRole.Cashier && account.CashierId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var cashier = await db.Cashiers.SingleAsync(x => x.Id == account.CashierId, ct); cashier.IsActive = normalized == "reactivate"; cashier.UpdatedAtUtc = DateTime.UtcNow; }
-        account.UpdatedAtUtc = DateTime.UtcNow; await AddAudit(db, user.UserAccountId!.Value, $"AdminAccount{char.ToUpperInvariant(normalized[0]) + normalized[1..]}", id, $"{request.Reason}; PreviousStatus={before}; NewStatus={account.Status}", h.TraceIdentifier, ct); return Results.NoContent();
+        if (account.CreatorId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var creator = await db.Creators.SingleAsync(x => x.Id == account.CreatorId, ct); creator.Status = normalized == "reactivate" ? CreatorStatus.Active : normalized == "deactivate" ? CreatorStatus.Closed : CreatorStatus.Suspended; creator.UpdatedAtUtc = now; }
+        if (account.Role == UserRole.MerchantAdmin && account.MerchantId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var merchant = await db.Merchants.SingleAsync(x => x.Id == account.MerchantId, ct); merchant.Status = normalized == "reactivate" ? MerchantStatus.Active : normalized == "deactivate" ? MerchantStatus.Closed : MerchantStatus.Suspended; merchant.UpdatedAtUtc = now; }
+        if (account.Role == UserRole.Cashier && account.CashierId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var cashier = await db.Cashiers.SingleAsync(x => x.Id == account.CashierId, ct); cashier.IsActive = normalized == "reactivate"; cashier.UpdatedAtUtc = now; }
+        account.UpdatedAtUtc = now; await AddAudit(db, user.UserAccountId!.Value, $"AdminAccount{char.ToUpperInvariant(normalized[0]) + normalized[1..]}", id, $"{request.Reason}; PreviousStatus={before}; NewStatus={account.Status}", h.TraceIdentifier, ct); return Results.NoContent();
+    }
+
+    private static async Task DeleteAccount(UserAccount account, ApplicationDbContext db, DateTime now, CancellationToken ct)
+    {
+        await db.RefreshTokens.Where(x => x.UserAccountId == account.Id && x.RevokedAtUtc == null).ExecuteUpdateAsync(x => x.SetProperty(token => token.RevokedAtUtc, now).SetProperty(token => token.RevokedReason, "Account deleted"), ct);
+        account.Status = AccountStatus.Closed;
+        account.Email = $"deleted+{account.Id:N}@deleted.weymela.invalid";
+        account.NormalizedEmail = account.Email.ToUpperInvariant();
+        account.PhoneNumber = null;
+        account.NormalizedPhoneNumber = null;
+        account.PasswordHash = string.Empty;
+        account.IsEmailVerified = false;
+        account.IsPhoneVerified = false;
+        account.RecoveryEmail = null;
+        account.NormalizedRecoveryEmail = null;
+        account.IsRecoveryEmailVerified = false;
+        account.FirebaseUid = null;
+        account.PinHash = null;
+        account.PinFailedAttemptCount = 0;
+        account.PinLockedAtUtc = null;
+        account.PinRetryNotBeforeUtc = null;
+        account.PinEnrolledAtUtc = null;
+        account.PinChangedAtUtc = null;
+        account.LockoutEndUtc = null;
+        account.FailedLoginCount = 0;
+        account.LastFailedLoginAtUtc = null;
+        account.LastLoginAtUtc = null;
+        account.BirthDate = null;
+        account.UpdatedAtUtc = now;
+        account.UpdatedBy = "admin-delete";
+        if (account.Role == UserRole.Creator && account.CreatorId.HasValue) { var creator = await db.Creators.SingleAsync(x => x.Id == account.CreatorId, ct); creator.Status = CreatorStatus.Closed; creator.UpdatedAtUtc = now; creator.UpdatedBy = "admin-delete"; }
+        else if (account.Role == UserRole.Customer && account.CustomerId.HasValue) { var customer = await db.Customers.SingleAsync(x => x.Id == account.CustomerId, ct); customer.Status = CustomerStatus.Closed; customer.UpdatedAtUtc = now; customer.UpdatedBy = "admin-delete"; }
+        else if (account.Role == UserRole.MerchantAdmin && account.MerchantId.HasValue) { var merchant = await db.Merchants.SingleAsync(x => x.Id == account.MerchantId, ct); merchant.Status = MerchantStatus.Closed; merchant.UpdatedAtUtc = now; merchant.UpdatedBy = "admin-delete"; }
+        else if (account.Role == UserRole.Cashier && account.CashierId.HasValue) { var cashier = await db.Cashiers.SingleAsync(x => x.Id == account.CashierId, ct); cashier.IsActive = false; cashier.UpdatedAtUtc = now; cashier.UpdatedBy = "admin-delete"; }
     }
     private static async Task<IResult> RevokeSessions(Guid id, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound(); if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid(); var tokens = await db.RefreshTokens.Where(x => x.UserAccountId == id && x.RevokedAtUtc == null).ToListAsync(ct); foreach (var token in tokens) token.RevokedAtUtc = DateTime.UtcNow; await AddAudit(db, user.UserAccountId!.Value, "AdminSessionsRevoked", id, request.Reason, h.TraceIdentifier, ct); return Results.NoContent(); }
     private static async Task<IResult> ChangeAlert(Guid id, string status, string reason, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var alert = await db.OperationalAlerts.SingleOrDefaultAsync(x => x.Id == id, ct); if (alert is null) return Results.NotFound(); var old = alert.Status; alert.Status = status; alert.UpdatedAtUtc = DateTime.UtcNow; if (status == "Acknowledged") { alert.AcknowledgedAtUtc = DateTime.UtcNow; alert.AcknowledgedByUserId = user.UserAccountId; } if (status == "Resolved") alert.ResolvedAtUtc = DateTime.UtcNow; db.OperationalAlertHistories.Add(new() { Id = Guid.NewGuid(), OperationalAlertId = id, PreviousStatus = old, NewStatus = status, ActorUserId = user.UserAccountId!.Value, Reason = reason, ChangedAtUtc = DateTime.UtcNow, CreatedAtUtc = DateTime.UtcNow }); await AddAudit(db, user.UserAccountId.Value, $"OperationalAlert{status}", id, reason, h.TraceIdentifier, ct); return Results.NoContent(); }
