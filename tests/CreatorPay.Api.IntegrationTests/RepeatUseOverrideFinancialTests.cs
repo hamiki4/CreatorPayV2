@@ -327,6 +327,11 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
             Assert.Equal(CampaignStatus.Active, campaign.Status);
             Assert.Null(await db.CampaignQrCodes.SingleOrDefaultAsync(x => x.CampaignId == campaign.Id));
         }
+        const string videoUrl = "https://www.tiktok.com/@active-e2e-business/video/1234567890123456789";
+        var promoVideo = await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/promotion-video", creator, new { videoUrl });
+        Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
+        var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", owner, new { reason = (string?)null })).StatusCode);
 
         var discovery = await Get(client, "/api/v1/customer/discovery/advertising", shopper);
         Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
@@ -334,6 +339,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var advertised = discoveryRows.EnumerateArray().Single(x => x.GetProperty("relationshipId").GetGuid() == relationshipId);
         Assert.Equal(creatorCode, advertised.GetProperty("creatorCode").GetString());
         Assert.Equal("Active", advertised.GetProperty("status").GetString());
+        Assert.Equal(videoUrl, advertised.GetProperty("promotionVideoUrl").GetString());
+        Assert.Equal("Live", advertised.GetProperty("promotionVideoStatus").GetString());
         Assert.True((await ValidateCreator(client, cashier, creatorCode)).GetProperty("isValid").GetBoolean());
 
         Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/suspend", owner, new { reason = "Deactivate disposable promotion" })).StatusCode);
@@ -628,6 +635,21 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var list = await Get(client, "/api/v1/customer/discovery/businesses?q=Addis", shopper); Assert.Equal(HttpStatusCode.OK, list.StatusCode); var businesses = await list.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         var business = Assert.Single(businesses.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business"); Assert.True(business.GetProperty("rewardsAvailable").GetBoolean());
         Assert.DoesNotContain(businesses.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Desktop Workflow Business");
+        var owner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000008", merchantId: "20000000-0000-0000-0000-000000000001");
+        await using (var promoDb = Db())
+        {
+            var activePartnerships = await promoDb.MerchantCreatorPartnerships.Where(x => x.MerchantId == Guid.Parse("20000000-0000-0000-0000-000000000001") && x.Status == PartnershipStatus.Approved).Select(x => new { x.Id, x.CreatorId }).ToListAsync();
+            foreach (var partnership in activePartnerships)
+            {
+                var creatorUser = await promoDb.UserAccounts.SingleAsync(x => x.CreatorId == partnership.CreatorId && x.Role == UserRole.Creator);
+                var creatorToken = Token(UserRole.Creator, creatorUser.Id.ToString(), creatorId: partnership.CreatorId.ToString());
+                var videoUrl = $"https://www.tiktok.com/@e2e/video/{partnership.Id:N}";
+                var submitted = await Post(client, $"/api/v1/creator/partnerships/{partnership.Id}/promotion-video", creatorToken, new { videoUrl }, $"promo-{partnership.Id:N}");
+                Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+                var promoVideoId = (await submitted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+                Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", owner, new { reason = (string?)null }, $"approve-{partnership.Id:N}")).StatusCode);
+            }
+        }
         var advertisingResponse = await Get(client, "/api/v1/customer/discovery/advertising?q=Addis", shopper); Assert.Equal(HttpStatusCode.OK, advertisingResponse.StatusCode); var advertising = await advertisingResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); Assert.Equal(2, advertising.GetArrayLength()); Assert.All(advertising.EnumerateArray(), x => Assert.Equal("Active E2E Business", x.GetProperty("businessName").GetString()));
         var mimiRows = await (await Get(client, "/api/v1/customer/discovery/advertising?q=Mimi", shopper)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); var mimiRow = Assert.Single(mimiRows.EnumerateArray()); Assert.Equal("Mimi Active", mimiRow.GetProperty("creatorName").GetString());
         var qrImage = await Get(client, $"/api/v1/customer/discovery/advertising/{mimiRow.GetProperty("relationshipId").GetGuid()}/qr-image", shopper); Assert.Equal(HttpStatusCode.OK, qrImage.StatusCode); Assert.Equal("image/png", qrImage.Content.Headers.ContentType?.MediaType); Assert.True((await qrImage.Content.ReadAsByteArrayAsync()).Length > 100);
@@ -691,6 +713,12 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/activate", owner, new { reason = "Pilot activation" })).StatusCode);
         await using (var db = Db()) Assert.Single(await db.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == relationshipId && x.Status == CampaignStatus.Active).ToListAsync());
+        var creatorToken = Token(UserRole.Creator, creatorUserId.ToString(), creatorId: creatorId.ToString());
+        const string activationVideoUrl = "https://www.tiktok.com/@activation-e2e/video/1234567890123456791";
+        var promoVideo = await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/promotion-video", creatorToken, new { videoUrl = activationVideoUrl }, "activation-promo");
+        Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
+        var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", owner, new { reason = (string?)null }, "activation-promo-approve")).StatusCode);
         await AssertPromotionState(client, owner, shopper, cashier, relationshipId, "4828", true);
         var submitted = await Post(client, "/api/v1/cashier/checkouts/by-creator", cashier, new { creatorCode = "4828", shopperPhoneNumber = "+251911000001", purchaseAmount = 100m }, "creator-id-lifecycle-submit");
         Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);

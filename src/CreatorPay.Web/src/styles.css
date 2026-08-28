@@ -16,3 +16,61 @@
 .request-groups{display:grid;gap:1rem}
 .request-groups>div{display:grid;gap:.65rem}
 .customer-discovery-list .promo-video-link{font-size:.94rem}
+.account-shell.role-customer .account-actions .icon-button[aria-label="Notifications"]{display:grid}
+@media (max-width:650px){
+  .role-customer .account-actions .icon-button[aria-label="Notifications"]{display:none}
+  .creator-dashboard,.shopper{padding-bottom:5.8rem}
+  .creator-tabs,.shopper>nav{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:24;
+    margin:0;
+    padding:.4rem .45rem .55rem;
+    background:#fff;
+    border-top:1px solid #d7e1d9;
+    border-bottom:0;
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(0,1fr);
+    gap:.25rem;
+    overflow:visible;
+    box-shadow:0 -.35rem 1rem rgb(21 60 39/.08);
+  }
+  .creator-tabs button,.shopper>nav button{
+    min-height:4rem;
+    padding:.45rem .35rem;
+    white-space:normal;
+    display:grid;
+    justify-items:center;
+    align-content:center;
+    gap:.2rem;
+    font-size:.72rem;
+    line-height:1.1;
+    text-align:center;
+  }
+  .creator-tabs button span,.shopper>nav button span{display:block}
+  .nav-icon{
+    display:grid;
+    place-items:center;
+    width:1.3rem;
+    height:1.3rem;
+    color:currentColor;
+  }
+  .nav-icon svg{
+    width:1.3rem;
+    height:1.3rem;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:1.9;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+  .creator-tabs button[data-mobile-hidden="true"],
+  .shopper>nav button[data-mobile-hidden="true"]{display:none}
+}
+@media (min-width:651px){
+  .nav-icon{display:none}
+}
+.summary-action-card{cursor:pointer}

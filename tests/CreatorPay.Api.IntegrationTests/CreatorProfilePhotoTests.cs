@@ -151,6 +151,11 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
         var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+        const string videoUrl = "https://www.tiktok.com/@active-photo/video/1234567890123456789";
+        var promoVideo = await Post(activeClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl });
+        Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
+        var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", new { reason = (string?)null })).StatusCode);
 
         var invited = await Post(merchant, "/api/v1/merchant/partnerships/invitations", new { creatorId = pendingCreator.CreatorId, introductoryMessage = "Join us" });
         Assert.Equal(HttpStatusCode.Created, invited.StatusCode);
@@ -178,6 +183,8 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         var advertisingRows = await advertising.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         var advertisingRow = Assert.Single(advertisingRows!.EnumerateArray(), x => x.GetProperty("creatorId").GetGuid() == activeCreator.CreatorId);
         Assert.Contains("/photo?v=", advertisingRow.GetProperty("creatorProfileImageUrl").GetString());
+        Assert.Equal(videoUrl, advertisingRow.GetProperty("promotionVideoUrl").GetString());
+        Assert.Equal("Live", advertisingRow.GetProperty("promotionVideoStatus").GetString());
 
         var businessDetail = await Get(customer, $"/api/v1/customer/discovery/businesses/{MerchantId}");
         Assert.Equal(HttpStatusCode.OK, businessDetail.StatusCode);

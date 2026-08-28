@@ -5,6 +5,7 @@ import { AccountChrome } from './AccountChrome'
 import { onActionableRefresh } from './actionableRefresh'
 import { creatorPhotoUrl, ProfileAvatar } from './profileMedia'
 import { prepareProfilePhoto, profilePhotoAccept, profilePhotoProcessingMessage, profilePhotoUnsupportedMessage } from './photoUpload'
+import { NavIcon } from './navIcons'
 
 type Tab = 'home' | 'find' | 'ads' | 'requests' | 'sales' | 'payout' | 'profile'
 type Profile = {
@@ -182,8 +183,9 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [profileError, setProfileError] = useState('')
   const [earnings, setEarnings] = useState<Earnings>()
   const [requests, setRequests] = useState<AdvertisingRequest[]>([])
+  const [earningsError, setEarningsError] = useState('')
+  const [relationshipsError, setRelationshipsError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
 
   const loadProfile = async () =>
     api<Profile>('/api/v1/creators/me')
@@ -204,9 +206,18 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
       api<AdvertisingRequest[]>('/api/v1/creator/partnerships'),
     ]).then((results) => {
       const [e, a] = results
-      if (e.status === 'fulfilled') setEarnings(e.value)
-      if (a.status === 'fulfilled') setRequests(a.value)
-      setError(results.some((x) => x.status === 'rejected') ? "We couldn't load some information." : '')
+      if (e.status === 'fulfilled') {
+        setEarnings(e.value)
+        setEarningsError('')
+      } else {
+        setEarningsError("We couldn't load payout information right now.")
+      }
+      if (a.status === 'fulfilled') {
+        setRequests(a.value)
+        setRelationshipsError('')
+      } else {
+        setRelationshipsError("We couldn't load advertising relationships right now.")
+      }
     })
 
   const load = () => Promise.all([loadProfile(), loadSupporting()]).finally(() => setLoading(false))
@@ -270,8 +281,15 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
       <div className="creator-dashboard">
         <nav className="creator-tabs" aria-label="Creator sections">
           {tabs.map(([value, label]) => (
-            <button key={value} className={tab === value ? 'active' : ''} aria-current={tab === value ? 'page' : undefined} onClick={() => setTab(value)}>
-              {label}
+            <button
+              key={value}
+              className={tab === value ? 'active' : ''}
+              data-mobile-hidden={value === 'sales' ? 'true' : undefined}
+              aria-current={tab === value ? 'page' : undefined}
+              onClick={() => setTab(value)}
+            >
+              <NavIcon name={value === 'find' ? 'find' : value === 'ads' ? 'ads' : value === 'requests' ? 'requests' : value === 'sales' ? 'sales' : 'payout'} />
+              <span>{label}</span>
             </button>
           ))}
         </nav>
@@ -282,6 +300,11 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                 <span>Pending Requests</span>
                 <strong>{pending}</strong>
               </article>
+              <article className="summary-action-card" role="button" tabIndex={0} onClick={() => setTab('sales')} onKeyDown={(event) => event.key === 'Enter' && setTab('sales')}>
+                <span>Confirmed Sales</span>
+                <strong>{requests.filter((x) => x.status === 'Approved').length}</strong>
+                <small>View sales</small>
+              </article>
               <article>
                 <span>Payout Amount</span>
                 <strong>{money(earnings?.currentPayoutAmount ?? 0, earnings?.currencyCode)}</strong>
@@ -291,7 +314,8 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                 <strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong>
               </article>
             </div>
-            {error && <p className="friendly-error">{error}</p>}
+            {relationshipsError && <p className="friendly-error">{relationshipsError}</p>}
+            {earningsError && <p className="friendly-error">{earningsError}</p>}
             <div className="creator-start">
               <h2>Start advertising</h2>
               <p>Find a Business, request permission to promote, and start earning money!</p>
@@ -299,10 +323,10 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
             </div>
           </>
         )}
-        {tab === 'find' && <FindBusinesses onRequested={() => void load()} />}
-        {tab === 'ads' && <ActiveAds items={requests} loading={loading} refresh={() => void load()} />}
-        {tab === 'requests' && <CreatorRequests items={requests} refresh={() => void load()} />}
-        {tab === 'sales' && <CreatorConfirmedSales />}
+        {tab === 'find' && <><FindBusinesses onRequested={() => void load()} />{relationshipsError && <p className="friendly-error">{relationshipsError}</p>}</>}
+        {tab === 'ads' && <><ActiveAds items={requests} loading={loading} refresh={() => void load()} />{relationshipsError && <p className="friendly-error">{relationshipsError}</p>}</>}
+        {tab === 'requests' && <><CreatorRequests items={requests} refresh={() => void load()} />{relationshipsError && <p className="friendly-error">{relationshipsError}</p>}</>}
+        {tab === 'sales' && <><CreatorConfirmedSales />{earningsError && <p className="friendly-error">{earningsError}</p>}</>}
         {tab === 'payout' && (
           <section className="creator-section">
             <h2>Payout</h2>
@@ -316,6 +340,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                 <strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong>
               </article>
             </div>
+            {earningsError && <p className="friendly-error">{earningsError}</p>}
           </section>
         )}
         {tab === 'profile' && (
