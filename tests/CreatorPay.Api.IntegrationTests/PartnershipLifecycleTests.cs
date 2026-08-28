@@ -289,6 +289,100 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Creator_can_submit_exact_tiktok_promotion_video_and_customer_only_sees_it_after_business_approval()
+    {
+        var creator = await AddCreator("Promo Video Creator");
+        using var creatorClient = Client(creator.UserId, creator.CreatorId);
+        using var merchant = Client(MerchantUserId, null, MerchantId);
+        using var customer = CustomerClient(Guid.Parse("10000000-0000-0000-0000-000000000002"), Guid.Parse("10000000-0000-0000-0000-000000000001"));
+        const string videoUrl = "https://www.tiktok.com/@weymela/video/1234567890123456789?lang=en";
+
+        var requested = await Post(creatorClient, "/api/v1/creator/partnerships/requests", new { merchantId = MerchantId, introductoryMessage = "Promo submission" });
+        Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
+        var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+
+        var submitted = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl });
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        var pending = await submitted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("Pending", pending.GetProperty("status").GetString());
+        Assert.Equal(videoUrl, pending.GetProperty("videoUrl").GetString());
+
+        var duplicate = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl });
+        Assert.Equal(HttpStatusCode.OK, duplicate.StatusCode);
+        var duplicateBody = await duplicate.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(pending.GetProperty("id").GetGuid(), duplicateBody.GetProperty("id").GetGuid());
+        Assert.Equal("Pending", duplicateBody.GetProperty("status").GetString());
+
+        var hidden = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
+        Assert.Equal(HttpStatusCode.OK, hidden.StatusCode);
+        var hiddenRows = await hidden.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(hiddenRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{pending.GetProperty("id").GetGuid()}/approve", new { reason = (string?)null })).StatusCode);
+        var live = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
+        Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+        var liveRows = await live.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var row = Assert.Single(liveRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+        Assert.Equal(videoUrl, row.GetProperty("promotionVideoUrl").GetString());
+        Assert.Equal("Live", row.GetProperty("promotionVideoStatus").GetString());
+        Assert.Equal("TikTok", row.GetProperty("promotionVideoPlatform").GetString());
+    }
+
+    [DockerFact]
+    public async Task Invalid_profile_only_tiktok_url_is_rejected_and_wrong_business_cannot_review_promotion_videos()
+    {
+        var creator = await AddCreator("Invalid Promo Creator");
+        using var creatorClient = Client(creator.UserId, creator.CreatorId);
+        using var merchant = Client(MerchantUserId, null, MerchantId);
+        var wrongMerchant = await AddMerchant("Wrong Promo Reviewer");
+        using var wrongMerchantClient = Client(wrongMerchant.UserId, null, wrongMerchant.MerchantId);
+
+        var requested = await Post(creatorClient, "/api/v1/creator/partnerships/requests", new { merchantId = MerchantId, introductoryMessage = "Promo validation" });
+        Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
+        var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+
+        var invalid = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl = "https://www.tiktok.com/@weymela" });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        Assert.Contains("video link", await invalid.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+
+        var submitted = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl = "https://www.tiktok.com/@weymela/video/9876543210987654321" });
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        var videoId = (await submitted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(wrongMerchantClient, $"/api/v1/merchant/promotion-videos/{videoId}/approve", new { reason = (string?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(creatorClient, $"/api/v1/merchant/promotion-videos/{videoId}/approve", new { reason = (string?)null })).StatusCode);
+    }
+
+    [DockerFact]
+    public async Task Expired_relationship_hides_customer_promotion_video_but_keeps_history()
+    {
+        var creator = await AddCreator("Expired Promo Creator");
+        using var creatorClient = Client(creator.UserId, creator.CreatorId);
+        using var merchant = Client(MerchantUserId, null, MerchantId);
+        using var customer = CustomerClient(Guid.Parse("10000000-0000-0000-0000-000000000002"), Guid.Parse("10000000-0000-0000-0000-000000000001"));
+
+        var requested = await Post(creatorClient, "/api/v1/creator/partnerships/requests", new { merchantId = MerchantId, introductoryMessage = "Expired promo" });
+        var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl = "https://www.tiktok.com/@weymela/video/1111111111111111111" })).StatusCode);
+        await using (var db = Db())
+        {
+            var row = await db.MerchantCreatorPartnerships.SingleAsync(x => x.Id == partnershipId);
+            db.Entry(row).Property(nameof(MerchantCreatorPartnership.EndDateUtc)).CurrentValue = DateTime.UtcNow.AddSeconds(-1);
+            await db.SaveChangesAsync();
+        }
+
+        var discovery = await Get(customer, "/api/v1/customer/discovery/advertising?q=Expired");
+        Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
+        var rows = await discovery.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(rows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+        await using var verify = Db();
+        Assert.True(await verify.PromotionVideos.AnyAsync(x => x.MerchantCreatorPartnershipId == partnershipId));
+    }
+
+    [DockerFact]
     public async Task Deactivated_approved_relationship_reactivates_without_a_new_request_or_location_and_notifies_once()
     {
         var creator = await AddCreator("Reactivate Regression Creator");
@@ -333,6 +427,44 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         db.Creators.Add(new Creator { Id = creatorId, PublicCreatorId = $"CR-TEST-{n:N0}", CreatorCode = (4000 + n).ToString(), DisplayName = name, PhoneNumber = phone, NormalizedPhoneNumber = phone, City = "Addis Ababa", Status = CreatorStatus.Active, CreatedAtUtc = DateTime.UtcNow });
         db.UserAccounts.Add(new UserAccount { Id = userId, PhoneNumber = phone, NormalizedPhoneNumber = phone, Role = UserRole.Creator, Status = AccountStatus.Active, CreatorId = creatorId, IsPhoneVerified = true, CreatedAtUtc = DateTime.UtcNow });
         await db.SaveChangesAsync(); return (creatorId, userId);
+    }
+
+    private async Task<(Guid MerchantId, Guid UserId)> AddMerchant(string name)
+    {
+        var n = Interlocked.Increment(ref sequence); var merchantId = Guid.NewGuid(); var userId = Guid.NewGuid(); var phone = $"+251977{n:000000}";
+        await using var db = Db();
+        db.Merchants.Add(new Merchant
+        {
+            Id = merchantId,
+            PublicMerchantId = $"BM-TEST-{n:N0}",
+            LegalBusinessName = name,
+            TradingName = name,
+            BusinessType = "Other",
+            PrimaryContactName = name,
+            PhoneNumber = phone,
+            NormalizedPhoneNumber = phone,
+            PreferredLanguage = "en",
+            TermsAcceptedAtUtc = DateTime.UtcNow,
+            BusinessAddress = "Addis Ababa",
+            City = "Addis Ababa",
+            Region = "Addis Ababa",
+            Country = "Ethiopia",
+            TimeZone = "Africa/Addis_Ababa",
+            Status = MerchantStatus.Active
+        });
+        db.UserAccounts.Add(new UserAccount
+        {
+            Id = userId,
+            PhoneNumber = phone,
+            NormalizedPhoneNumber = phone,
+            Role = UserRole.MerchantAdmin,
+            Status = AccountStatus.Active,
+            MerchantId = merchantId,
+            IsPhoneVerified = true,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        return (merchantId, userId);
     }
 
     private ApplicationDbContext Db() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(database.GetConnectionString()).Options);

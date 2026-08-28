@@ -17,7 +17,20 @@ namespace CreatorPay.Infrastructure.Discovery;
 public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutOptions> checkoutOptions, IQrTokenService qrTokens, CreatorQrUrlBuilder qrUrls, ICreatorProfilePhotoStore profilePhotos) : IDiscoveryService
 {
     private readonly string currencyCode = checkoutOptions.Value.CurrencyCode;
-    public async Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, CancellationToken ct)
+    private static readonly IReadOnlyDictionary<string, (double Latitude, double Longitude)> LocationHints = new Dictionary<string, (double, double)>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Piazza"] = (9.0350, 38.7570),
+        ["Piassa"] = (9.0350, 38.7570),
+        ["Gotera"] = (8.9950, 38.7900),
+        ["Bole"] = (8.9990, 38.7890),
+        ["Kazanchis"] = (9.0105, 38.7690),
+        ["Megenagna"] = (9.0380, 38.8070),
+        ["Mexico"] = (8.9865, 38.7410),
+        ["Arat Kilo"] = (9.0358, 38.7505),
+        ["Addis Ababa"] = (9.0300, 38.7400),
+    };
+
+    public async Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, double? latitude, double? longitude, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         var promotedMerchantIds = EligibleCampaigns(now).Select(x => x.MerchantId).Distinct();
@@ -28,9 +41,15 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         if (!string.IsNullOrWhiteSpace(term)) merchants = merchants.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.LegalBusinessName, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%"));
         var selectedCategory = category?.Trim();
         if (!string.IsNullOrWhiteSpace(selectedCategory)) merchants = merchants.Where(x => x.Category != null && EF.Functions.ILike(x.Category, selectedCategory));
-        var rows = await merchants.OrderBy(x => x.TradingName).Take(50).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City }).ToListAsync(ct);
+        var rows = await merchants.OrderBy(x => x.TradingName).Take(50).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, x.BusinessAddress, x.Region }).ToListAsync(ct);
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.Id), currencyCode, ct);
-        return rows.Where(x => eligibleMerchantIds.Contains(x.Id)).Select(x => new ShopperBusinessDto(x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, true)).ToArray();
+        var lookup = rows.ToDictionary(x => x.Id);
+        var ordered = rows.Where(x => eligibleMerchantIds.Contains(x.Id))
+            .Select(x => new ShopperBusinessDto(x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, true))
+            .ToArray();
+        return latitude.HasValue && longitude.HasValue
+            ? ordered.OrderBy(x => DistanceForMerchant(lookup[x.BusinessId].TradingName, lookup[x.BusinessId].BusinessAddress, lookup[x.BusinessId].City, lookup[x.BusinessId].Region, latitude, longitude)).ToArray()
+            : ordered;
     }
 
     public async Task<ShopperBusinessDetailDto> GetShopperBusinessAsync(Guid merchantId, CancellationToken ct)
@@ -65,20 +84,58 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         return await RewardEligibilityQueries.FundedMerchantIdsAsync(db, ids, currencyCode, ct);
     }
 
-    public async Task<IReadOnlyList<ShopperAdvertisingRowDto>> SearchShopperAdvertisingAsync(string? query, CancellationToken ct)
+    public async Task<IReadOnlyList<ShopperAdvertisingRowDto>> SearchShopperAdvertisingAsync(string? query, string? businessType, double? latitude, double? longitude, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         var relationships = from campaign in EligibleCampaigns(now)
                             join relationship in db.MerchantCreatorPartnerships.AsNoTracking() on campaign.MerchantCreatorPartnershipId equals relationship.Id
                             join merchant in db.Merchants.AsNoTracking() on relationship.MerchantId equals merchant.Id
                             join creator in db.Creators.AsNoTracking() on relationship.CreatorId equals creator.Id
-                            select new { RelationshipId = relationship.Id, MerchantId = merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.City, CreatorId = creator.Id, creator.PublicCreatorId, creator.CreatorCode, creator.DisplayName, creator.ProfileImageFileName, relationship.EndDateUtc, campaign.ExpiresAtUtc };
+                            select new { RelationshipId = relationship.Id, MerchantId = merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.BusinessAddress, merchant.City, merchant.Region, merchant.BusinessType, CreatorId = creator.Id, creator.PublicCreatorId, creator.CreatorCode, creator.DisplayName, creator.ProfileImageFileName, relationship.EndDateUtc, campaign.ExpiresAtUtc };
         var term = query?.Trim();
-        if (!string.IsNullOrWhiteSpace(term)) relationships = relationships.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.DisplayName, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{term}%"));
+        if (!string.IsNullOrWhiteSpace(term)) relationships = relationships.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.BusinessAddress, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.DisplayName, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{term}%"));
+        var selectedType = businessType?.Trim();
+        if (!string.IsNullOrWhiteSpace(selectedType)) relationships = relationships.Where(x => x.BusinessType == selectedType);
         var campaignRows = await relationships.OrderBy(x => x.TradingName).ThenBy(x => x.DisplayName).Take(200).ToListAsync(ct);
         var rows = campaignRows.GroupBy(x => x.RelationshipId).Select(x => x.OrderByDescending(y => y.ExpiresAtUtc).First()).Take(100).ToList();
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.MerchantId).Distinct(), currencyCode, ct);
-        return rows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x => new ShopperAdvertisingRowDto(x.RelationshipId, x.MerchantId, x.PublicMerchantId, x.TradingName, x.City, x.CreatorId, x.PublicCreatorId, x.CreatorCode, x.DisplayName, "Active", Math.Max(1, (int)Math.Ceiling((new[] { x.EndDateUtc, x.ExpiresAtUtc }.Where(v => v.HasValue).Min()!.Value - now).TotalDays)), true, PhotoUrl(x.PublicCreatorId, x.ProfileImageFileName))).ToArray();
+        var relationshipIds = rows.Select(x => x.RelationshipId).Distinct().ToArray();
+        var promoVideos = await db.PromotionVideos.AsNoTracking()
+            .Where(x => relationshipIds.Contains(x.MerchantCreatorPartnershipId))
+            .OrderByDescending(x => x.SubmittedAtUtc)
+            .ToListAsync(ct);
+        return rows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x =>
+        {
+            var relationshipEnd = x.EndDateUtc ?? x.ExpiresAtUtc;
+            var video = CurrentVideo(promoVideos, x.RelationshipId, relationshipEnd, now);
+            if (video is null || video.Status != "Live") return null;
+            var distance = DistanceForMerchant(x.TradingName, x.BusinessAddress, x.City, x.Region, latitude, longitude);
+            return new ShopperAdvertisingRowDto(
+                x.RelationshipId,
+                x.MerchantId,
+                x.PublicMerchantId,
+                x.TradingName,
+                x.City,
+                x.CreatorId,
+                x.PublicCreatorId,
+                x.CreatorCode,
+                x.DisplayName,
+                "Active",
+                Math.Max(1, (int)Math.Ceiling((new[] { x.EndDateUtc, x.ExpiresAtUtc }.Where(v => v.HasValue).Min()!.Value - now).TotalDays)),
+                true,
+                PhotoUrl(x.PublicCreatorId, x.ProfileImageFileName),
+                x.BusinessType,
+                x.BusinessAddress,
+                null,
+                x.Region,
+                video is { Status: "Live" } ? video.VideoUrl : null,
+                video?.Platform,
+                video?.Status,
+                video?.RejectionReason,
+                video?.SubmittedAtUtc,
+                video?.ReviewedAtUtc,
+                distance);
+        }).Where(x => x is not null).Select(x => x!).OrderBy(x => latitude.HasValue && longitude.HasValue ? x.DistanceKm ?? double.MaxValue : 0).ThenBy(x => x.BusinessName).ThenBy(x => x.CreatorName).ToArray();
     }
 
     public async Task<ShopperCreatorQrDto> GetShopperCreatorQrAsync(Guid relationshipId, CancellationToken ct)
@@ -174,6 +231,60 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         where campaign.CreatorId == partnership.CreatorId && campaign.MerchantId == partnership.MerchantId
             && campaign.Status == CampaignStatus.Active && campaign.StartsAtUtc <= now && campaign.ExpiresAtUtc > now
         select campaign;
+
+    private static PromotionVideoSummaryDto? CurrentVideo(IEnumerable<PromotionVideo> videos, Guid relationshipId, DateTime? relationshipEndUtc, DateTime now)
+    {
+        var current = videos.Where(x => x.MerchantCreatorPartnershipId == relationshipId)
+            .OrderByDescending(x => x.Status == PromotionVideoStatus.Pending)
+            .ThenByDescending(x => x.Status == PromotionVideoStatus.Approved)
+            .ThenByDescending(x => x.SubmittedAtUtc)
+            .FirstOrDefault();
+        if (current is null) return null;
+        var live = current.Status == PromotionVideoStatus.Approved && (!relationshipEndUtc.HasValue || relationshipEndUtc > now);
+        var status = current.Status switch
+        {
+            PromotionVideoStatus.Pending => "Pending",
+            PromotionVideoStatus.Rejected => "Rejected",
+            PromotionVideoStatus.Expired => "Expired",
+            PromotionVideoStatus.Approved when live => "Live",
+            PromotionVideoStatus.Approved => "Expired",
+            _ => "Pending"
+        };
+        return new(current.Id, current.VideoUrl, current.Platform, status, current.SubmittedAtUtc, current.ReviewedAtUtc, current.RejectionReason);
+    }
+
+    private static double? DistanceForMerchant(string tradingName, string? businessAddress, string city, string? region, double? latitude, double? longitude)
+    {
+        if (!latitude.HasValue || !longitude.HasValue) return null;
+        var combined = $"{tradingName} {businessAddress} {city} {region}".Trim();
+        if (!TryResolveCoordinates(combined, out var lat, out var lon)) return null;
+        return Haversine(latitude.Value, longitude.Value, lat, lon);
+    }
+
+    private static bool TryResolveCoordinates(string value, out double latitude, out double longitude)
+    {
+        foreach (var hint in LocationHints)
+        {
+            if (value.Contains(hint.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                latitude = hint.Value.Latitude;
+                longitude = hint.Value.Longitude;
+                return true;
+            }
+        }
+        latitude = longitude = default;
+        return false;
+    }
+
+    private static double Haversine(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double R = 6371d;
+        static double ToRad(double value) => value * Math.PI / 180d;
+        var dLat = ToRad(lat2 - lat1);
+        var dLon = ToRad(lon2 - lon1);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) + Math.Cos(ToRad(lat1)) * Math.Cos(ToRad(lat2)) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        return 2 * R * Math.Asin(Math.Min(1, Math.Sqrt(a)));
+    }
 
     private static PublicOfferDto MapOffer(OfferRow x) => new(x.CampaignCode,
         string.IsNullOrWhiteSpace(x.Conditions) ? $"{x.MerchantName} Offer" : x.Conditions.Split('\n', 2)[0],

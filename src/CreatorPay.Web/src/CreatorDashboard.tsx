@@ -300,7 +300,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
           </>
         )}
         {tab === 'find' && <FindBusinesses onRequested={() => void load()} />}
-        {tab === 'ads' && <ActiveAds items={requests} loading={loading} />}
+        {tab === 'ads' && <ActiveAds items={requests} loading={loading} refresh={() => void load()} />}
         {tab === 'requests' && <CreatorRequests items={requests} refresh={() => void load()} />}
         {tab === 'sales' && <CreatorConfirmedSales />}
         {tab === 'payout' && (

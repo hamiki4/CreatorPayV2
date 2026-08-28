@@ -36,6 +36,15 @@ export type BusinessRelationship = {
   creatorCity?: string;
   creatorProfileImageUrl?: string;
   creatorPhoneNumber?: string;
+  promotionVideo?: {
+    id: string;
+    videoUrl: string;
+    platform: string;
+    status: string;
+    submittedAtUtc: string;
+    reviewedAtUtc?: string;
+    rejectionReason?: string;
+  };
 };
 const socialPlatforms = new Map([
   ["tiktok", "TikTok"],
@@ -349,6 +358,7 @@ export function AdvertisingRequests({
   const requests = currentPartnerships(items, (x) => x.creatorId).filter(
     (x) => !["Approved", "Suspended", "Revoked"].includes(x.status),
   );
+  const promoApprovals = items.filter((x) => x.promotionVideo?.status === "Pending");
   async function decide(x: BusinessRelationship, accept: boolean) {
     try {
       await api(
@@ -371,6 +381,23 @@ export function AdvertisingRequests({
       setMessage((error as Error).message);
     }
   }
+  async function reviewVideo(x: BusinessRelationship, accept: boolean) {
+    if (!x.promotionVideo) return;
+    try {
+      await api(
+        `/api/v1/merchant/promotion-videos/${x.promotionVideo.id}/${accept ? "approve" : "reject"}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason: accept ? null : prompt("Rejection reason (optional):")?.trim() || null }),
+        },
+      );
+      setMessage(accept ? `Promotion video for ${x.creatorName} approved.` : `Promotion video for ${x.creatorName} rejected.`);
+      refresh();
+    } catch (error) {
+      console.error(error);
+      setMessage((error as Error).message);
+    }
+  }
   return (
     <section className="creator-section">
       <h2>Requests</h2>
@@ -383,7 +410,7 @@ export function AdvertisingRequests({
           {message}
         </p>
       )}
-      {requests.length === 0 ? (
+      {requests.length === 0 && promoApprovals.length === 0 ? (
         <p className="compact-empty">No pending requests or invitations.</p>
       ) : (
         <div className="request-groups">
@@ -424,6 +451,41 @@ export function AdvertisingRequests({
                   )}
                 </article>
               ))}
+          </div>
+          <div>
+            <h3>Promo Video Approvals</h3>
+            {promoApprovals.length === 0 ? (
+              <p className="compact-empty">No promo videos waiting for approval.</p>
+            ) : (
+              promoApprovals.map((x) => (
+                <article key={x.id}>
+                  <div className="creator-card">
+                    <CreatorIdentity
+                      name={x.creatorName}
+                      photoUrl={x.creatorProfileImageUrl}
+                      phoneNumber={x.creatorPhoneNumber}
+                      city={x.creatorCity}
+                    />
+                    <small>{new Date(x.promotionVideo?.submittedAtUtc ?? x.requestedAtUtc).toLocaleDateString()}</small>
+                  </div>
+                  <span>{x.promotionVideo?.platform ?? "TikTok"} Video</span>
+                  <a
+                    href={x.promotionVideo?.videoUrl ?? "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="quiet"
+                  >
+                    View Video
+                  </a>
+                  <div>
+                    <button onClick={() => void reviewVideo(x, true)}>Approve</button>
+                    <button className="danger" onClick={() => void reviewVideo(x, false)}>
+                      Reject
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
           </div>
           <div>
             <h3>Outgoing Invitations</h3>

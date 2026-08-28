@@ -8,3 +8,11 @@
 .admin-business-type-editor strong{font-size:1.05rem}
 .admin-business-type-editor .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem;margin-top:0}
 .admin-business-type-editor select{width:100%}
+.search-actions{display:flex;gap:.5rem;align-items:end;flex-wrap:wrap}
+.search-actions button{min-width:0}
+.promo-video-status{display:grid;gap:.35rem}
+.promo-video-status a,.promo-video-status button{width:fit-content}
+.promo-video-link{display:inline-flex;align-items:center;gap:.25rem;color:#153c27;font-weight:700;text-decoration:none}
+.request-groups{display:grid;gap:1rem}
+.request-groups>div{display:grid;gap:.65rem}
+.customer-discovery-list .promo-video-link{font-size:.94rem}

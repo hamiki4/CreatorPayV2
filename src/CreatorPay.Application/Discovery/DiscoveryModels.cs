@@ -12,10 +12,11 @@ public sealed record PublicCreatorCardDto(string PublicCreatorId, string Display
 public sealed record PublicCreatorProfileDto(string PublicCreatorId, string DisplayName, string? ProfileImageUrl, IReadOnlyList<PublicSocialLinkDto> SocialLinks, IReadOnlyList<PublicOfferDto> ActiveOffers);
 public sealed record CreatorPhotoFile(Stream Content, string ContentType);
 public sealed record PublicCreatorSearchDto(IReadOnlyList<PublicCreatorCardDto> Items, int Page, int PageSize, int TotalCount);
+public sealed record PromotionVideoSummaryDto(Guid Id, string VideoUrl, string Platform, string Status, DateTime SubmittedAtUtc, DateTime? ReviewedAtUtc, string? RejectionReason);
 public sealed record ShopperBusinessDto(Guid BusinessId, string PublicBusinessId, string BusinessName, string? Category, string City, bool RewardsAvailable);
-public sealed record ShopperAdvertisingCreatorDto(Guid CreatorId, string PublicCreatorId, string DisplayName, string? SocialPlatform, long? FollowerCount, int DaysLeft, Guid CampaignId, string? CreatorProfileImageUrl = null);
+public sealed record ShopperAdvertisingCreatorDto(Guid CreatorId, string PublicCreatorId, string DisplayName, string? SocialPlatform, long? FollowerCount, int DaysLeft, Guid CampaignId, string? CreatorProfileImageUrl = null, PromotionVideoSummaryDto? PromotionVideo = null);
 public sealed record ShopperBusinessDetailDto(Guid BusinessId, string PublicBusinessId, string BusinessName, string? Category, string City, bool RewardsAvailable, IReadOnlyList<ShopperAdvertisingCreatorDto> Creators);
-public sealed record ShopperAdvertisingRowDto(Guid RelationshipId, Guid BusinessId, string PublicBusinessId, string BusinessName, string City, Guid CreatorId, string PublicCreatorId, string CreatorCode, string CreatorName, string Status, int DaysLeft, bool RewardsAvailable, string? CreatorProfileImageUrl = null);
+public sealed record ShopperAdvertisingRowDto(Guid RelationshipId, Guid BusinessId, string PublicBusinessId, string BusinessName, string City, Guid CreatorId, string PublicCreatorId, string CreatorCode, string CreatorName, string Status, int DaysLeft, bool RewardsAvailable, string? CreatorProfileImageUrl = null, string? BusinessType = null, string? AddressLine1 = null, string? AddressLine2 = null, string? Region = null, string? PromotionVideoUrl = null, string? PromotionVideoPlatform = null, string? PromotionVideoStatus = null, string? PromotionVideoRejectionReason = null, DateTime? PromotionVideoSubmittedAtUtc = null, DateTime? PromotionVideoReviewedAtUtc = null, double? DistanceKm = null);
 public sealed record ShopperCreatorQrDto(Guid RelationshipId, string BusinessName, string CreatorName, string Payload);
 
 public interface IDiscoveryService
@@ -33,8 +34,8 @@ public interface IDiscoveryService
     Task<CreatorPhotoFile> GetCreatorPhotoAsync(string publicCreatorId, CancellationToken ct);
     Task<PublicOfferDto> GetOfferAsync(string offerCode, CancellationToken ct);
     Task<PublicOfferDto> ResolveOfferQrAsync(string publicQrId, CancellationToken ct);
-    Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, CancellationToken ct);
+    Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, double? latitude, double? longitude, CancellationToken ct);
     Task<ShopperBusinessDetailDto> GetShopperBusinessAsync(Guid merchantId, CancellationToken ct);
-    Task<IReadOnlyList<ShopperAdvertisingRowDto>> SearchShopperAdvertisingAsync(string? query, CancellationToken ct);
+    Task<IReadOnlyList<ShopperAdvertisingRowDto>> SearchShopperAdvertisingAsync(string? query, string? businessType, double? latitude, double? longitude, CancellationToken ct);
     Task<ShopperCreatorQrDto> GetShopperCreatorQrAsync(Guid relationshipId, CancellationToken ct);
 }

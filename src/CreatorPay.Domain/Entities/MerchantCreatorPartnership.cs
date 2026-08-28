@@ -28,6 +28,7 @@ public sealed class MerchantCreatorPartnership : Entity
     public Creator Creator { get; set; } = null!;
     public ICollection<PartnershipLocation> Locations { get; } = [];
     public ICollection<PartnershipStatusHistory> StatusHistory { get; } = [];
+    public ICollection<PromotionVideo> PromotionVideos { get; } = [];
 
     public void Approve(DateTime approvedAtUtc, Guid approvedByUserId, DateTime? startDateUtc = null, DateTime? endDateUtc = null)
     {

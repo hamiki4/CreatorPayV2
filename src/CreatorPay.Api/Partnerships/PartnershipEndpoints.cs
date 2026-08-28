@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Campaigns;
 using CreatorPay.Application.Commission;
+using CreatorPay.Application.Discovery;
 using CreatorPay.Application.Merchants;
 using CreatorPay.Application.Notifications;
 using CreatorPay.Domain.Entities;
@@ -19,7 +20,9 @@ public sealed record MerchantInviteCreatorRequest(Guid CreatorId, string? Introd
 public sealed record PartnershipReasonRequest(string? Reason);
 public sealed record PartnershipDatesRequest(DateTime? StartDateUtc, DateTime? EndDateUtc);
 public sealed record PartnershipLocationsRequest(Guid[] LocationIds);
-public sealed record PartnershipListItem(Guid Id, Guid MerchantId, string MerchantName, Guid CreatorId, string CreatorName, PartnershipStatus Status, DateTime RequestedAtUtc, DateTime? StartDateUtc, DateTime? EndDateUtc, string? IntroductoryMessage, IReadOnlyList<LocationItem> Locations, string InitiatedBy = "Unknown", DateTime? ActivatedAtUtc = null, DateTime? ExpiresAtUtc = null, bool PromotionActive = false, string RelationshipState = "Pending", bool ActivationRequired = false, string? CreatorSocialPlatform = null, string? CreatorSocialProfileUrl = null, string? CreatorCity = null, long? CreatorFollowerCount = null, string? CreatorProfileImageUrl = null, string? CreatorPhoneNumber = null);
+public sealed record SubmitPromotionVideoRequest(string VideoUrl);
+public sealed record PromotionVideoActionRequest(string? Reason);
+public sealed record PartnershipListItem(Guid Id, Guid MerchantId, string MerchantName, Guid CreatorId, string CreatorName, PartnershipStatus Status, DateTime RequestedAtUtc, DateTime? StartDateUtc, DateTime? EndDateUtc, string? IntroductoryMessage, IReadOnlyList<LocationItem> Locations, string InitiatedBy = "Unknown", DateTime? ActivatedAtUtc = null, DateTime? ExpiresAtUtc = null, bool PromotionActive = false, string RelationshipState = "Pending", bool ActivationRequired = false, string? CreatorSocialPlatform = null, string? CreatorSocialProfileUrl = null, string? CreatorCity = null, long? CreatorFollowerCount = null, string? CreatorProfileImageUrl = null, string? CreatorPhoneNumber = null, PromotionVideoSummaryDto? PromotionVideo = null);
 public sealed record LocationItem(Guid Id, string Name, bool IsActive);
 
 public static class PartnershipEndpoints
@@ -35,10 +38,13 @@ public static class PartnershipEndpoints
         creator.MapPost("/partnerships/{id:guid}/stop-promoting", (Guid id, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct) => CreatorRevoke(id, u, db, h, ct, "CreatorStoppedPromoting"));
         creator.MapPost("/partnerships/{id:guid}/accept-invitation", (Guid id, ICurrentUserService u, ApplicationDbContext db, ICommissionEngine commissions, IOptions<CampaignOptions> campaignOptions, INotificationService notifications, HttpContext h, CancellationToken ct) => CreatorInvitationDecision(id, true, u, db, commissions, campaignOptions, notifications, h, ct));
         creator.MapPost("/partnerships/{id:guid}/decline-invitation", (Guid id, ICurrentUserService u, ApplicationDbContext db, ICommissionEngine commissions, IOptions<CampaignOptions> campaignOptions, INotificationService notifications, HttpContext h, CancellationToken ct) => CreatorInvitationDecision(id, false, u, db, commissions, campaignOptions, notifications, h, ct));
+        creator.MapPost("/partnerships/{id:guid}/promotion-video", (Guid id, SubmitPromotionVideoRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, IOptions<CampaignOptions> campaignOptions, HttpContext h, CancellationToken ct) => SubmitPromotionVideo(id, request, u, db, notifications, campaignOptions, h, ct));
+        creator.MapGet("/promotion-videos", (ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => CreatorPromotionVideos(u, db, ct));
 
         var merchant = endpoints.MapGroup("/api/v1/merchant").WithTags("Merchant partnerships").RequireAuthorization("MerchantAdminOnly");
         merchant.MapGet("/creators/search", SearchCreators);
         merchant.MapGet("/partnerships", (string? status, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct) => MerchantPartnerships(status, u, db, campaignOptions, ct));
+        merchant.MapGet("/promotion-videos", (string? status, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => MerchantPromotionVideos(status, u, db, ct));
         merchant.MapGet("/dashboard-metrics", MerchantDashboardMetrics);
         merchant.MapGet("/partnerships/{id:guid}", MerchantPartnership);
         merchant.MapPost("/partnerships", MerchantAdd);
@@ -53,6 +59,8 @@ public static class PartnershipEndpoints
         merchant.MapPost("/partnerships/{id:guid}/block", (Guid id, PartnershipReasonRequest r, ICurrentUserService u, ApplicationDbContext db, ICommissionEngine commissions, IOptions<CampaignOptions> campaignOptions, INotificationService notifications, HttpContext h, CancellationToken ct) => Transition(id, PartnershipStatus.Blocked, r.Reason, u, db, commissions, campaignOptions, notifications, h, ct));
         merchant.MapPut("/partnerships/{id:guid}/locations", SetLocations);
         merchant.MapPut("/partnerships/{id:guid}/dates", SetDates);
+        merchant.MapPost("/promotion-videos/{id:guid}/approve", (Guid id, PromotionVideoActionRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, HttpContext h, CancellationToken ct) => ReviewPromotionVideo(id, true, request, u, db, notifications, h, ct));
+        merchant.MapPost("/promotion-videos/{id:guid}/reject", (Guid id, PromotionVideoActionRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, HttpContext h, CancellationToken ct) => ReviewPromotionVideo(id, false, request, u, db, notifications, h, ct));
 
         var admin = endpoints.MapGroup("/api/v1/admin/partnerships").WithTags("Partnership support").RequireAuthorization("AdminOperationsOnly");
         admin.MapGet("/", async (ApplicationDbContext db, CancellationToken ct) => Results.Ok((await Query(db).ToListAsync(ct)).Select(Item)));
@@ -225,6 +233,125 @@ public static class PartnershipEndpoints
         return Results.Ok(Item(p) with { PromotionActive = true, RelationshipState = "Active", ActivationRequired = false });
     }
 
+    private static async Task<IResult> CreatorPromotionVideos(ICurrentUserService u, ApplicationDbContext db, CancellationToken ct)
+    {
+        var creatorId = u.CreatorId!.Value;
+        var partnerships = await db.MerchantCreatorPartnerships.AsNoTracking()
+            .Include(x => x.Merchant)
+            .Include(x => x.Creator).ThenInclude(x => x.SocialProfiles)
+            .Include(x => x.Locations).ThenInclude(x => x.MerchantLocation)
+            .Where(x => x.CreatorId == creatorId)
+            .OrderByDescending(x => x.RequestedAtUtc)
+            .ToListAsync(ct);
+        var ids = partnerships.Select(x => x.Id).ToArray();
+        var videos = await db.PromotionVideos.AsNoTracking().Where(x => ids.Contains(x.MerchantCreatorPartnershipId)).OrderByDescending(x => x.SubmittedAtUtc).ToListAsync(ct);
+        var now = DateTime.UtcNow;
+        return Results.Ok(partnerships.Select(x => Item(x) with { PromotionVideo = CurrentPromotionVideo(videos, x.Id, x.EndDateUtc, now) }));
+    }
+
+    private static async Task<IResult> MerchantPromotionVideos(string? status, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct)
+    {
+        var merchantId = u.MerchantId!.Value;
+        var query = db.MerchantCreatorPartnerships.AsNoTracking()
+            .Include(x => x.Merchant)
+            .Include(x => x.Creator).ThenInclude(x => x.SocialProfiles)
+            .Include(x => x.Locations).ThenInclude(x => x.MerchantLocation)
+            .Where(x => x.MerchantId == merchantId);
+        if (Enum.TryParse<PartnershipStatus>(status, true, out var parsed)) query = query.Where(x => x.Status == parsed);
+        var partnerships = await query.OrderByDescending(x => x.RequestedAtUtc).ToListAsync(ct);
+        var ids = partnerships.Select(x => x.Id).ToArray();
+        var videos = await db.PromotionVideos.AsNoTracking().Where(x => ids.Contains(x.MerchantCreatorPartnershipId)).OrderByDescending(x => x.SubmittedAtUtc).ToListAsync(ct);
+        var now = DateTime.UtcNow;
+        return Results.Ok(partnerships.Select(x => Item(x) with { PromotionVideo = CurrentPromotionVideo(videos, x.Id, x.EndDateUtc, now) }));
+    }
+
+    private static async Task<IResult> SubmitPromotionVideo(Guid partnershipId, SubmitPromotionVideoRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, IOptions<CampaignOptions> campaignOptions, HttpContext h, CancellationToken ct)
+    {
+        if (u.CreatorId is null) return Problem(401, "Creator authentication is required.");
+        if (!TryValidateTikTokVideoUrl(request.VideoUrl, out var normalizedUrl, out var error)) return Problem(400, error);
+        var now = DateTime.UtcNow;
+        var partnership = await db.MerchantCreatorPartnerships.Include(x => x.Merchant).Include(x => x.Creator).FirstOrDefaultAsync(x => x.Id == partnershipId && x.CreatorId == u.CreatorId.Value, ct);
+        if (partnership is null) return NotFound();
+        if (partnership.Status != PartnershipStatus.Approved || !partnership.IsTransactionEligibleAt(now)) return Problem(409, "Only an active approved relationship can submit a promotion video.");
+        var currencyCode = campaignOptions.Value.CurrencyCode;
+        var eligibility = await BusinessAdvertisingEligibility.EvaluateAsync(db, partnership.MerchantId, currencyCode, ct);
+        if (!eligibility.Eligible) return Problem(409, $"Advertising is restricted until the available wallet balance reaches {eligibility.Minimum:0.00} {currencyCode}.");
+        var existing = await db.PromotionVideos.FirstOrDefaultAsync(x => x.MerchantCreatorPartnershipId == partnership.Id && x.Status == PromotionVideoStatus.Pending, ct);
+        if (existing is not null)
+        {
+            return Results.Ok(new { id = existing.Id, videoUrl = existing.VideoUrl, platform = existing.Platform, status = existing.Status.ToString(), submittedAtUtc = existing.SubmittedAtUtc, reviewedAtUtc = existing.ReviewedAtUtc, rejectionReason = existing.RejectionReason });
+        }
+        var video = new PromotionVideo
+        {
+            Id = Guid.NewGuid(),
+            MerchantCreatorPartnershipId = partnership.Id,
+            MerchantId = partnership.MerchantId,
+            CreatorId = partnership.CreatorId,
+            VideoUrl = normalizedUrl,
+            Platform = "TikTok",
+            SubmittedAtUtc = now,
+            CreatedAtUtc = now,
+            CreatedBy = u.UserAccountId?.ToString()
+        };
+        db.PromotionVideos.Add(video);
+        await db.SaveChangesAsync(ct);
+        await NotifyMerchant(notifications, db, partnership.MerchantId, NotificationType.PromotionVideoSubmitted, $"promotion-video:{video.Id}:submitted", "New promotion video waiting for approval.", $"{partnership.Creator.DisplayName} submitted a TikTok promotion video for approval.", "/?view=requests", h.TraceIdentifier, partnership.Id, ct);
+        return Results.Created($"/api/v1/creator/partnerships/{partnership.Id}/promotion-video", new { id = video.Id, videoUrl = video.VideoUrl, platform = video.Platform, status = video.Status.ToString(), submittedAtUtc = video.SubmittedAtUtc, reviewedAtUtc = video.ReviewedAtUtc, rejectionReason = video.RejectionReason });
+    }
+
+    private static async Task<IResult> ReviewPromotionVideo(Guid videoId, bool approve, PromotionVideoActionRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, HttpContext h, CancellationToken ct)
+    {
+        if (u.MerchantId is null) return Problem(401, "Merchant authentication is required.");
+        var video = await db.PromotionVideos.Include(x => x.MerchantCreatorPartnership).ThenInclude(x => x.Creator).Include(x => x.MerchantCreatorPartnership).ThenInclude(x => x.Merchant).FirstOrDefaultAsync(x => x.Id == videoId && x.MerchantId == u.MerchantId.Value, ct);
+        if (video is null) return NotFound();
+        if (video.Status != PromotionVideoStatus.Pending) return Problem(409, "Only a pending promotion video can be reviewed.");
+        var now = DateTime.UtcNow;
+        if (approve)
+        {
+            video.Approve(now, u.UserAccountId!.Value);
+            await db.SaveChangesAsync(ct);
+            await NotifyCreator(notifications, db, video.CreatorId, NotificationType.PromotionVideoApproved, $"promotion-video:{video.Id}:approved", "Promotion video approved", $"Your promotion video for {video.MerchantCreatorPartnership.Merchant.TradingName} is now live.", "/?view=ads", h.TraceIdentifier, video.MerchantCreatorPartnershipId, ct);
+            return Results.Ok(new { id = video.Id, videoUrl = video.VideoUrl, platform = video.Platform, status = video.Status.ToString(), submittedAtUtc = video.SubmittedAtUtc, reviewedAtUtc = video.ReviewedAtUtc, rejectionReason = video.RejectionReason });
+        }
+        video.Reject(now, u.UserAccountId!.Value, request.Reason);
+        await db.SaveChangesAsync(ct);
+        await NotifyCreator(notifications, db, video.CreatorId, NotificationType.PromotionVideoRejected, $"promotion-video:{video.Id}:rejected", "Promotion video rejected", $"Your promotion video for {video.MerchantCreatorPartnership.Merchant.TradingName} was not approved.", "/?view=ads", h.TraceIdentifier, video.MerchantCreatorPartnershipId, ct);
+        return Results.Ok(new { id = video.Id, videoUrl = video.VideoUrl, platform = video.Platform, status = video.Status.ToString(), submittedAtUtc = video.SubmittedAtUtc, reviewedAtUtc = video.ReviewedAtUtc, rejectionReason = video.RejectionReason });
+    }
+
+    private static PromotionVideoSummaryDto? CurrentPromotionVideo(IEnumerable<PromotionVideo> videos, Guid partnershipId, DateTime? relationshipEndUtc, DateTime now)
+    {
+        var current = videos.Where(x => x.MerchantCreatorPartnershipId == partnershipId)
+            .OrderByDescending(x => x.Status == PromotionVideoStatus.Pending)
+            .ThenByDescending(x => x.Status == PromotionVideoStatus.Approved)
+            .ThenByDescending(x => x.SubmittedAtUtc)
+            .FirstOrDefault();
+        if (current is null) return null;
+        var status = current.Status switch
+        {
+            PromotionVideoStatus.Pending => "Pending",
+            PromotionVideoStatus.Rejected => "Rejected",
+            PromotionVideoStatus.Expired => "Expired",
+            PromotionVideoStatus.Approved when relationshipEndUtc.HasValue && relationshipEndUtc.Value > now => "Live",
+            PromotionVideoStatus.Approved => "Expired",
+            _ => "Pending"
+        };
+        return new(current.Id, current.VideoUrl, current.Platform, status, current.SubmittedAtUtc, current.ReviewedAtUtc, current.RejectionReason);
+    }
+
+    private static bool TryValidateTikTokVideoUrl(string? value, out string normalizedUrl, out string error)
+    {
+        normalizedUrl = string.Empty;
+        error = "A valid TikTok video URL is required.";
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps) { error = "Only https TikTok video URLs are allowed."; return false; }
+        var host = uri.Host.ToLowerInvariant();
+        if (!(host == "tiktok.com" || host.EndsWith(".tiktok.com", StringComparison.OrdinalIgnoreCase))) { error = "Only TikTok video URLs are supported."; return false; }
+        if (!System.Text.RegularExpressions.Regex.IsMatch(uri.AbsolutePath, @"^/@[^/]+/video/\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) { error = "Paste the exact TikTok video link, not a profile page."; return false; }
+        normalizedUrl = uri.GetLeftPart(UriPartial.Path) + uri.Query;
+        return true;
+    }
+
     private static async Task<IResult> CreatorRevoke(Guid id, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct, string eventType)
     { var p = await db.MerchantCreatorPartnerships.Include(x => x.Merchant).Include(x => x.Creator).FirstOrDefaultAsync(x => x.Id == id && x.CreatorId == u.CreatorId, ct); if (p is null) return NotFound(); if (eventType == "PartnershipWithdrawn" && p.Status != PartnershipStatus.Pending) return Problem(409, "Only a pending request can be withdrawn."); if (eventType == "CreatorStoppedPromoting" && p.Status != PartnershipStatus.Approved) return Problem(409, "Only an approved partnership can be stopped."); var old = p.Status; var now = DateTime.UtcNow; p.Revoke(now, u.UserAccountId!.Value); Audit(db, p, u.UserAccountId.Value, old, PartnershipStatus.Revoked, eventType, null, h, now); await db.SaveChangesAsync(ct); return Results.Ok(Item(p)); }
 
@@ -273,7 +400,7 @@ public static class PartnershipEndpoints
 
     private static IQueryable<MerchantCreatorPartnership> Query(ApplicationDbContext db) => db.MerchantCreatorPartnerships.AsNoTracking().Include(x => x.Merchant).Include(x => x.Creator).ThenInclude(x => x.SocialProfiles).Include(x => x.Locations).ThenInclude(x => x.MerchantLocation).OrderByDescending(x => x.RequestedAtUtc);
     private static async Task<IReadOnlyList<PartnershipListItem>> ItemsWithInitiator(IQueryable<MerchantCreatorPartnership> query, ApplicationDbContext db, string currencyCode, CancellationToken ct)
-    { var items = await query.ToListAsync(ct); var requesterIds = items.Select(x => x.RequestedByUserId).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray(); var businessRequesters = await db.UserAccounts.AsNoTracking().Where(x => requesterIds.Contains(x.Id) && x.MerchantId != null).Select(x => x.Id).ToListAsync(ct); var now = DateTime.UtcNow; var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, items.Select(x => x.MerchantId), currencyCode, ct); var ids = items.Select(x => x.Id).ToArray(); var active = (await db.CreatorMerchantCampaigns.AsNoTracking().Where(x => ids.Contains(x.MerchantCreatorPartnershipId) && x.Status == CampaignStatus.Active && x.StartsAtUtc <= now && x.ExpiresAtUtc > now).Select(x => x.MerchantCreatorPartnershipId).Distinct().ToListAsync(ct)).ToHashSet(); return items.Select(x => { var promotionActive = active.Contains(x.Id) && x.IsTransactionEligibleAt(now) && eligibleMerchantIds.Contains(x.MerchantId); return Item(x) with { InitiatedBy = x.RequestedByUserId.HasValue && businessRequesters.Contains(x.RequestedByUserId.Value) ? "Business" : "Creator", PromotionActive = promotionActive, RelationshipState = promotionActive ? "Active" : State(x.Status), ActivationRequired = x.Status == PartnershipStatus.Approved && !promotionActive }; }).ToList(); }
+    { var items = await query.ToListAsync(ct); var requesterIds = items.Select(x => x.RequestedByUserId).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray(); var businessRequesters = await db.UserAccounts.AsNoTracking().Where(x => requesterIds.Contains(x.Id) && x.MerchantId != null).Select(x => x.Id).ToListAsync(ct); var now = DateTime.UtcNow; var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, items.Select(x => x.MerchantId), currencyCode, ct); var ids = items.Select(x => x.Id).ToArray(); var active = (await db.CreatorMerchantCampaigns.AsNoTracking().Where(x => ids.Contains(x.MerchantCreatorPartnershipId) && x.Status == CampaignStatus.Active && x.StartsAtUtc <= now && x.ExpiresAtUtc > now).Select(x => x.MerchantCreatorPartnershipId).Distinct().ToListAsync(ct)).ToHashSet(); var videos = await db.PromotionVideos.AsNoTracking().Where(x => ids.Contains(x.MerchantCreatorPartnershipId)).OrderByDescending(x => x.SubmittedAtUtc).ToListAsync(ct); return items.Select(x => { var promotionActive = active.Contains(x.Id) && x.IsTransactionEligibleAt(now) && eligibleMerchantIds.Contains(x.MerchantId); return Item(x) with { InitiatedBy = x.RequestedByUserId.HasValue && businessRequesters.Contains(x.RequestedByUserId.Value) ? "Business" : "Creator", PromotionActive = promotionActive, RelationshipState = promotionActive ? "Active" : State(x.Status), ActivationRequired = x.Status == PartnershipStatus.Approved && !promotionActive, PromotionVideo = CurrentPromotionVideo(videos, x.Id, x.EndDateUtc, now) }; }).ToList(); }
     private static string State(PartnershipStatus status) => status switch { PartnershipStatus.Pending => "Pending", PartnershipStatus.Rejected => "Declined", PartnershipStatus.Approved => "ActivationRequired", PartnershipStatus.Suspended => "Suspended", PartnershipStatus.Revoked => "Revoked", PartnershipStatus.Blocked => "Blocked", _ => "NoRelationship" };
     private static PartnershipListItem Item(MerchantCreatorPartnership p) => Item(p, p.Merchant, p.Creator);
     private static PartnershipListItem Item(MerchantCreatorPartnership p, Merchant m, Creator c)
