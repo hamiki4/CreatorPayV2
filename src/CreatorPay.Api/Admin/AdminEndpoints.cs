@@ -54,9 +54,9 @@ public static class AdminEndpoints
     private static async Task<IResult> PasswordResetRequests(ApplicationDbContext db, CancellationToken ct)
     {
         var items = await db.SupportRequests.AsNoTracking()
-            .Where(x => x.Subject == "Password Reset" && (x.Status == "Pending" || x.Status == "Approved"))
+            .Where(x => x.Subject == "Password Reset" && x.Status == "Pending")
             .OrderByDescending(x => x.CreatedAtUtc)
-            .Select(x => new { id = x.Id, name = x.Name, phone = x.Contact, role = x.UserType, requestedAtUtc = x.CreatedAtUtc, status = x.Status, canApprove = x.Status == "Pending", canDelete = x.Status != "Approved" })
+            .Select(x => new { id = x.Id, name = x.Name, phone = x.Contact, role = x.UserType, requestedAtUtc = x.CreatedAtUtc, status = x.Status, canApprove = true, canDelete = true })
             .ToListAsync(ct);
         return Results.Ok(items);
     }
@@ -123,7 +123,7 @@ public static class AdminEndpoints
             failedCheckouts = await db.CheckoutSessions.CountAsync(x => x.Status == CheckoutSessionStatus.Rejected || x.Status == CheckoutSessionStatus.Expired || x.Status == CheckoutSessionStatus.Cancelled, ct),
             failedNotifications = await db.NotificationOutboxMessages.CountAsync(x => x.Status == NotificationOutboxStatus.Failed || x.Status == NotificationOutboxStatus.DeadLettered, ct),
             suspiciousActivity = await db.FraudAlerts.CountAsync(x => x.Status == FraudAlertStatus.Open, ct),
-            openSupportRequests = await db.SupportRequests.CountAsync(x => x.Status == "Open" || x.Subject == "Password Reset" && x.Status == "Pending", ct),
+            openSupportRequests = await db.SupportRequests.CountAsync(x => x.Subject == "Password Reset" && x.Status == "Pending", ct),
             notificationDeadLetters = await db.NotificationDeadLetters.CountAsync(x => x.Status != NotificationDeadLetterStatus.Resolved, ct),
             walletsBelowThreshold = await db.MerchantWallets.CountAsync(x => x.Status == MerchantWalletStatus.LowBalance && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
             rejectedOfflineSyncItems = await db.OfflineSyncItemResults.CountAsync(x => x.ResultStatus == "Rejected", ct),
@@ -345,6 +345,7 @@ public static class AdminEndpoints
                 x.phone,
                 x.businessName,
                 x.publicBusinessId,
+                x.merchantId,
                 x.merchantBusinessType,
                 x.assignedLocation,
                 x.role,

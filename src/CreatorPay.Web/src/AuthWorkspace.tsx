@@ -194,7 +194,7 @@ export function AuthWorkspace() {
     addEventListener(NATIVE_BACK_EVENT,back)
     return()=>removeEventListener(NATIVE_BACK_EVENT,back)
   },[mode,forgot,forgotPin])
-  async function post(path: string, body: unknown) {
+  async function post(path: string, body: unknown, failureMessage = text.failed) {
     setBusy(true);
     setMessage("");
     try {
@@ -205,7 +205,7 @@ export function AuthWorkspace() {
         }),
         v = await r.json().catch(() => ({}));
       if (!r.ok) {
-        setMessage(r.status >= 500 ? text.failed : (v.detail ?? text.failed));
+        setMessage(r.status >= 500 ? failureMessage : (v.detail ?? failureMessage));
         return false;
       }
       return v as { message?: string; reference?:string; status?:string };
@@ -381,7 +381,7 @@ export function AuthWorkspace() {
                   const result = await post("/api/v1/auth/password-reset-requests", {
                     phoneNumber: contact.includes("@") ? null : contact,
                     email: contact.includes("@") ? contact : null,
-                  });
+                  }, "Unable to submit password reset request. Please try again.");
                   if (result) {
                     const status = normalizePasswordResetStatus(result.status);
                     setResetReference(result.reference ?? "");

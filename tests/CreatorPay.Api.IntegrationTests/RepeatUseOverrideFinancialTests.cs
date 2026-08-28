@@ -797,8 +797,17 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         using var client = factory!.CreateClient(); var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" }); Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
         await using (var setup = Db()) { _ = await setup.UserAccounts.SingleAsync(x => x.NormalizedPhoneNumber == "+251911000001"); }
         var oldLogin = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "0911000001", password = "E2e-test-password-1!" }); Assert.Equal(HttpStatusCode.OK, oldLogin.StatusCode); var oldRefresh = (await oldLogin.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refreshToken").GetString();
-        var mismatch = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = "0911000001" }); Assert.Equal(HttpStatusCode.OK, mismatch.StatusCode); Assert.Equal("Pending", (await mismatch.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
-        var submitted = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = "0911000001" }); Assert.Equal(HttpStatusCode.OK, submitted.StatusCode); var reference = (await submitted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("reference").GetString()!;
+        var mismatch = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = "0911000001" });
+        Assert.Equal(HttpStatusCode.OK, mismatch.StatusCode);
+        var mismatchBody = await mismatch.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Pending", mismatchBody!.GetProperty("status").GetString());
+        Assert.Equal("Password reset request submitted successfully. Your request is waiting for admin approval.", mismatchBody.GetProperty("message").GetString());
+        var submitted = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = "0911000001" });
+        Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
+        var submittedBody = await submitted.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Pending", submittedBody!.GetProperty("status").GetString());
+        Assert.Equal("A password reset request is already pending admin approval.", submittedBody.GetProperty("message").GetString());
+        var reference = submittedBody.GetProperty("reference").GetString()!;
         var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001"); var queue = await (await Get(client, "/api/v1/admin/password-reset-requests", admin)).Content.ReadFromJsonAsync<JsonElement>(); var item = Assert.Single(queue.EnumerateArray()); Assert.Equal("Pending", item.GetProperty("status").GetString()); Assert.False(item.TryGetProperty("birthDate", out _));
         Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/admin/password-reset-requests/{item.GetProperty("id").GetGuid()}/approve", admin, new { })).StatusCode); Assert.Equal(HttpStatusCode.Conflict, (await Post(client, $"/api/v1/admin/password-reset-requests/{item.GetProperty("id").GetGuid()}/approve", admin, new { })).StatusCode);
         Assert.Equal("Approved", (await client.GetFromJsonAsync<JsonElement>($"/api/v1/auth/password-reset-requests/{reference}")).GetProperty("status").GetString());
@@ -830,8 +839,13 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, customerReset.StatusCode);
         var customerBody = await customerReset.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Pending", customerBody!.GetProperty("status").GetString());
-        Assert.Equal("Your password reset request is waiting for admin approval.", customerBody.GetProperty("message").GetString());
+        Assert.Equal("Password reset request submitted successfully. Your request is waiting for admin approval.", customerBody.GetProperty("message").GetString());
         var customerReference = customerBody.GetProperty("reference").GetString()!;
+        var customerRepeat = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = shopperPhone });
+        Assert.Equal(HttpStatusCode.OK, customerRepeat.StatusCode);
+        var customerRepeatBody = await customerRepeat.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(customerReference, customerRepeatBody!.GetProperty("reference").GetString());
+        Assert.Equal("Pending", customerRepeatBody.GetProperty("status").GetString());
 
         var summary1 = await (await Get(client, "/api/v1/admin/dashboard/summary", admin)).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(1, summary1!.GetProperty("openSupportRequests").GetInt32());
@@ -864,6 +878,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal("Password reset completed.", completedStatus.GetProperty("message").GetString());
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = shopperPhone, password = originalPassword })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = shopperPhone, password = replacementPassword })).StatusCode);
+        queue = await (await Get(client, "/api/v1/admin/password-reset-requests", admin)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.DoesNotContain(queue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == shopperPhone);
 
         var creatorReset = await client.PostAsJsonAsync("/api/v1/auth/password-reset-requests", new { phoneNumber = creatorPhone });
         Assert.Equal(HttpStatusCode.OK, creatorReset.StatusCode);
@@ -883,7 +899,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, creatorRetry.StatusCode);
         var creatorRetryBody = await creatorRetry.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Pending", creatorRetryBody!.GetProperty("status").GetString());
-        Assert.Equal("Your password reset request is waiting for admin approval.", creatorRetryBody.GetProperty("message").GetString());
+        Assert.NotEqual(creatorReference, creatorRetryBody.GetProperty("reference").GetString());
+        Assert.Equal("Password reset request submitted successfully. Your request is waiting for admin approval.", creatorRetryBody.GetProperty("message").GetString());
         queue = await (await Get(client, "/api/v1/admin/password-reset-requests", admin)).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Single(queue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == creatorPhone && x.GetProperty("status").GetString() == "Pending");
         Assert.DoesNotContain(queue.EnumerateArray(), x => x.GetProperty("phone").GetString() == creatorPhone && x.GetProperty("status").GetString() == "Rejected");
@@ -897,6 +914,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var ownerItem = Assert.Single(queue!.EnumerateArray(), x => x.GetProperty("phone").GetString() == ownerPhone);
         Assert.Equal("Pending", ownerItem.GetProperty("status").GetString());
         Assert.True(ownerItem.GetProperty("canApprove").GetBoolean());
+        Assert.All(queue.EnumerateArray(), x => Assert.Equal("Pending", x.GetProperty("status").GetString()));
         summary1 = await (await Get(client, "/api/v1/admin/dashboard/summary", admin)).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(2, summary1!.GetProperty("openSupportRequests").GetInt32());
         unread1 = await (await Get(client, "/api/v1/notifications/unread-count", admin)).Content.ReadFromJsonAsync<JsonElement>();

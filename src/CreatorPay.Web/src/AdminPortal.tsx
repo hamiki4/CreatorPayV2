@@ -1123,7 +1123,7 @@ function AccountPage({
         setMessage((body as { detail?: string }).detail ?? "Unable to update business type.");
         return;
       }
-      setMessage("Business type updated and audited.");
+      setMessage("Business Type updated.");
       setEditing(null);
       await load(page, filters);
     } finally {
@@ -1157,37 +1157,45 @@ function AccountPage({
         />
       )}
       {editing && (
-        <section className="panel form">
-          <h2>Edit Business Type</h2>
-          <p>
-            {editing.name} · {editing.merchantId}
-          </p>
-          <label>
-            Business Type
-            <select value={editingBusinessType} onChange={(e) => setEditingBusinessType(e.target.value)}>
-              {businessTypes.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.en}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="actions">
-            <button type="button" onClick={() => void saveBusinessType()} disabled={savingBusinessType}>
-              {savingBusinessType ? "Saving…" : "Save Business Type"}
-            </button>
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                setEditing(null);
-                setEditingBusinessType("Other");
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </section>
+        <div className="modal-backdrop">
+          <section
+            className="help-dialog admin-business-type-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="business-type-editor-title"
+          >
+            <h2 id="business-type-editor-title">Edit Business Type</h2>
+            <p>
+              <strong>{editing.name}</strong>
+            </p>
+            <p>Current Business Type: {editing.businessType}</p>
+            <label>
+              New Business Type
+              <select value={editingBusinessType} onChange={(e) => setEditingBusinessType(e.target.value)}>
+                {businessTypes.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.en}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="actions">
+              <button type="button" onClick={() => void saveBusinessType()} disabled={savingBusinessType}>
+                {savingBusinessType ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setEditing(null);
+                  setEditingBusinessType("Other");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
       )}
       <form
         className="panel form account-filters"
