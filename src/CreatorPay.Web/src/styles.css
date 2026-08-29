@@ -74,3 +74,51 @@
   .nav-icon{display:none}
 }
 .summary-action-card{cursor:pointer}
+.shopper-search-field{min-width:0}
+.shopper-search-field input{min-width:0}
+.search-bar.shopper-relationship-search{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:end;gap:.6rem}
+.filter-toggle{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-width:0;white-space:nowrap}
+.filter-toggle svg{width:1rem;height:1rem;fill:currentColor;flex:0 0 auto}
+.filter-toggle-label{display:inline}
+.filter-summary{margin:-.5rem 0 1rem;color:#487052;font-size:.86rem;font-weight:700}
+.filter-sheet{display:grid;gap:1rem}
+.filter-sheet>label{gap:.3rem}
+.filter-sheet-group{display:grid;gap:.45rem}
+.filter-sheet-group span{color:#487052;font-size:.8rem;font-weight:700}
+.filter-sheet-group button{justify-content:flex-start;width:100%;text-align:left}
+.near-me-compact{width:fit-content}
+.filters-dialog,.promo-video-dialog{width:min(32rem,calc(100vw - 2rem));padding:clamp(1rem,4vw,2rem)}
+.filters-dialog .actions,.promo-video-dialog .actions{flex-wrap:wrap}
+.filters-dialog .actions>*,.promo-video-dialog .actions>*{flex:1;min-width:10rem}
+.customer-discovery-list .shopper-relationship-row{align-items:start}
+.customer-discovery-list .promo-video-link{font-size:.94rem}
+.customer-discovery-list .creator-heading{flex-wrap:wrap}
+.customer-discovery-list .creator-heading>span{min-width:0}
+.creator-ads-list{display:grid;gap:.45rem}
+.creator-ads-row{display:grid;grid-template-columns:minmax(12rem,2fr) minmax(10rem,1.2fr) minmax(7rem,.8fr) minmax(8rem,1fr) minmax(7rem,.8fr);align-items:start;gap:.75rem;padding:.9rem 1rem;background:#fff;border:1px solid #c9d7cd;border-radius:.95rem;box-shadow:0 1px 1px rgb(21 60 39/.04)}
+.creator-ads-row>*{min-width:0;overflow-wrap:anywhere}
+.creator-ads-row.headings{padding:.4rem 1rem;border:0;background:transparent;color:#487052;font-size:.76rem;font-weight:700;box-shadow:none}
+.creator-ads-row [data-label]::before{content:attr(data-label) ": ";display:none}
+.creator-ads-business,.creator-ads-promo,.creator-ads-status,.creator-ads-activated,.creator-ads-days{display:grid;gap:.28rem}
+.creator-ads-promo a,.creator-ads-promo button{width:fit-content}
+.creator-ads-business strong{font:700 1.05rem Manrope,sans-serif}
+.creator-ads-status .status-badge{display:inline-flex;width:fit-content}
+.promo-video-dialog{margin-top:1rem}
+@media (max-width:650px){
+  .search-bar.shopper-relationship-search{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+  .search-bar.shopper-relationship-search .search-actions{grid-column:1/-1;justify-content:stretch}
+  .search-bar.shopper-relationship-search .search-actions button{width:100%}
+  .filter-toggle{min-height:2.8rem;padding:.65rem .8rem}
+  .filter-toggle-label{display:none}
+  .customer-discovery-list .shopper-relationship-row.headings{display:none}
+  .customer-discovery-list .shopper-relationship-row{grid-template-columns:1fr;gap:.55rem;padding:.9rem 1rem}
+  .customer-discovery-list .shopper-relationship-row [data-label]::before{content:attr(data-label) ": ";display:block;margin-bottom:.15rem;color:#487052;font-size:.72rem;font-weight:700}
+  .customer-discovery-list .shopper-relationship-row [data-label=Promoted by],.customer-discovery-list .shopper-relationship-row [data-label=Video]{grid-column:1/-1}
+  .customer-discovery-list .promo-video-link{width:fit-content}
+  .creator-ads-row.headings{display:none}
+  .creator-ads-row{grid-template-columns:1fr;gap:.55rem;padding:.95rem 1rem}
+  .creator-ads-row [data-label]::before{display:block;color:#487052;font-size:.72rem;font-weight:700}
+  .creator-ads-promo a,.creator-ads-promo button,.creator-ads-status .status-badge{width:100%}
+  .creator-ads-business strong{font-size:1.02rem}
+  .filters-dialog,.promo-video-dialog{width:min(32rem,calc(100vw - 1rem));padding:1rem}
+}

@@ -190,7 +190,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.True(activeRow.GetProperty("promotionActive").GetBoolean());
         Assert.Equal("Active", activeRow.GetProperty("relationshipState").GetString());
         shopperRows = await (await Get(shopper, "/api/v1/customer/discovery/advertising")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.Contains(shopperRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+        Assert.DoesNotContain(shopperRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
         shopperBusinesses = await (await Get(shopper, "/api/v1/customer/discovery/businesses?q=Addis")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Contains(shopperBusinesses!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
     }

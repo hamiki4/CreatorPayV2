@@ -113,12 +113,12 @@ test('Creator requests a Business and the Business activates it',async({page,req
   await page.getByRole('button',{name:'Find Businesses'}).first().click()
   await expect(page.locator('article').filter({hasText:business})).toHaveCount(0)
   await page.getByRole('button',{name:'Active Ads',exact:true}).click()
-  // The Active Ads view intentionally contains an active-relationship table
-  // and a separate sales/earnings report table. Scope to the first table so
-  // this assertion verifies the active-ad row rather than matching both.
-  const creatorActiveRow=page.locator('.creator-ads-table').first().locator('tbody tr').filter({hasText:business})
+  // The Active Ads view intentionally contains an active-relationship grid
+  // and a separate sales/earnings report table. Scope to the first active row.
+  const creatorActiveRow=page.locator('.creator-ads-row.relationship-active').filter({hasText:business})
   await expect(creatorActiveRow).toHaveCount(1,{timeout:30000})
   await expect(creatorActiveRow).toContainText('Active')
+  await expect(creatorActiveRow).toContainText('Add Promo Video')
   await page.getByRole('button',{name:'Settings'}).click()
   const profileResponse=page.waitForResponse(response=>response.request().method()==='GET'&&new URL(response.url()).pathname==='/api/v1/creators/me',{timeout:30000})
   await page.getByRole('menu').getByRole('menuitem',{name:'Profile',exact:true}).click()
@@ -151,7 +151,7 @@ test('Creator requests a Business and the Business activates it',async({page,req
   await page.evaluate(()=>localStorage.clear())
   await login(page,`creator-request-${n}@e2e.invalid`)
   await page.getByRole('button',{name:'Active Ads',exact:true}).click()
-  await expect(page.locator('.creator-ads-table tbody tr').filter({hasText:business})).toHaveCount(0,{timeout:15000})
+  await expect(page.locator('.creator-ads-row.relationship-active').filter({hasText:business})).toHaveCount(0,{timeout:15000})
 
   await page.evaluate(()=>localStorage.clear())
   await login(page,`business-${n}@e2e.invalid`)
@@ -187,7 +187,7 @@ test('Business invites a Creator and remains authoritative for activation',async
   await invitation.getByRole('button',{name:'Accept'}).click()
   await expect(page.getByRole('status')).toContainText(`Invitation from ${business} accepted.`)
   await page.getByRole('button',{name:'Active Ads',exact:true}).click()
-  await expect(page.locator('.creator-ads-table tbody tr').filter({hasText:business}).first()).toContainText('Active')
+  await expect(page.locator('.creator-ads-row.relationship-active').filter({hasText:business}).first()).toContainText('Active')
   await expect(page.getByRole('button',{name:'Activate Ad'})).toHaveCount(0)
 
   await page.evaluate(()=>localStorage.clear())
