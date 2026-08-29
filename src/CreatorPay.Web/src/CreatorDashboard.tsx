@@ -6,6 +6,8 @@ import { onActionableRefresh } from './actionableRefresh'
 import { creatorPhotoUrl, ProfileAvatar } from './profileMedia'
 import { prepareProfilePhoto, profilePhotoAccept, profilePhotoProcessingMessage, profilePhotoUnsupportedMessage } from './photoUpload'
 import { RoleNavigation } from './RoleNavigation'
+import { currentPartnerships } from './partnershipState'
+import { daysLeftText, relationshipState } from './relationshipTime'
 
 type Tab = 'home' | 'find' | 'ads' | 'requests' | 'sales' | 'payout' | 'profile'
 type Profile = {
@@ -241,6 +243,9 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   }, [])
 
   const pending = requests.filter((x) => x.status === 'Pending').length
+  const activeAds = currentPartnerships(requests, (request) => request.merchantId)
+    .filter((request) => request.status === 'Approved' && relationshipState(request).label === 'Active')
+    .slice(0, 3)
   const date = (value?: string) => (value ? new Intl.DateTimeFormat('en-GB').format(new Date(value)) : '—')
   const photo = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
   const navigate = (target: string) =>
@@ -259,7 +264,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                   ? 'find'
                   : 'home',
     )
-  const selectedTab: Tab = tab === 'home' ? 'find' : tab
+  const selectedTab: Tab = tab === 'sales' ? 'home' : tab
 
   return (
     <AccountChrome
@@ -277,43 +282,83 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
           role="Creator"
           label="Creator sections"
           items={[
+            {id: 'home', label: 'Home', icon: 'home', active: selectedTab === 'home', onSelect: () => setTab('home')},
             {id: 'find', label: 'Find Businesses', icon: 'find', active: selectedTab === 'find', onSelect: () => setTab('find')},
             {id: 'ads', label: 'Active Ads', icon: 'ads', active: selectedTab === 'ads', onSelect: () => setTab('ads')},
             {id: 'requests', label: 'Requests', icon: 'requests', active: selectedTab === 'requests', onSelect: () => setTab('requests')},
-            {id: 'sales', label: 'Confirmed Sales', icon: 'sales', active: selectedTab === 'sales', onSelect: () => setTab('sales')},
             {id: 'payout', label: 'Payout', icon: 'payout', active: selectedTab === 'payout', onSelect: () => setTab('payout')},
             {id: 'profile', label: 'Profile', icon: 'profile', active: selectedTab === 'profile', onSelect: () => setTab('profile')},
           ]}
         />
         {tab === 'home' && (
-          <>
-            <div className="creator-summary compact-role-summary">
-              <article>
+          <section className="creator-home" aria-labelledby="creator-home-title">
+            <h2 id="creator-home-title" className="creator-home-title">Dashboard</h2>
+            <div className="creator-home-summary">
+              <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('requests')}>
                 <span>Pending Requests</span>
                 <strong>{pending}</strong>
-              </article>
-              <article className="summary-action-card" role="button" tabIndex={0} onClick={() => setTab('sales')} onKeyDown={(event) => event.key === 'Enter' && setTab('sales')}>
+              </button>
+              <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('sales')}>
                 <span>Confirmed Sales</span>
                 <strong>{earnings?.currentPeriodConfirmedSales ?? 0}</strong>
-                <small>View sales</small>
-              </article>
-              <article>
+              </button>
+              <button type="button" className="creator-home-stat" onClick={() => setTab('payout')}>
                 <span>Payout Amount</span>
                 <strong>{money(earnings?.currentPayoutAmount ?? 0, earnings?.currencyCode)}</strong>
-              </article>
-              <article>
+              </button>
+            </div>
+            <button type="button" className="creator-next-payout" onClick={() => setTab('payout')}>
+              <span>
                 <span>Next Payout Date</span>
                 <strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong>
-              </article>
-            </div>
+              </span>
+              <span aria-hidden="true">›</span>
+            </button>
             {relationshipsError && <p className="friendly-error">{relationshipsError}</p>}
             {earningsError && <p className="friendly-error">{earningsError}</p>}
-            <div className="creator-start">
-              <h2>Start advertising</h2>
-              <p>Find a Business, request permission to promote, and start earning money!</p>
-              <button onClick={() => setTab('find')}>Find Businesses</button>
+            <button type="button" className="creator-start-card" onClick={() => setTab('find')}>
+              <span className="creator-start-copy">
+                <strong>Start advertising</strong>
+                <span>Find businesses, request permission to promote, and start earning money!</span>
+              </span>
+              <span className="creator-start-action">
+                <span>Find Businesses</span>
+                <span aria-hidden="true">›</span>
+              </span>
+            </button>
+            <div className="creator-recent-ads">
+              <button type="button" className="creator-recent-heading" onClick={() => setTab('ads')}>
+                <strong>Recent Active Ads</strong>
+                <span>{activeAds.length} <span aria-hidden="true">›</span></span>
+              </button>
+              {activeAds.length === 0 ? (
+                <p className="compact-empty">No active ads yet.</p>
+              ) : (
+                <div className="creator-recent-list">
+                  {activeAds.map((ad) => {
+                    const state = relationshipState(ad)
+                    const days = state.daysLeft === null ? '—' : daysLeftText(state.daysLeft, state.tone)
+                    const promoState = ad.promotionVideo
+                      ? ad.promotionVideo.status === 'Approved' ? 'Promo video approved' : `Promo video ${ad.promotionVideo.status.toLowerCase()}`
+                      : 'Add Promo Video'
+                    return (
+                      <button type="button" className="creator-recent-ad" key={ad.id} onClick={() => setTab('ads')}>
+                        <span className="creator-recent-ad-main">
+                          <strong>{ad.merchantName}</strong>
+                          <span>Activated {date(ad.activatedAtUtc)}</span>
+                          <span>{promoState}</span>
+                        </span>
+                        <span className="creator-recent-ad-state">
+                          <span className="status-badge">Active</span>
+                          <span>{days}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          </>
+          </section>
         )}
         {tab === 'find' && <><FindBusinesses onRequested={() => void load()} />{relationshipsError && <p className="friendly-error">{relationshipsError}</p>}</>}
         {tab === 'ads' && <><ActiveAds items={requests} loading={loading} refresh={() => void load()} />{relationshipsError && <p className="friendly-error">{relationshipsError}</p>}</>}

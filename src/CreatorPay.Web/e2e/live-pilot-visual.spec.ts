@@ -32,10 +32,10 @@ const roles: RoleCase[] = [
     navigation: 'Creator sections',
     accent: 'rgb(124, 77, 255)',
     tabs: [
+      {label: 'Home', slug: 'home'},
       {label: 'Find Businesses', slug: 'find'},
       {label: 'Active Ads', slug: 'active-ads'},
       {label: 'Requests', slug: 'requests'},
-      {label: 'Confirmed Sales', slug: 'confirmed-sales'},
       {label: 'Payout', slug: 'payout'},
       {label: 'Profile', slug: 'profile'},
     ],
@@ -183,6 +183,12 @@ for (const viewport of [
         await assertLiveGeometry(page, role, viewport.width < 651)
         if (role.role === 'creator' && tab.slug === 'find') {
           await expect(page.locator('.business-discovery-card .business-card-days')).toHaveCount(0)
+        }
+        if (role.role === 'creator' && tab.slug === 'home') {
+          await expect(page.locator('.creator-home-stat')).toHaveCount(3)
+          await expect(page.locator('.creator-next-payout')).toBeVisible()
+          await expect(page.locator('.creator-start-card')).toBeVisible()
+          await expect(page.locator('.creator-recent-ad').first()).toBeVisible()
         }
         if (role.role === 'creator' && tab.slug === 'active-ads') {
           await expect(page.locator('.creator-ads-row.relationship-active .creator-ads-days').first()).toContainText('days left')

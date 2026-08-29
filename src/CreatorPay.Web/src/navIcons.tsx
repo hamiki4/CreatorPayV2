@@ -1,6 +1,7 @@
 import type {SVGProps} from 'react'
 
 export type NavIconName =
+  | 'home'
   | 'discover'
   | 'cashback'
   | 'notifications'
@@ -34,6 +35,14 @@ export function NavIcon({name, size = 22, className}: NavIconProps) {
   const svgProps = { ...iconProps, width: size, height: size, className }
 
   switch (name) {
+    case 'home':
+      return (
+        <svg {...svgProps}>
+          <path d="m3.5 10 8.5-7 8.5 7" />
+          <path d="M5.5 9v11h13V9" />
+          <path d="M9.5 20v-6h5v6" />
+        </svg>
+      )
     case 'discover':
     case 'find':
       return (

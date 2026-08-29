@@ -77,8 +77,9 @@ test('Creator Ads preserves historical performance without exposing Shopper or p
   for(const label of ['Payout Amount','Pending Requests','Next Payout Date'])assert.match(creatorDashboard,new RegExp(label))
   assert.doesNotMatch(creatorDashboard,/Reserved Payout/)
 })
-test('Confirmed Sales navigation restores transaction history without merging it into ads or payouts',()=>{
-  assert.match(creatorDashboard,/label: 'Confirmed Sales', icon: 'sales'/)
+test('Creator Home preserves Confirmed Sales transaction history without merging it into ads or payouts',()=>{
+  assert.match(creatorDashboard,/label: 'Home', icon: 'home'/)
+  assert.match(creatorDashboard,/className="creator-home-stat creator-home-stat--accent" onClick=\{\(\) => setTab\('sales'\)\}/)
   assert.match(creatorDashboard,/currentPeriodConfirmedSales \?\? 0/)
   assert.match(creatorDashboard,/tab === 'sales'.*CreatorConfirmedSales/s)
   assert.match(creatorAds,/\/api\/v1\/creator\/ads\/performance/)

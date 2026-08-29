@@ -56,9 +56,6 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
           {role === 'Creator' ? (
             <div className="account-identity account-identity--creator">
               <strong className="account-identity-name">{name ?? role}</strong>
-              <span className="account-identity-media">
-                {identityMedia ?? <ProfileAvatar name={name ?? role} photoUrl={photoUrl} className="account-identity-avatar" />}
-              </span>
               {status && <AccountStatusBadge status={status} />}
             </div>
           ) : (
@@ -70,6 +67,11 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
             </>
           )}
         </div>
+        {role === 'Creator' && (
+          <span className="account-header-avatar">
+            {identityMedia ?? <ProfileAvatar name={name ?? role} photoUrl={photoUrl} className="account-identity-avatar" />}
+          </span>
+        )}
         <div className="account-actions">
           <button
             type="button"
