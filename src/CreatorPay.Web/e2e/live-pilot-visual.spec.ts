@@ -133,7 +133,9 @@ async function assertLiveGeometry(page: Page, role: RoleCase, mobile: boolean) {
 }
 
 for (const viewport of [
+  {name: '375', width: 375, height: 812},
   {name: '390', width: 390, height: 844},
+  {name: '393', width: 393, height: 852},
   {name: '430', width: 430, height: 932},
   {name: 'desktop', width: 1280, height: 900},
 ]) {
