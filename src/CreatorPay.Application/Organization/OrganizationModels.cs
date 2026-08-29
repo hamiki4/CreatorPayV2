@@ -11,7 +11,7 @@ public sealed record SupervisorLocationsRequest(IReadOnlyList<Guid> LocationIds)
 public sealed record CashierLocationsRequest(IReadOnlyList<Guid> LocationIds, Guid? PrimaryLocationId);
 public sealed record AcceptStaffInvitationRequest(string Token, string Password, string Confirmation);
 public sealed record LocationResponse(Guid Id, string Name, string AddressLine1, string? AddressLine2, string City, string? Region, string CountryCode, string TimeZoneId, bool IsActive);
-public sealed record StaffResponse(Guid Id, string FirstName, string LastName, string Email, string Username, string PhoneNumber, bool IsActive, IReadOnlyList<StaffLocationResponse> Locations, string BusinessName);
+public sealed record StaffResponse(Guid Id, string FirstName, string LastName, string Email, string Username, string PhoneNumber, bool IsActive, string EffectiveStatus, string EffectiveStatusReason, IReadOnlyList<StaffLocationResponse> Locations, string BusinessName);
 public sealed record StaffLocationResponse(Guid Id, string Name, bool IsActive, bool IsPrimary);
 public sealed record InvitationResponse(Guid InvitationId, string Email, UserRole Role, DateTime ExpiresAtUtc, string InvitationUrl, string? DevelopmentToken);
 public sealed record InvitationPreviewResponse(string BusinessName, string Role, string LocationName, DateTime ExpiresAtUtc);

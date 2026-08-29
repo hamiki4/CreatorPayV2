@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, statusLabel } from './apiClient'
+import { api } from './apiClient'
 import { ActiveAds, AdvertisingRequest, CreatorConfirmedSales, CreatorRequests, FindBusinesses } from './CreatorAdvertising'
-import { AccountChrome } from './AccountChrome'
+import { AccountChrome, AccountStatusBadge } from './AccountChrome'
 import { onActionableRefresh } from './actionableRefresh'
 import { creatorPhotoUrl, ProfileAvatar } from './profileMedia'
 import { prepareProfilePhoto, profilePhotoAccept, profilePhotoProcessingMessage, profilePhotoUnsupportedMessage } from './photoUpload'
@@ -14,6 +14,8 @@ type Profile = {
   creatorCode: string
   creatorStatus: string
   accountStatus: string
+  effectiveStatus: string
+  effectiveStatusReason: string
   email: string
   phoneNumber: string
   city: string
@@ -136,7 +138,7 @@ function ProfilePanel({
                 <br />
                 {profile.city}
               </p>
-              <span className="status-badge">{statusLabel(profile.creatorStatus)}</span>
+              <AccountStatusBadge status={profile.effectiveStatus} />
             </div>
           </div>
           <div className="actions creator-photo-actions">
@@ -270,7 +272,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
     <AccountChrome
       role="Creator"
       name={profile?.displayName}
-      status={profile ? statusLabel(profile.creatorStatus) : 'Active'}
+      status={profile?.effectiveStatus}
       photoUrl={photo}
       identityMedia={profile ? <ProfileAvatar name={profile.displayName} photoUrl={headerPhoto} style={{ width: '2.5rem', height: '2.5rem', fontSize: '1rem' }} /> : undefined}
       onProfile={() => setTab('profile')}

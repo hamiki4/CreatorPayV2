@@ -12,10 +12,10 @@ public static class RewardEligibilityQueries
             relationship.Status == PartnershipStatus.Approved &&
             relationship.StartDateUtc.HasValue && relationship.StartDateUtc <= now &&
             relationship.EndDateUtc.HasValue && relationship.EndDateUtc > now &&
-            db.Merchants.Any(merchant => merchant.Id == relationship.MerchantId && (merchant.Status == MerchantStatus.Active || merchant.Status == MerchantStatus.LowBalance)) &&
+            db.Merchants.Any(merchant => merchant.Id == relationship.MerchantId && (merchant.Status == MerchantStatus.Active || merchant.Status == MerchantStatus.LowBalance || merchant.Status == MerchantStatus.ApprovedUnfunded || merchant.Status == MerchantStatus.LowBalanceRestricted || merchant.Status == MerchantStatus.FundingRestricted)) &&
             db.Creators.Any(creator => creator.Id == relationship.CreatorId && creator.Status == CreatorStatus.Active) &&
-            db.UserAccounts.Any(account => account.MerchantId == relationship.MerchantId && account.Role == UserRole.MerchantAdmin && account.Status == AccountStatus.Active) &&
-            db.UserAccounts.Any(account => account.CreatorId == relationship.CreatorId && account.Role == UserRole.Creator && account.Status == AccountStatus.Active) &&
+            db.UserAccounts.Any(account => account.MerchantId == relationship.MerchantId && account.Role == UserRole.MerchantAdmin && account.Status == AccountStatus.Active && (account.LockoutEndUtc == null || account.LockoutEndUtc <= now)) &&
+            db.UserAccounts.Any(account => account.CreatorId == relationship.CreatorId && account.Role == UserRole.Creator && account.Status == AccountStatus.Active && (account.LockoutEndUtc == null || account.LockoutEndUtc <= now)) &&
             (!db.PartnershipLocations.Any(location => location.MerchantCreatorPartnershipId == relationship.Id && location.IsActive) ||
              db.PartnershipLocations.Any(location => location.MerchantCreatorPartnershipId == relationship.Id && location.IsActive &&
                  db.MerchantLocations.Any(merchantLocation => merchantLocation.Id == location.MerchantLocationId && merchantLocation.IsActive))));

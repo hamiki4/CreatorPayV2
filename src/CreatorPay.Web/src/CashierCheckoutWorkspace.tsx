@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "./apiClient";
+import { AccountStatusBadge } from "./AccountChrome";
 
 type Mode = "cashier" | "merchant";
 type Staff = {
@@ -7,6 +8,8 @@ type Staff = {
   lastName: string;
   username: string;
   businessName: string;
+  effectiveStatus: string;
+  effectiveStatusReason: string;
   locations: { id: string; name: string; isPrimary: boolean }[];
 };
 type Purchase = {
@@ -344,6 +347,7 @@ export function CashierCheckoutWorkspace({
               <strong>
                 {staff ? `${staff.firstName} ${staff.lastName}` : "Cashier"}
               </strong>
+              {staff && <AccountStatusBadge status={staff.effectiveStatus} />}
               <p>{staff?.businessName}</p>
               <p>{staff?.locations.map((x) => x.name).join(", ")}</p>
               <small>Username: {staff?.username}</small>

@@ -34,9 +34,13 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
     {
         var now = DateTime.UtcNow;
         var promotedMerchantIds = EligibleCampaigns(now).Select(x => x.MerchantId).Distinct();
-        var merchants = db.Merchants.AsNoTracking().Where(x => x.Status == MerchantStatus.Active
+        var merchants = db.Merchants.AsNoTracking().Where(x => (x.Status == MerchantStatus.Active ||
+                x.Status == MerchantStatus.LowBalance ||
+                x.Status == MerchantStatus.ApprovedUnfunded ||
+                x.Status == MerchantStatus.LowBalanceRestricted ||
+                x.Status == MerchantStatus.FundingRestricted)
             && promotedMerchantIds.Contains(x.Id)
-            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active));
+            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)));
         var term = query?.Trim();
         if (!string.IsNullOrWhiteSpace(term)) merchants = merchants.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.LegalBusinessName, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%"));
         var selectedCategory = category?.Trim();
@@ -54,17 +58,22 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
 
     public async Task<ShopperBusinessDetailDto> GetShopperBusinessAsync(Guid merchantId, CancellationToken ct)
     {
-        var merchant = await db.Merchants.AsNoTracking().Where(x => x.Id == merchantId && x.Status == MerchantStatus.Active
-            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active))
+        var now = DateTime.UtcNow;
+        var merchant = await db.Merchants.AsNoTracking().Where(x => x.Id == merchantId && (x.Status == MerchantStatus.Active ||
+                x.Status == MerchantStatus.LowBalance ||
+                x.Status == MerchantStatus.ApprovedUnfunded ||
+                x.Status == MerchantStatus.LowBalanceRestricted ||
+                x.Status == MerchantStatus.FundingRestricted)
+            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)))
             .Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City }).SingleOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Business is unavailable.");
-        var now = DateTime.UtcNow;
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [merchantId], currencyCode, ct);
         if (!eligibleMerchantIds.Contains(merchantId)) throw new KeyNotFoundException("Business is unavailable.");
         var rows = await (from campaign in EligibleCampaigns(now)
                           where campaign.MerchantId == merchantId
                           join partnership in db.MerchantCreatorPartnerships.AsNoTracking() on campaign.MerchantCreatorPartnershipId equals partnership.Id
                           join creator in db.Creators.AsNoTracking() on campaign.CreatorId equals creator.Id
+                          where creator.Status == CreatorStatus.Active
                           select new { campaign.Id, campaign.CreatorId, creator.PublicCreatorId, creator.DisplayName, creator.ProfileImageFileName, partnership.EndDateUtc, campaign.ExpiresAtUtc }).ToListAsync(ct);
         var creatorIds = rows.Select(x => x.CreatorId).Distinct().ToArray();
         var socials = await db.CreatorSocialProfiles.AsNoTracking().Where(x => creatorIds.Contains(x.CreatorId))
@@ -160,7 +169,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         var campaignRows = await EligibleCampaigns(now).Select(x => new { x.CreatorId, x.MerchantId }).ToListAsync(ct);
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, campaignRows.Select(x => x.MerchantId), currencyCode, ct);
         var eligibleCreatorIds = campaignRows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x => x.CreatorId).Distinct().ToArray();
-        var creators = db.Creators.AsNoTracking().Where(x => x.Status == CreatorStatus.Active && eligibleCreatorIds.Contains(x.Id));
+        var creators = db.Creators.AsNoTracking().Where(x => x.Status == CreatorStatus.Active && db.UserAccounts.Any(a => a.CreatorId == x.Id && a.Role == UserRole.Creator && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)) && eligibleCreatorIds.Contains(x.Id));
         var term = query?.Trim();
         if (!string.IsNullOrWhiteSpace(term)) creators = creators.Where(x => EF.Functions.ILike(x.DisplayName, $"%{term}%"));
         var total = await creators.CountAsync(ct);
@@ -175,7 +184,8 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
     public async Task<PublicCreatorProfileDto> GetCreatorAsync(string publicCreatorId, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active, ct)
+        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active
+            && db.UserAccounts.Any(a => a.CreatorId == x.Id && a.Role == UserRole.Creator && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)), ct)
             ?? throw new KeyNotFoundException("Creator is unavailable.");
         var offerData = await (from campaign in EligibleCampaigns(now)
                                where campaign.CreatorId == creator.Id
@@ -194,7 +204,8 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
 
     public async Task<CreatorPhotoFile> GetCreatorPhotoAsync(string publicCreatorId, CancellationToken ct)
     {
-        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active && x.ProfileImageFileName != null, ct)
+        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active && x.ProfileImageFileName != null
+            && db.UserAccounts.Any(a => a.CreatorId == x.Id && a.Role == UserRole.Creator && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= DateTime.UtcNow)), ct)
             ?? throw new KeyNotFoundException("Creator photo is unavailable.");
         return new(await profilePhotos.OpenAsync(creator.ProfileImageFileName!, ct), creator.ProfileImageContentType ?? "application/octet-stream");
     }
@@ -324,7 +335,13 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
 
     public async Task<IReadOnlyList<MerchantDiscoveryDto>> SearchAsync(string? q, string? zone, CancellationToken ct)
     {
-        var merchants = db.Merchants.Where(x => x.Status == MerchantStatus.Active);
+        var now = DateTime.UtcNow;
+        var merchants = db.Merchants.Where(x => (x.Status == MerchantStatus.Active ||
+                x.Status == MerchantStatus.LowBalance ||
+                x.Status == MerchantStatus.ApprovedUnfunded ||
+                x.Status == MerchantStatus.LowBalanceRestricted ||
+                x.Status == MerchantStatus.FundingRestricted)
+            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)));
         if (!string.IsNullOrWhiteSpace(q)) merchants = merchants.Where(x => x.TradingName.ToLower().Contains(q.Trim().ToLower()));
         var ids = await merchants.Select(x => x.Id).ToListAsync(ct);
         if (!string.IsNullOrWhiteSpace(zone)) ids = ids.Intersect(await db.MerchantPromotionProfiles.Where(x => x.ZoneCode == zone).Select(x => x.MerchantId).ToListAsync(ct)).ToList();
@@ -337,7 +354,12 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
     public async Task<MerchantDiscoveryDto> GetMerchantAsync(Guid id, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        var merchant = await db.Merchants.SingleOrDefaultAsync(x => x.Id == id && x.Status == MerchantStatus.Active, ct) ?? throw new KeyNotFoundException();
+        var merchant = await db.Merchants.SingleOrDefaultAsync(x => x.Id == id && (x.Status == MerchantStatus.Active ||
+                x.Status == MerchantStatus.LowBalance ||
+                x.Status == MerchantStatus.ApprovedUnfunded ||
+                x.Status == MerchantStatus.LowBalanceRestricted ||
+                x.Status == MerchantStatus.FundingRestricted)
+            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)), ct) ?? throw new KeyNotFoundException();
         if (!(await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [id], currencyCode, ct)).Contains(id)) throw new KeyNotFoundException();
         var profile = await db.MerchantPromotionProfiles.SingleOrDefaultAsync(x => x.MerchantId == id, ct);
         var trialEligible = !await db.MerchantTrialCredits.AnyAsync(x => x.MerchantId == id && x.Status != TrialCreditStatus.Active, ct);

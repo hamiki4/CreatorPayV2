@@ -10,7 +10,16 @@ public static class BusinessAdvertisingEligibility
     {
         var available = await db.MerchantWallets.AsNoTracking().Where(x => x.MerchantId == merchantId && x.CurrencyCode == currencyCode).Select(x => (decimal?)x.AvailableBalance).SingleOrDefaultAsync(ct) ?? 0m;
         var minimum = await BusinessWalletMinimumQueries.CurrentMinimumAsync(db, currencyCode, merchantId, ct);
-        var active = await db.Merchants.AsNoTracking().AnyAsync(x => x.Id == merchantId && x.Status == MerchantStatus.Active, ct);
+        var now = DateTime.UtcNow;
+        var active = await db.Merchants.AsNoTracking().AnyAsync(x =>
+            x.Id == merchantId &&
+            (x.Status == MerchantStatus.Active ||
+             x.Status == MerchantStatus.LowBalance ||
+             x.Status == MerchantStatus.ApprovedUnfunded ||
+             x.Status == MerchantStatus.LowBalanceRestricted ||
+             x.Status == MerchantStatus.FundingRestricted) &&
+            db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)),
+            ct);
         return (active && available >= minimum, available, minimum);
     }
 
@@ -19,8 +28,15 @@ public static class BusinessAdvertisingEligibility
         var ids = merchantIds.Distinct().ToArray();
         if (ids.Length == 0) return [];
 
+        var now = DateTime.UtcNow;
         var activeMerchantIds = await db.Merchants.AsNoTracking()
-            .Where(x => ids.Contains(x.Id) && x.Status == MerchantStatus.Active)
+            .Where(x => ids.Contains(x.Id)
+                && (x.Status == MerchantStatus.Active ||
+                    x.Status == MerchantStatus.LowBalance ||
+                    x.Status == MerchantStatus.ApprovedUnfunded ||
+                    x.Status == MerchantStatus.LowBalanceRestricted ||
+                    x.Status == MerchantStatus.FundingRestricted)
+                && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)))
             .Select(x => new { x.Id, x.BusinessType })
             .ToListAsync(ct);
         if (activeMerchantIds.Count == 0) return [];

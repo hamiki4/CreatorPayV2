@@ -15,7 +15,7 @@ public sealed record PinRequest(string Pin, string Confirmation);
 public sealed record PinUnlockRequest(string PhoneNumber, string Pin);
 public sealed record PasswordPinResetRequest(string PhoneNumber, string Password, string NewPin, string Confirmation);
 public sealed record PinStatus(bool IsEligible, bool IsPinEnrolled, bool IsLocked, int FailedAttemptCount);
-public sealed record CurrentUser(Guid UserAccountId, string Email, string? PhoneNumber, UserRole Role, AccountStatus Status, Guid? CreatorId, Guid? MerchantId, Guid? SupervisorId, Guid? CashierId, bool IsEmailVerified, bool IsPhoneVerified);
+public sealed record CurrentUser(Guid UserAccountId, string Email, string? PhoneNumber, UserRole Role, AccountStatus Status, string EffectiveStatus, string EffectiveStatusReason, Guid? CreatorId, Guid? MerchantId, Guid? SupervisorId, Guid? CashierId, bool IsEmailVerified, bool IsPhoneVerified);
 public sealed record TokenPair(string AccessToken, DateTime AccessTokenExpiresAtUtc, string RefreshToken, DateTime RefreshTokenExpiresAtUtc, CurrentUser User);
 public static class AuthenticationClaimTypes
 {

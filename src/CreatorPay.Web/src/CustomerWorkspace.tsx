@@ -1,7 +1,7 @@
 import {FormEvent, useEffect, useState} from 'react'
 import {getAccessToken} from './sessionStore'
 import {rankMatches, useTypeahead} from './typeahead'
-import {AccountChrome} from './AccountChrome'
+import {AccountChrome, AccountStatusBadge} from './AccountChrome'
 import {onActionableRefresh} from './actionableRefresh'
 import {api as request} from './apiClient'
 import {ProfileAvatar} from './profileMedia'
@@ -61,6 +61,8 @@ type ShopperProfile = {
   email: string
   phone: string
   accountStatus: string
+  effectiveStatus: string
+  effectiveStatusReason: string
   isEmailVerified: boolean
   isPhoneVerified: boolean
 }
@@ -282,7 +284,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
     <AccountChrome
       role="Customer"
       name={profile?.name}
-      status={profile?.accountStatus ?? 'Active'}
+      status={profile?.effectiveStatus}
       onProfile={() => setView('profile')}
       onHelp={() => location.assign('/help')}
       onSignOut={onSignOut}
@@ -578,7 +580,6 @@ function ShopperProfileCard({profile}: {profile?: ShopperProfile}) {
     ['Name', profile.name],
     ['Email', profile.email],
     ['Phone', profile.phone],
-    ['Account Status', profile.accountStatus],
   ]
   return (
     <section className="shopper-profile">
@@ -590,6 +591,10 @@ function ShopperProfileCard({profile}: {profile?: ShopperProfile}) {
             <dd>{value}</dd>
           </div>
         ))}
+        <div>
+          <dt>Status</dt>
+          <dd><AccountStatusBadge status={profile.effectiveStatus} /></dd>
+        </div>
       </dl>
     </section>
   )

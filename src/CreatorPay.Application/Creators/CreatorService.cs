@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using CreatorPay.Application.Accounts;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.CustomerVerification;
 using CreatorPay.Domain.Entities;
@@ -156,7 +157,11 @@ public sealed class CreatorService(ICreatorStore store, IPasswordHasher password
     internal static string NormalizeEmail(string? value) => value?.Trim().ToUpperInvariant() ?? string.Empty;
     internal static string NormalizePhone(string value) => EthiopianMobileNumber.Normalize(value);
     private static string FormatPhone(string normalized) => normalized;
-    private static CreatorProfileResponse ToProfile(UserAccount user, Creator c) => new(c.Id, c.PublicCreatorId, c.CreatorCode, c.FirstName, c.LastName, c.DisplayName, c.PhoneNumber, user.Email, user.IsEmailVerified, user.IsPhoneVerified, user.Status, c.Status, c.ProfileImageFileName is null ? null : new(c.ProfileImageFileName, c.ProfileImageContentType!, c.ProfileImageSizeBytes!.Value), Next(user, c), c.PreferredLanguage, c.City, c.Zone, c.Biography, c.ContentCategories, c.SocialProfiles.Select(x => new SocialProfileResponse(x.Id, x.Platform, x.Handle, x.ProfileUrl, x.FollowerCount, x.IsPrimary, x.VerificationStatus, x.CreatedAtUtc, x.UpdatedAtUtc)).ToArray(), c.PreferredPayoutChannel, c.PreferredPayoutAccountIdentifier);
+    private static CreatorProfileResponse ToProfile(UserAccount user, Creator c)
+    {
+        var effective = EffectiveAccountStatus.FromCreator(user, c, DateTime.UtcNow);
+        return new(c.Id, c.PublicCreatorId, c.CreatorCode, c.FirstName, c.LastName, c.DisplayName, c.PhoneNumber, user.Email, user.IsEmailVerified, user.IsPhoneVerified, user.Status, c.Status, effective.EffectiveStatus, effective.EffectiveStatusReason, c.ProfileImageFileName is null ? null : new(c.ProfileImageFileName, c.ProfileImageContentType!, c.ProfileImageSizeBytes!.Value), Next(user, c), c.PreferredLanguage, c.City, c.Zone, c.Biography, c.ContentCategories, c.SocialProfiles.Select(x => new SocialProfileResponse(x.Id, x.Platform, x.Handle, x.ProfileUrl, x.FollowerCount, x.IsPrimary, x.VerificationStatus, x.CreatedAtUtc, x.UpdatedAtUtc)).ToArray(), c.PreferredPayoutChannel, c.PreferredPayoutAccountIdentifier);
+    }
     private static string Next(UserAccount u, Creator c) => c.Status == CreatorStatus.PendingApproval ? "Your profile is awaiting platform approval." : c.Status == CreatorStatus.Active ? "Your creator account is active." : c.Status == CreatorStatus.Rejected ? "Your application was rejected. Contact platform support." : c.Status == CreatorStatus.Suspended ? "Your creator account is suspended. Contact platform support." : "Complete creator onboarding.";
     private static string? ValidatePilotProfile(bool terms, string city, string bio, string categories, IReadOnlyList<SocialProfileRequest>? profiles)
     {
