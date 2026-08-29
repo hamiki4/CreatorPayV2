@@ -191,7 +191,7 @@ export function CashierCheckoutWorkspace({
 
   return (
     <div className="creator-dashboard cashier-dashboard">
-      <nav className="creator-tabs" aria-label="Cashier Dashboard sections">
+      <nav className="cashier-tabs" aria-label="Cashier Dashboard sections">
         {tabs.map(([id, label]) => (
           <button
             key={id}

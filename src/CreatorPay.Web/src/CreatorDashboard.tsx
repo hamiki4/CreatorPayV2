@@ -5,7 +5,7 @@ import { AccountChrome, AccountStatusBadge } from './AccountChrome'
 import { onActionableRefresh } from './actionableRefresh'
 import { creatorPhotoUrl, ProfileAvatar } from './profileMedia'
 import { prepareProfilePhoto, profilePhotoAccept, profilePhotoProcessingMessage, profilePhotoUnsupportedMessage } from './photoUpload'
-import { NavIcon } from './navIcons'
+import { RoleNavigation } from './RoleNavigation'
 
 type Tab = 'home' | 'find' | 'ads' | 'requests' | 'sales' | 'payout' | 'profile'
 type Profile = {
@@ -243,13 +243,6 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   const pending = requests.filter((x) => x.status === 'Pending').length
   const date = (value?: string) => (value ? new Intl.DateTimeFormat('en-GB').format(new Date(value)) : '—')
   const photo = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
-  const tabs: [Tab, string][] = [
-    ['find', 'Find Businesses'],
-    ['ads', 'Active Ads'],
-    ['requests', 'Requests'],
-    ['sales', 'Confirmed Sales'],
-    ['payout', 'Payout'],
-  ]
   const headerPhoto = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
   const navigate = (target: string) =>
     setTab(
@@ -267,6 +260,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                   ? 'find'
                   : 'home',
     )
+  const selectedTab: Tab = tab === 'home' ? 'find' : tab
 
   return (
     <AccountChrome
@@ -281,20 +275,17 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
       onNavigate={navigate}
     >
       <div className="creator-dashboard">
-        <nav className="creator-tabs" aria-label="Creator sections">
-          {tabs.map(([value, label]) => (
-            <button
-              key={value}
-              className={tab === value ? 'active' : ''}
-              data-mobile-hidden={value === 'sales' ? 'true' : undefined}
-              aria-current={tab === value ? 'page' : undefined}
-              onClick={() => setTab(value)}
-            >
-              <NavIcon name={value === 'find' ? 'find' : value === 'ads' ? 'ads' : value === 'requests' ? 'requests' : value === 'sales' ? 'sales' : 'payout'} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
+        <RoleNavigation
+          role="Creator"
+          label="Creator sections"
+          items={[
+            {id: 'find', label: 'Find', icon: 'find', active: selectedTab === 'find', onSelect: () => setTab('find')},
+            {id: 'ads', label: 'Active Ads', icon: 'ads', active: selectedTab === 'ads', onSelect: () => setTab('ads')},
+            {id: 'requests', label: 'Requests', icon: 'requests', active: selectedTab === 'requests', onSelect: () => setTab('requests')},
+            {id: 'payout', label: 'Payout', icon: 'payout', active: selectedTab === 'payout', onSelect: () => setTab('payout')},
+            {id: 'profile', label: 'Profile', icon: 'profile', active: selectedTab === 'profile', onSelect: () => setTab('profile')},
+          ]}
+        />
         {tab === 'home' && (
           <>
             <div className="creator-summary compact-role-summary">

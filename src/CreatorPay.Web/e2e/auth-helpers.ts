@@ -4,6 +4,9 @@ import type { Page } from '@playwright/test'
 const password=process.env.E2E_SHOPPER_PASSWORD!
 
 function phoneFor(identity:string){
+  if(identity==='shopper@e2e.invalid')return process.env.E2E_SHOPPER_PHONE!
+  if(identity==='creator@e2e.invalid')return process.env.E2E_CREATOR_PHONE!
+  if(identity==='business-1@e2e.invalid')return process.env.E2E_OWNER_PHONE!
   if(identity==='owner@e2e.invalid')return process.env.E2E_OWNER_PHONE!
   const match=identity.match(/^(creator-request|creator-invite|creator-pending|business)-(\d)@/)
   if(!match)throw Error(`No E2E phone mapping for ${identity}`)

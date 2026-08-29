@@ -6,7 +6,7 @@ import {onActionableRefresh} from './actionableRefresh'
 import {api as request} from './apiClient'
 import {ProfileAvatar} from './profileMedia'
 import {businessTypes} from './AuthWorkspace'
-import {NavIcon} from './navIcons'
+import {RoleNavigation} from './RoleNavigation'
 
 type Wallet = {
   availableCashback: number
@@ -277,8 +277,22 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
   }
 
   const pendingCount = checkouts.filter((x) => x.status === 'AwaitingCustomerApproval').length
-  const navigate = (target: string) => setView(target.includes('confirmation') ? 'confirmations' : target.includes('cashback') ? 'cashback' : 'discover')
+  const navigate = (target: string) =>
+    setView(
+      target.includes('confirmation')
+        ? 'confirmations'
+        : target.includes('cashback')
+          ? 'cashback'
+          : target.includes('profile')
+            ? 'profile'
+            : 'discover',
+    )
   const visibleRows = rows.filter((x) => x.rewardsAvailable)
+  const navItems = [
+    {id: 'discover', label: 'Discover', icon: 'discover' as const, active: view === 'discover', onSelect: () => setView('discover')},
+    {id: 'cashback', label: 'Cashback', icon: 'cashback' as const, active: view === 'cashback', onSelect: () => setView('cashback')},
+    {id: 'profile', label: 'Profile', icon: 'profile' as const, active: view === 'profile', onSelect: () => setView('profile')},
+  ]
 
   return (
     <AccountChrome
@@ -291,16 +305,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
       onNavigate={navigate}
     >
       <section className="shopper">
-        <nav aria-label="Customer navigation">
-          <button className={view === 'discover' ? 'active' : ''} onClick={() => setView('discover')}>
-            <NavIcon name="discover" />
-            <span>Discover</span>
-          </button>
-          <button className={view === 'cashback' ? 'active' : ''} onClick={() => setView('cashback')}>
-            <NavIcon name="cashback" />
-            <span>Cashback</span>
-          </button>
-        </nav>
+        <RoleNavigation role="Customer" label="Customer navigation" items={navItems} />
 
         {view === 'discover' && (
           <section>
@@ -466,7 +471,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
         {view === 'profile' && (
           <>
             {profileError && <p className="friendly-error" role="alert">{profileError}</p>}
-            <ShopperProfileCard profile={profile} />
+            <ShopperProfileCard profile={profile} onHelp={() => location.assign('/help')} onSignOut={onSignOut} />
           </>
         )}
       </section>
@@ -574,7 +579,7 @@ function Summary({wallet}: {wallet?: Wallet}) {
   )
 }
 
-function ShopperProfileCard({profile}: {profile?: ShopperProfile}) {
+function ShopperProfileCard({profile,onHelp,onSignOut}: {profile?: ShopperProfile;onHelp:()=>void;onSignOut:()=>void}) {
   if (!profile) return <p className="compact-empty">Profile is temporarily unavailable.</p>
   const rows = [
     ['Name', profile.name],
@@ -596,6 +601,10 @@ function ShopperProfileCard({profile}: {profile?: ShopperProfile}) {
           <dd><AccountStatusBadge status={profile.effectiveStatus} /></dd>
         </div>
       </dl>
+      <div className="profile-actions">
+        <button type="button" className="quiet" onClick={onHelp}>Help</button>
+        <button type="button" className="danger" onClick={onSignOut}>Sign out</button>
+      </div>
     </section>
   )
 }
