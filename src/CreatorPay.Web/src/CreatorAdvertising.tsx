@@ -83,16 +83,16 @@ export function FindBusinesses({onRequested}: {onRequested: () => void}) {
     const relationship =
       currentRequests.find((x) => x.merchantId === business.id) ||
       currentRequests.find((x) => x.merchantName.toLowerCase() === business.tradingName.toLowerCase())
-    if (!relationship) return {label: 'No relationship', days: '—', canRequest: true}
-    if (relationship.status === 'Pending') return {label: 'Request Pending', days: '—', canRequest: false}
+    if (!relationship) return {label: 'No relationship', canRequest: true}
+    if (relationship.status === 'Pending') return {label: 'Request Pending', canRequest: false}
     if (relationship.status === 'Approved') {
       const state = relationshipState(relationship)
-      return {label: state.label === 'Active' ? 'Active Ad' : state.label, days: state.daysLeft === null ? '—' : daysLeftText(state.daysLeft, state.tone), canRequest: false}
+      return {label: state.label === 'Active' ? 'Active Ad' : state.label, canRequest: false}
     }
-    if (['Revoked', 'Suspended'].includes(relationship.status)) return {label: 'Deactivated', days: '—', canRequest: false, reactivationManagedByBusiness: true}
-    if (relationship.status === 'Blocked') return {label: 'Blocked', days: '—', canRequest: false}
-    if (relationship.status === 'Rejected') return {label: 'Declined', days: '—', canRequest: true}
-    return {label: 'Unavailable', days: '—', canRequest: false}
+    if (['Revoked', 'Suspended'].includes(relationship.status)) return {label: 'Deactivated', canRequest: false, reactivationManagedByBusiness: true}
+    if (relationship.status === 'Blocked') return {label: 'Blocked', canRequest: false}
+    if (relationship.status === 'Rejected') return {label: 'Declined', canRequest: true}
+    return {label: 'Unavailable', canRequest: false}
   }
 
   return (
@@ -131,7 +131,6 @@ export function FindBusinesses({onRequested}: {onRequested: () => void}) {
                 </div>
                 <div className="business-card-meta">
                   <span className="status-badge">{state.label}</span>
-                  <small className="business-card-days">Days left: {state.days}</small>
                 </div>
                 <div className="business-card-actions">
                   {state.canRequest && <button onClick={() => void request(x)}>{state.label === 'Declined' ? 'Request Again' : 'Request to Advertise'}</button>}

@@ -243,7 +243,6 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   const pending = requests.filter((x) => x.status === 'Pending').length
   const date = (value?: string) => (value ? new Intl.DateTimeFormat('en-GB').format(new Date(value)) : '—')
   const photo = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
-  const headerPhoto = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
   const navigate = (target: string) =>
     setTab(
       target.includes('payout')
@@ -268,7 +267,6 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
       name={profile?.displayName}
       status={profile?.effectiveStatus}
       photoUrl={photo}
-      identityMedia={profile ? <ProfileAvatar name={profile.displayName} photoUrl={headerPhoto} style={{ width: '2.5rem', height: '2.5rem', fontSize: '1rem' }} /> : undefined}
       onProfile={() => setTab('profile')}
       onHelp={() => location.assign('/help')}
       onSignOut={onSignOut}
@@ -279,7 +277,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
           role="Creator"
           label="Creator sections"
           items={[
-            {id: 'find', label: 'Find', icon: 'find', active: selectedTab === 'find', onSelect: () => setTab('find')},
+            {id: 'find', label: 'Find Businesses', icon: 'find', active: selectedTab === 'find', onSelect: () => setTab('find')},
             {id: 'ads', label: 'Active Ads', icon: 'ads', active: selectedTab === 'ads', onSelect: () => setTab('ads')},
             {id: 'requests', label: 'Requests', icon: 'requests', active: selectedTab === 'requests', onSelect: () => setTab('requests')},
             {id: 'payout', label: 'Payout', icon: 'payout', active: selectedTab === 'payout', onSelect: () => setTab('payout')},

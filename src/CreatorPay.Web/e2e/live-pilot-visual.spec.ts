@@ -4,6 +4,7 @@ import {login} from './auth-helpers'
 
 const liveMode = Boolean(process.env.E2E_EXTERNAL_WEB_URL)
 const shots = process.env.E2E_SCREENSHOT_DIR ?? '/tmp/creatorpay-live-shots'
+const selectedTab = process.env.E2E_VISUAL_TAB
 
 type RoleCase = {
   role: 'customer' | 'creator' | 'business'
@@ -31,7 +32,7 @@ const roles: RoleCase[] = [
     navigation: 'Creator sections',
     accent: 'rgb(124, 77, 255)',
     tabs: [
-      {label: 'Find', slug: 'find'},
+      {label: 'Find Businesses', slug: 'find'},
       {label: 'Active Ads', slug: 'active-ads'},
       {label: 'Requests', slug: 'requests'},
       {label: 'Payout', slug: 'payout'},
@@ -142,6 +143,7 @@ for (const viewport of [
   for (const role of roles) {
     test(`live PILOT ${role.role} navigation and screenshots at ${viewport.name}`, async ({page}) => {
       test.skip(!liveMode, 'Runs only when the public PILOT bundle is selected.')
+      test.setTimeout(90_000)
       await page.setViewportSize({width: viewport.width, height: viewport.height})
       await login(page, role.identity)
       const scriptAsset = await page.locator('script[type="module"]').getAttribute('src')
@@ -150,14 +152,49 @@ for (const viewport of [
       expect(cssAsset).toMatch(/^\/assets\/index-[A-Za-z0-9_-]+\.css$/)
       const nav = page.getByRole('navigation', {name: role.navigation})
       await expect(nav.getByRole('button')).toHaveText(role.tabs.map((tab) => tab.label))
-      for (const tab of role.tabs) {
-        await nav.getByRole('button', {name: tab.label, exact: true}).click()
+      if (role.role === 'creator') {
+        await expect(page.locator('.account-identity--creator .account-status')).toHaveCSS('color', 'rgb(23, 107, 70)')
+        const nameBox = await page.locator('.account-identity-name').boundingBox()
+        const avatarBox = await page.locator('.account-identity-avatar').boundingBox()
+        expect(nameBox).not.toBeNull()
+        expect(avatarBox).not.toBeNull()
+        expect(avatarBox!.x).toBeGreaterThan(nameBox!.x)
+        if (viewport.width < 651) {
+          const settings = page.getByRole('button', {name: 'Settings', exact: true})
+          await settings.click()
+          const menu = page.getByRole('menu')
+          await expect(menu).toBeVisible()
+          const menuBox = await menu.boundingBox()
+          expect(menuBox).not.toBeNull()
+          expect(menuBox!.x).toBeGreaterThanOrEqual(0)
+          expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(viewport.width)
+          await page.mouse.move(0, 0)
+          await page.screenshot({path: `${shots}/creator-settings-${viewport.name}.png`, animations: 'disabled'})
+          await settings.click()
+        }
+      }
+      for (const tab of role.tabs.filter((item) => !selectedTab || item.slug === selectedTab)) {
+        const tabButton = nav.getByRole('button', {name: tab.label, exact: true})
+        if ((await tabButton.getAttribute('aria-current')) !== 'page') await tabButton.click()
         await expect(nav.getByRole('button', {name: tab.label, exact: true})).toHaveAttribute('aria-current', 'page')
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
         await assertLiveGeometry(page, role, viewport.width < 651)
+        if (role.role === 'creator' && tab.slug === 'find') {
+          await expect(page.locator('.business-discovery-card .business-card-days')).toHaveCount(0)
+        }
+        if (role.role === 'creator' && tab.slug === 'active-ads') {
+          await expect(page.locator('.creator-ads-row.relationship-active .creator-ads-days').first()).toContainText('days left')
+        }
+        if (role.role === 'creator' && tab.slug === 'profile') {
+          const creatorIdSize = Number.parseFloat(await page.locator('.creator-id-profile > strong').evaluate((node) => getComputedStyle(node).fontSize))
+          const copySize = Number.parseFloat(await page.getByRole('button', {name: 'Copy Creator ID'}).evaluate((node) => getComputedStyle(node).fontSize))
+          expect(creatorIdSize).toBeLessThanOrEqual(44)
+          expect(copySize).toBeLessThanOrEqual(13)
+        }
+        await page.mouse.move(0, 0)
         await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
         await page.waitForTimeout(500)
-        await page.screenshot({path: `${shots}/${role.role}-${tab.slug}-${viewport.name}.png`})
+        await page.screenshot({path: `${shots}/${role.role}-${tab.slug}-${viewport.name}.png`, animations: 'disabled'})
       }
     })
   }

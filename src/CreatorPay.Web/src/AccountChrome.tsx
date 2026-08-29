@@ -55,11 +55,11 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
           <h1>{role}</h1>
           {role === 'Creator' ? (
             <div className="account-identity account-identity--creator">
-              {identityMedia ?? <ProfileAvatar name={name ?? role} photoUrl={photoUrl} className="account-identity-avatar" />}
-              <div className="account-identity-text">
-                <strong>{name ?? role}</strong>
-                {status && <AccountStatusBadge status={status} />}
-              </div>
+              <strong className="account-identity-name">{name ?? role}</strong>
+              <span className="account-identity-media">
+                {identityMedia ?? <ProfileAvatar name={name ?? role} photoUrl={photoUrl} className="account-identity-avatar" />}
+              </span>
+              {status && <AccountStatusBadge status={status} />}
             </div>
           ) : (
             <>

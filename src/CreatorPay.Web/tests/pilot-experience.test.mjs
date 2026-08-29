@@ -32,7 +32,7 @@ test('Creator and Business use unified account chrome without duplicate header t
   assert.match(experienceCompact,/!dashboardRole/)
   assert.doesNotMatch(mainCompact,/HelpLinkcategory=\{creator\?["']ContentCreators["']:["']Businesses["']\}/)
   assert.match(creatorDashboard,/AccountChrome/)
-  assert.match(creatorDashboard,/identityMedia=/)
+  assert.match(creatorDashboard,/photoUrl=\{photo\}/)
 })
 test('Business Wallet uses the shared API client and friendly errors',()=>{
   assert.match(wallet,/import \{api,apiBlob\} from '\.\/apiClient'/)
@@ -132,7 +132,7 @@ test('Creator Find Businesses cards stay compact and hide redundant labels',()=>
   assert.match(findBusinesses,/business-card-top/)
   assert.match(findBusinesses,/business-card-meta/)
   assert.match(findBusinesses,/business-card-actions/)
-  assert.match(findBusinesses,/Days left:/)
+  assert.doesNotMatch(findBusinesses,/Days left:/)
   assert.match(findBusinesses,/Request to Advertise/)
   assert.doesNotMatch(findBusinesses,/STATUS:|ACTION:|data-label="Status"|data-label="Action"/)
 })
