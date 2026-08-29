@@ -54,7 +54,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
     public async Task DisposeAsync() { if (factory is not null) await factory.DisposeAsync(); await database.DisposeAsync(); }
 
     [DockerFact]
-    public async Task Approved_funded_pair_becomes_active_and_is_removed_from_request_discovery()
+    public async Task Approved_funded_pair_grants_permission_without_starting_a_campaign()
     {
         await using (var db = Db())
         {
@@ -72,15 +72,15 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var approved = await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" });
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
         var approvedBody = await approved.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.True(approvedBody.GetProperty("promotionActive").GetBoolean());
-        Assert.Equal("Active", approvedBody.GetProperty("relationshipState").GetString());
-        Assert.False(approvedBody.GetProperty("activationRequired").GetBoolean());
+        Assert.False(approvedBody.GetProperty("promotionActive").GetBoolean());
+        Assert.Equal("AwaitingVideo", approvedBody.GetProperty("relationshipState").GetString());
+        Assert.True(approvedBody.GetProperty("activationRequired").GetBoolean());
 
         await using (var db = Db())
         {
             var relationship = await db.MerchantCreatorPartnerships.SingleAsync(x => x.Id == partnershipId);
             Assert.Equal(PartnershipStatus.Approved, relationship.Status);
-            Assert.Single(await db.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == partnershipId && x.Status == CampaignStatus.Active).ToListAsync());
+            Assert.Empty(await db.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == partnershipId).ToListAsync());
             Assert.False(await db.MerchantLocations.AnyAsync(x => x.MerchantId == MerchantId && x.IsActive));
         }
         var merchantDiscovery = await Get(merchant, "/api/v1/merchant/creators/search?q=Sammy");
@@ -93,7 +93,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
     }
 
     [DockerFact]
-    public async Task Previously_approved_funded_pair_without_an_active_location_reconciles_to_active()
+    public async Task Previously_approved_funded_pair_reconcile_does_not_publish_without_creator_go_live()
     {
         var creator = await AddCreator("Legacy Sammy Regression");
         Guid partnershipId;
@@ -111,11 +111,11 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var reconciled = await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/reconcile-readiness", new { });
         Assert.Equal(HttpStatusCode.OK, reconciled.StatusCode);
         var body = await reconciled.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.True(body.GetProperty("promotionActive").GetBoolean());
-        Assert.Equal("Active", body.GetProperty("relationshipState").GetString());
-        Assert.False(body.GetProperty("activationRequired").GetBoolean());
+        Assert.False(body.GetProperty("promotionActive").GetBoolean());
+        Assert.Equal("AwaitingVideo", body.GetProperty("relationshipState").GetString());
+        Assert.True(body.GetProperty("activationRequired").GetBoolean());
         await using var verify = Db();
-        Assert.Single(await verify.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == partnershipId && x.Status == CampaignStatus.Active).ToListAsync());
+        Assert.Empty(await verify.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == partnershipId).ToListAsync());
         Assert.False(await verify.MerchantLocations.AnyAsync(x => x.MerchantId == MerchantId && x.IsActive));
     }
 
@@ -174,7 +174,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var creatorRows = await (await Get(seededCreator, "/api/v1/creator/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         var activeRow = Assert.Single(creatorRows!.EnumerateArray(), x => x.GetProperty("merchantName").GetString() == "Active E2E Business");
         Assert.False(activeRow.GetProperty("promotionActive").GetBoolean());
-        Assert.Equal("ActivationRequired", activeRow.GetProperty("relationshipState").GetString());
+        Assert.Equal("Approved", activeRow.GetProperty("relationshipState").GetString());
         var shopperRows = await (await Get(shopper, "/api/v1/customer/discovery/advertising")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.DoesNotContain(shopperRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
         var shopperBusinesses = await (await Get(shopper, "/api/v1/customer/discovery/businesses?q=Addis")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -190,7 +190,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.True(activeRow.GetProperty("promotionActive").GetBoolean());
         Assert.Equal("Active", activeRow.GetProperty("relationshipState").GetString());
         shopperRows = await (await Get(shopper, "/api/v1/customer/discovery/advertising")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.DoesNotContain(shopperRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+        Assert.Contains(shopperRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
         shopperBusinesses = await (await Get(shopper, "/api/v1/customer/discovery/businesses?q=Addis")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Contains(shopperBusinesses!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
     }
@@ -289,7 +289,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
     }
 
     [DockerFact]
-    public async Task Creator_can_submit_exact_tiktok_promotion_video_and_customer_only_sees_it_after_business_approval()
+    public async Task Creator_go_live_starts_period_and_customer_visibility_only_after_video_approval()
     {
         var creator = await AddCreator("Promo Video Creator");
         using var creatorClient = Client(creator.UserId, creator.CreatorId);
@@ -301,13 +301,29 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
         var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
 
-        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+        var permission = await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" });
+        Assert.Equal(HttpStatusCode.OK, permission.StatusCode);
+        var permissionBody = await permission.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("AwaitingVideo", permissionBody.GetProperty("relationshipState").GetString());
+        Assert.False(permissionBody.GetProperty("promotionActive").GetBoolean());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, permissionBody.GetProperty("activatedAtUtc").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, permissionBody.GetProperty("expiresAtUtc").ValueKind);
+
+        var beforeVideo = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
+        var beforeVideoRows = await beforeVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(beforeVideoRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
 
         var submitted = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl });
         Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
         var pending = await submitted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal("Pending", pending.GetProperty("status").GetString());
         Assert.Equal(videoUrl, pending.GetProperty("videoUrl").GetString());
+
+        var pendingRelationships = await (await Get(creatorClient, "/api/v1/creator/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var pendingRelationship = pendingRelationships.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == partnershipId);
+        Assert.Equal("PendingApproval", pendingRelationship.GetProperty("relationshipState").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, pendingRelationship.GetProperty("activatedAtUtc").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, pendingRelationship.GetProperty("expiresAtUtc").ValueKind);
 
         var duplicate = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl });
         Assert.Equal(HttpStatusCode.OK, duplicate.StatusCode);
@@ -321,6 +337,57 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.DoesNotContain(hiddenRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
 
         Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{pending.GetProperty("id").GetGuid()}/approve", new { reason = (string?)null })).StatusCode);
+        var approvedRelationships = await (await Get(creatorClient, "/api/v1/creator/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var approvedRelationship = approvedRelationships.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == partnershipId);
+        Assert.Equal("Approved", approvedRelationship.GetProperty("relationshipState").GetString());
+        Assert.Equal("Approved", approvedRelationship.GetProperty("promotionVideo").GetProperty("status").GetString());
+        Assert.False(approvedRelationship.GetProperty("promotionActive").GetBoolean());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, approvedRelationship.GetProperty("activatedAtUtc").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, approvedRelationship.GetProperty("expiresAtUtc").ValueKind);
+
+        var stillHidden = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
+        var stillHiddenRows = await stillHidden.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(stillHiddenRows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
+
+        var creatorProfile = await (await Get(creatorClient, "/api/v1/creators/me")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("Active", creatorProfile.GetProperty("effectiveStatus").GetString());
+
+        await using (var db = Db())
+        {
+            var account = await db.UserAccounts.SingleAsync(x => x.Id == creator.UserId);
+            account.LockoutEndUtc = DateTime.UtcNow.AddMinutes(5);
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { })).StatusCode);
+        await using (var db = Db())
+        {
+            var account = await db.UserAccounts.SingleAsync(x => x.Id == creator.UserId);
+            account.LockoutEndUtc = null;
+            var merchantRow = await db.Merchants.SingleAsync(x => x.Id == MerchantId);
+            merchantRow.Status = MerchantStatus.Suspended;
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { })).StatusCode);
+        await using (var db = Db())
+        {
+            var merchantRow = await db.Merchants.SingleAsync(x => x.Id == MerchantId);
+            merchantRow.Status = MerchantStatus.Active;
+            Assert.False(await db.CreatorMerchantCampaigns.AnyAsync(x => x.MerchantCreatorPartnershipId == partnershipId));
+            await db.SaveChangesAsync();
+        }
+
+        var beforeGoLive = DateTime.UtcNow;
+        var goLive = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { });
+        Assert.Equal(HttpStatusCode.OK, goLive.StatusCode);
+        var liveBody = await goLive.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.True(liveBody.GetProperty("promotionActive").GetBoolean());
+        Assert.Equal("Active", liveBody.GetProperty("relationshipState").GetString());
+        Assert.Equal("Live", liveBody.GetProperty("promotionVideo").GetProperty("status").GetString());
+        var activatedAt = liveBody.GetProperty("activatedAtUtc").GetDateTime();
+        var expiresAt = liveBody.GetProperty("expiresAtUtc").GetDateTime();
+        Assert.InRange(activatedAt, beforeGoLive, DateTime.UtcNow);
+        Assert.Equal(activatedAt.AddDays(MerchantCreatorPartnership.ActivePeriodDays), expiresAt);
+
         var live = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         var liveRows = await live.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -402,14 +469,14 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var reactivated = await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/reactivate", new { reason = "Resume" });
         Assert.Equal(HttpStatusCode.OK, reactivated.StatusCode);
         var result = await reactivated.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.True(result.GetProperty("promotionActive").GetBoolean());
-        Assert.Equal("Active", result.GetProperty("relationshipState").GetString());
+        Assert.False(result.GetProperty("promotionActive").GetBoolean());
+        Assert.Equal("AwaitingVideo", result.GetProperty("relationshipState").GetString());
 
         await using (var verify = Db())
         {
             Assert.Single(await verify.MerchantCreatorPartnerships.Where(x => x.Id == partnershipId).ToListAsync());
             Assert.Equal(PartnershipStatus.Approved, (await verify.MerchantCreatorPartnerships.SingleAsync(x => x.Id == partnershipId)).Status);
-            Assert.Single(await verify.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == partnershipId && x.Status == CampaignStatus.Active).ToListAsync());
+            Assert.Empty(await verify.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == partnershipId).ToListAsync());
             Assert.False(await verify.MerchantLocations.AnyAsync(x => x.MerchantId == MerchantId && x.IsActive));
             Assert.Single(await verify.Notifications.Where(x => x.IdempotencyKey.StartsWith($"partnership:{partnershipId}:merchant:reactivated:")).ToListAsync());
             Assert.Single(await verify.NotificationOutboxMessages.Where(x => x.Notification.IdempotencyKey.StartsWith($"partnership:{partnershipId}:merchant:reactivated:")).ToListAsync());

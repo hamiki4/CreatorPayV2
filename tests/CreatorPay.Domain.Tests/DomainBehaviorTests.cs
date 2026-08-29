@@ -70,14 +70,15 @@ public sealed class DomainBehaviorTests
     }
 
     [Fact]
-    public void Partnership_Approval_RecordsApprovalAndPeriod()
+    public void Partnership_Approval_RecordsPermissionWithoutStartingLivePeriod()
     {
         var partnership = PendingPartnership();
         partnership.Approve(Now, Guid.NewGuid(), Now.AddDays(1), Now.AddDays(10));
         Assert.Equal(PartnershipStatus.Approved, partnership.Status);
         Assert.Equal(Now, partnership.ApprovedAtUtc);
-        Assert.Equal(Now, partnership.StartDateUtc);
-        Assert.Equal(Now.AddDays(MerchantCreatorPartnership.ActivePeriodDays), partnership.EndDateUtc);
+        Assert.Null(partnership.StartDateUtc);
+        Assert.Null(partnership.EndDateUtc);
+        Assert.False(partnership.IsTransactionEligibleAt(Now));
     }
 
     [Fact]
@@ -121,6 +122,7 @@ public sealed class DomainBehaviorTests
     {
         var partnership = PendingPartnership();
         partnership.Approve(Now, Guid.NewGuid());
+        partnership.ActivatePromotion(Now, Guid.NewGuid());
         Assert.True(partnership.IsTransactionEligibleAt(Now));
         Assert.True(partnership.IsTransactionEligibleAt(Now.AddDays(29)));
     }
@@ -130,6 +132,7 @@ public sealed class DomainBehaviorTests
     {
         var partnership = PendingPartnership();
         partnership.Approve(Now, Guid.NewGuid());
+        partnership.ActivatePromotion(Now, Guid.NewGuid());
         Assert.False(partnership.IsTransactionEligibleAt(Now.AddDays(MerchantCreatorPartnership.ActivePeriodDays)));
         Assert.False(partnership.IsTransactionEligibleAt(Now.AddDays(MerchantCreatorPartnership.ActivePeriodDays).AddTicks(1)));
     }

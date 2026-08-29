@@ -8,6 +8,10 @@ export function relationshipState(item:TimedRelationship,now=Date.now()){
   if(item.relationshipState==='Blocked')return{label:'Blocked',daysLeft:null,tone:'deactivated'}
   if(item.relationshipState==='Suspended'||item.relationshipState==='Revoked')return{label:'Deactivated',daysLeft:null,tone:'deactivated'}
   if(item.relationshipState==='Pending')return{label:'Pending',daysLeft:null,tone:'pending'}
+  if(item.relationshipState==='AwaitingVideo')return{label:'Awaiting Video',daysLeft:null,tone:'pending'}
+  if(item.relationshipState==='PendingApproval')return{label:'Pending Approval',daysLeft:null,tone:'pending'}
+  if(item.relationshipState==='Approved')return{label:'Approved',daysLeft:null,tone:'pending'}
+  if(item.relationshipState==='Rejected')return{label:'Video Rejected',daysLeft:null,tone:'declined'}
   if(item.relationshipState==='ActivationRequired'||item.activationRequired===true)return{label:'Activation Required',daysLeft:null,tone:'pending'}
   if(item.status==='Revoked'||item.status==='Suspended'||item.status==='Blocked')return{label:'Deactivated',daysLeft:null,tone:'deactivated'}
   if(item.status==='Rejected')return{label:'Declined',daysLeft:null,tone:'declined'}

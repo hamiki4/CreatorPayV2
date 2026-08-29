@@ -318,7 +318,13 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var beforeItems = await beforeActivation.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.False(beforeItems.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == relationshipId).GetProperty("promotionActive").GetBoolean());
 
-        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/activate", owner, new { reason = "Activate disposable promotion" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/activate", owner, new { reason = "Confirm advertising permission" })).StatusCode);
+        const string videoUrl = "https://www.tiktok.com/@active-e2e-business/video/1234567890123456789";
+        var promoVideo = await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/promotion-video", creator, new { videoUrl });
+        Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
+        var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", owner, new { reason = (string?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/go-live", creator, new { })).StatusCode);
         Guid campaignId;
         await using (var db = Db())
         {
@@ -327,11 +333,6 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
             Assert.Equal(CampaignStatus.Active, campaign.Status);
             Assert.Null(await db.CampaignQrCodes.SingleOrDefaultAsync(x => x.CampaignId == campaign.Id));
         }
-        const string videoUrl = "https://www.tiktok.com/@active-e2e-business/video/1234567890123456789";
-        var promoVideo = await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/promotion-video", creator, new { videoUrl });
-        Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
-        var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", owner, new { reason = (string?)null })).StatusCode);
 
         var discovery = await Get(client, "/api/v1/customer/discovery/advertising", shopper);
         Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
@@ -352,6 +353,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.False(creatorItems.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == relationshipId).GetProperty("promotionActive").GetBoolean());
 
         Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/reactivate", owner, new { reason = "Reactivate disposable promotion" })).StatusCode);
+        Assert.False((await ValidateCreator(client, cashier, creatorCode)).GetProperty("isValid").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/go-live", creator, new { })).StatusCode);
         Assert.True((await ValidateCreator(client, cashier, creatorCode)).GetProperty("isValid").GetBoolean());
         await using (var db = Db()) { var campaigns = await db.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == relationshipId).ToListAsync(); Assert.Single(campaigns); Assert.Equal(campaignId, campaigns[0].Id); Assert.Equal(CampaignStatus.Active, campaigns[0].Status); }
 
@@ -382,7 +385,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var owner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000008", merchantId: "20000000-0000-0000-0000-000000000001"); var creator = Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001"); var relationshipId = Guid.Parse("40000000-0000-0000-0000-000000000001");
         await using (var db = Db()) { var campaignIds = await db.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == relationshipId).Select(x => x.Id).ToArrayAsync(); var relationship = await db.MerchantCreatorPartnerships.SingleAsync(x => x.Id == relationshipId); relationship.AssignedCampaignId = null; await db.SaveChangesAsync(); await db.CheckoutSessions.Where(x => campaignIds.Contains(x.CampaignId)).ExecuteDeleteAsync(); await db.SavedPromotions.Where(x => campaignIds.Contains(x.CampaignId)).ExecuteDeleteAsync(); await db.CampaignCommissionAssignments.Where(x => x.MerchantCreatorPartnershipId == relationshipId).ExecuteDeleteAsync(); await db.CampaignQrCodes.Where(x => campaignIds.Contains(x.CampaignId)).ExecuteDeleteAsync(); await db.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == relationshipId).ExecuteDeleteAsync(); await db.PlatformCommissionAssignments.ExecuteDeleteAsync(); }
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/activate", creator, new { reason = "Creator may not activate" })).StatusCode);
-        var response = await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/activate", owner, new { reason = "Owner activation" }); Assert.Equal(HttpStatusCode.Conflict, response.StatusCode); Assert.Contains("Platform commission settings are configured", await response.Content.ReadAsStringAsync());
+        var permission = await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/activate", owner, new { reason = "Owner permission approval" }); Assert.Equal(HttpStatusCode.OK, permission.StatusCode);
+        var response = await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/go-live", creator, new { }); Assert.Equal(HttpStatusCode.Conflict, response.StatusCode); Assert.Contains("Platform commission settings are configured", await response.Content.ReadAsStringAsync());
         await using var verify = Db(); Assert.Empty(await verify.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == relationshipId).ToListAsync()); Assert.Equal(PartnershipStatus.Approved, (await verify.MerchantCreatorPartnerships.SingleAsync(x => x.Id == relationshipId)).Status);
     }
 
@@ -716,6 +720,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
                 Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
                 var promoVideoId = (await submitted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
                 Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", owner, new { reason = (string?)null }, $"approve-{partnership.Id:N}")).StatusCode);
+                Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/creator/partnerships/{partnership.Id}/go-live", creatorToken, new { }, $"go-live-{partnership.Id:N}")).StatusCode);
             }
         }
         var advertisingResponse = await Get(client, "/api/v1/customer/discovery/advertising?q=Addis", shopper); Assert.Equal(HttpStatusCode.OK, advertisingResponse.StatusCode); var advertising = await advertisingResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(); Assert.Equal(2, advertising.GetArrayLength()); Assert.All(advertising.EnumerateArray(), x => Assert.Equal("Active E2E Business", x.GetProperty("businessName").GetString()));
@@ -779,14 +784,14 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var beforeRows = await before.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.False(beforeRows.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == relationshipId).GetProperty("promotionActive").GetBoolean());
 
-        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/activate", owner, new { reason = "Pilot activation" })).StatusCode);
-        await using (var db = Db()) Assert.Single(await db.CreatorMerchantCampaigns.Where(x => x.MerchantCreatorPartnershipId == relationshipId && x.Status == CampaignStatus.Active).ToListAsync());
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/activate", owner, new { reason = "Confirm advertising permission" })).StatusCode);
         var creatorToken = Token(UserRole.Creator, creatorUserId.ToString(), creatorId: creatorId.ToString());
         const string activationVideoUrl = "https://www.tiktok.com/@activation-e2e/video/1234567890123456791";
         var promoVideo = await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/promotion-video", creatorToken, new { videoUrl = activationVideoUrl }, "activation-promo");
         Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
         var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", owner, new { reason = (string?)null }, "activation-promo-approve")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/go-live", creatorToken, new { }, "activation-promo-go-live")).StatusCode);
         await AssertPromotionState(client, owner, shopper, cashier, relationshipId, "4828", true);
         var submitted = await Post(client, "/api/v1/cashier/checkouts/by-creator", cashier, new { creatorCode = "4828", shopperPhoneNumber = "+251911000001", purchaseAmount = 100m }, "creator-id-lifecycle-submit");
         Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
@@ -796,6 +801,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         await AssertPromotionState(client, owner, shopper, cashier, relationshipId, "4828", false);
 
         Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/merchant/partnerships/{relationshipId}/reactivate", owner, new { reason = "Business reactivated ad" })).StatusCode);
+        await AssertPromotionState(client, owner, shopper, cashier, relationshipId, "4828", false);
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/creator/partnerships/{relationshipId}/go-live", creatorToken, new { }, "activation-promo-go-live-again")).StatusCode);
         await AssertPromotionState(client, owner, shopper, cashier, relationshipId, "4828", true);
 
         await using (var db = Db()) await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"CreatorMerchantCampaigns\" SET \"ExpiresAtUtc\" = {DateTime.UtcNow.AddSeconds(-1)} WHERE \"MerchantCreatorPartnershipId\" = {relationshipId}");
@@ -1806,8 +1813,8 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         await using (var db = Db())
         {
             var relationship = await db.MerchantCreatorPartnerships.SingleAsync(x => x.Id == Guid.Parse("40000000-0000-0000-0000-000000000001"));
-            activated = relationship.ApprovedAtUtc!.Value;
-            Assert.Equal(activated, relationship.StartDateUtc);
+            activated = relationship.StartDateUtc!.Value;
+            Assert.NotEqual(relationship.ApprovedAtUtc, relationship.StartDateUtc);
             Assert.Equal(activated.AddDays(MerchantCreatorPartnership.ActivePeriodDays), relationship.EndDateUtc);
             Assert.True(relationship.IsTransactionEligibleAt(activated.AddDays(29)));
             var expires = relationship.EndDateUtc!.Value;

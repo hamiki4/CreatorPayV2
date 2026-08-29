@@ -248,7 +248,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const activeRelationships = items.filter((x) => relationshipState(x).label === 'Active')
+  const approvedRelationships = items.filter((x) => x.status === 'Approved')
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -276,12 +276,28 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
     setVideoUrl(video?.videoUrl ?? '')
   }
 
+  async function goLive(relationship: AdvertisingRequest) {
+    if (saving) return
+    setSaving(true)
+    setMessage('')
+    try {
+      await api(`/api/v1/creator/partnerships/${relationship.id}/go-live`, {method: 'POST'})
+      setMessage('Your promotion is now live and visible to customers.')
+      refresh()
+    } catch (error) {
+      console.error(error)
+      setMessage((error as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <section className="creator-section">
       <h2>Active Ads</h2>
-      {message && <p className={message.includes('submitted') ? 'success-note' : 'friendly-error'} role="status">{message}</p>}
-      {activeRelationships.length === 0 ? (
-        <p className="compact-empty">No active advertising relationships yet.</p>
+      {message && <p className={message.includes('submitted') || message.includes('now live') ? 'success-note' : 'friendly-error'} role="status">{message}</p>}
+      {approvedRelationships.length === 0 ? (
+        <p className="compact-empty">No approved advertising relationships yet.</p>
       ) : (
         <div className="table-wrap">
           <div className="creator-ads-table creator-ads-list" role="table" aria-label="Active Ads">
@@ -292,16 +308,20 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
               <span role="columnheader">Date Activated</span>
               <span role="columnheader">Days Left</span>
             </div>
-            {activeRelationships.map((x) => {
+            {approvedRelationships.map((x) => {
               const state = relationshipState(x)
               const days = state.daysLeft === null ? '—' : daysLeftText(state.daysLeft, state.tone)
               const promo = x.promotionVideo
-              const statusText = promo?.status === 'Pending' ? 'Active' : 'Active'
+              const live = x.promotionActive && promo?.status === 'Live' && state.label === 'Active'
+              const statusText = live ? 'Active' : promo?.status === 'Pending' ? 'Pending Approval' : promo?.status === 'Approved' ? 'Approved' : promo?.status === 'Rejected' ? 'Rejected' : 'Awaiting Video'
+              const statusTone = live ? 'live' : promo?.status === 'Rejected' ? 'rejected' : promo?.status === 'Approved' ? 'approved' : 'pending'
               const action =
-                promo?.status === 'Live' ? (
+                live ? (
                   <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer">View TikTok Video</a>
                 ) : promo?.status === 'Pending' ? (
                   <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer">View Submitted Link</a>
+                ) : promo?.status === 'Approved' ? (
+                  <button type="button" onClick={() => void goLive(x)} disabled={saving}>Go Live</button>
                 ) : promo?.status === 'Rejected' ? (
                   <button type="button" className="quiet" onClick={() => promptForVideo(x, promo)}>Submit New Video</button>
                 ) : promo?.status === 'Expired' ? (
@@ -319,13 +339,13 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
                     {action}
                   </div>
                   <div className="creator-ads-status" role="cell" data-label="Status">
-                    <span className="status-badge">{statusText}</span>
+                    <span className={`status-badge creator-ad-status creator-ad-status--${statusTone}`}>{statusText}</span>
                   </div>
-                  <div className="creator-ads-activated" role="cell" data-label="Date Activated">
-                    {x.activatedAtUtc ? new Date(x.activatedAtUtc).toLocaleDateString() : '—'}
+                  <div className={`creator-ads-activated${live ? '' : ' is-empty'}`} role="cell" data-label="Date Activated">
+                    {live && x.activatedAtUtc ? new Date(x.activatedAtUtc).toLocaleDateString() : null}
                   </div>
-                  <div className="creator-ads-days" role="cell" data-label="Days Left">
-                    {days}
+                  <div className={`creator-ads-days${live ? '' : ' is-empty'}`} role="cell" data-label="Days Left">
+                    {live ? days : null}
                   </div>
                 </div>
               )

@@ -37,8 +37,8 @@ public sealed class MerchantCreatorPartnership : Entity
         Status = PartnershipStatus.Approved;
         ApprovedAtUtc = approvedAtUtc;
         ApprovedByUserId = approvedByUserId;
-        StartDateUtc = approvedAtUtc;
-        EndDateUtc = approvedAtUtc.AddDays(ActivePeriodDays);
+        StartDateUtc = null;
+        EndDateUtc = null;
     }
 
     public void Reject(DateTime rejectedAtUtc, Guid rejectedByUserId, string reason)
@@ -77,7 +77,7 @@ public sealed class MerchantCreatorPartnership : Entity
         EnsureUtc(changedAtUtc);
         if (Status is not (PartnershipStatus.Suspended or PartnershipStatus.Blocked or PartnershipStatus.Revoked)) throw new InvalidOperationException("Only a suspended, blocked, or deactivated partnership can be reactivated.");
         Status = PartnershipStatus.Approved; SuspendedAtUtc = null; SuspendedByUserId = null; SuspensionReason = null;
-        StartDateUtc = changedAtUtc; EndDateUtc = changedAtUtc.AddDays(ActivePeriodDays);
+        StartDateUtc = null; EndDateUtc = null;
         UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
     }
 
@@ -86,6 +86,14 @@ public sealed class MerchantCreatorPartnership : Entity
         EnsureUtc(changedAtUtc);
         if (Status != PartnershipStatus.Approved) throw new InvalidOperationException("Only an approved partnership can be activated.");
         StartDateUtc = changedAtUtc; EndDateUtc = changedAtUtc.AddDays(ActivePeriodDays);
+        UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
+    }
+
+    public void PreparePromotion(DateTime changedAtUtc, Guid changedByUserId)
+    {
+        EnsureUtc(changedAtUtc);
+        if (Status != PartnershipStatus.Approved) throw new InvalidOperationException("Only an approved partnership can prepare a promotion.");
+        StartDateUtc = null; EndDateUtc = null;
         UpdatedAtUtc = changedAtUtc; UpdatedBy = changedByUserId.ToString();
     }
 

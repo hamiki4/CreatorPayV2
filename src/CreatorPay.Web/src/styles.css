@@ -144,6 +144,165 @@
   }
 }
 
+/* Creator interactions use the role accent instead of inherited Customer green. */
+.role-creator button,
+.role-creator a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.role-creator .creator-home-stat,
+.role-creator .creator-next-payout,
+.role-creator .creator-start-card,
+.role-creator .creator-recent-heading,
+.role-creator .creator-recent-ad {
+  transition: background-color .14s ease, border-color .14s ease, box-shadow .14s ease, transform .14s ease;
+}
+
+@media (hover:hover) {
+  .role-creator .creator-home-stat:hover,
+  .role-creator .creator-next-payout:hover,
+  .role-creator .creator-recent-ad:hover {
+    border-color: #cdbdff;
+    background: #f7f3ff;
+    box-shadow: 0 5px 16px rgb(93 55 180 / .1);
+  }
+
+  .role-creator .creator-start-card:hover {
+    border-color: #c6b2ff;
+    background: radial-gradient(circle at 92% 18%, rgb(255 123 199 / .2), transparent 34%), linear-gradient(135deg, #f8f4ff, #ece4ff);
+  }
+
+  .role-creator .creator-recent-heading:hover {
+    background: transparent;
+    color: #5f32d1;
+  }
+}
+
+.role-creator .creator-home-stat:active,
+.role-creator .creator-next-payout:active,
+.role-creator .creator-recent-ad:active {
+  border-color: #bba5ff;
+  background: #eee7ff;
+  transform: translateY(1px);
+}
+
+.role-creator .creator-start-card:active {
+  border-color: #bba5ff;
+  background: linear-gradient(135deg, #f4efff, #e9dfff);
+  transform: translateY(1px);
+}
+
+.role-creator .creator-recent-heading:active {
+  background: transparent;
+  color: #5f32d1;
+}
+
+.role-creator .creator-home-stat:focus-visible,
+.role-creator .creator-next-payout:focus-visible,
+.role-creator .creator-start-card:focus-visible,
+.role-creator .creator-recent-heading:focus-visible,
+.role-creator .creator-recent-ad:focus-visible,
+.role-creator .workspace-nav button:focus-visible,
+.role-creator .account-actions .icon-button:focus-visible,
+.role-creator .settings-menu button:focus-visible {
+  outline: 3px solid #9d7aff;
+  outline-offset: 2px;
+}
+
+.role-creator .settings-menu button:hover,
+.role-creator .settings-menu button:active {
+  background: var(--role-accent-soft);
+  color: #5f32d1;
+}
+
+.role-creator .settings-menu .signout-action:hover,
+.role-creator .settings-menu .signout-action:active {
+  background: #fff0ef;
+  color: #a12f25;
+}
+
+.role-creator .account-status {
+  gap: .22rem;
+  font-size: .67rem;
+  font-weight: 700;
+}
+
+.role-creator .account-status-dot {
+  font-size: .56rem;
+}
+
+.role-creator .account-identity-avatar {
+  width: 2.45rem;
+  height: 2.45rem;
+  min-width: 2.45rem;
+}
+
+.role-creator .creator-ads-status .status-badge,
+.role-creator .creator-ad-status {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  padding: .28rem .58rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.role-creator .creator-ad-status--live {
+  background: #dff4e6;
+  color: #176b46;
+}
+
+.role-creator .creator-ad-status--pending {
+  background: #fff0f7;
+  color: #9a3d73;
+}
+
+.role-creator .creator-ad-status--approved {
+  background: var(--role-accent-soft);
+  color: #5f32d1;
+}
+
+.role-creator .creator-ad-status--rejected {
+  background: #fee7e5;
+  color: #a12f25;
+}
+
+.role-creator .creator-ads-promo button:not(.quiet) {
+  background: var(--role-accent);
+}
+
+.role-creator .creator-ads-row .is-empty {
+  display: none;
+}
+
+@media (max-width:650px) {
+  .role-creator .account-header {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: .35rem;
+  }
+
+  .role-creator .account-header-copy {
+    gap: .12rem;
+  }
+
+  .role-creator .account-identity-avatar {
+    width: 2.3rem;
+    height: 2.3rem;
+    min-width: 2.3rem;
+  }
+
+  .role-creator .creator-ads-status .status-badge,
+  .role-creator .creator-ad-status {
+    width: fit-content;
+  }
+}
+
 .confirmed-sale-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
@@ -334,9 +493,9 @@
 }
 
 .role-creator .account-identity-avatar {
-  width: 2.2rem;
-  height: 2.2rem;
-  min-width: 2.2rem;
+  width: 2.45rem;
+  height: 2.45rem;
+  min-width: 2.45rem;
   font-size: .76rem;
 }
 
@@ -690,5 +849,13 @@
   .role-creator .creator-start-card {
     min-height: 8.4rem;
     padding: .85rem;
+  }
+}
+
+@media (max-width:650px) {
+  .role-creator .account-identity-avatar {
+    width: 2.3rem;
+    height: 2.3rem;
+    min-width: 2.3rem;
   }
 }

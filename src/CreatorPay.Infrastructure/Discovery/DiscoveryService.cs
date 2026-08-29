@@ -241,6 +241,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         join partnership in RewardEligibilityQueries.EligibleRelationships(db, now) on campaign.MerchantCreatorPartnershipId equals partnership.Id
         where campaign.CreatorId == partnership.CreatorId && campaign.MerchantId == partnership.MerchantId
             && campaign.Status == CampaignStatus.Active && campaign.StartsAtUtc <= now && campaign.ExpiresAtUtc > now
+            && db.PromotionVideos.Any(video => video.MerchantCreatorPartnershipId == partnership.Id && video.Status == PromotionVideoStatus.Approved)
         select campaign;
 
     private static PromotionVideoSummaryDto? CurrentVideo(IEnumerable<PromotionVideo> videos, Guid relationshipId, DateTime? relationshipEndUtc, DateTime now)

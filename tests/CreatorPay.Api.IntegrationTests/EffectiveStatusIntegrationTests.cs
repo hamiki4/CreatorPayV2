@@ -172,6 +172,7 @@ public sealed class EffectiveStatusIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
         var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>())!.GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await Post(ownerClient, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", new { reason = (string?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(creatorClient, $"/api/v1/creator/partnerships/{relationshipId}/go-live", new { })).StatusCode);
 
         var funded = await Get(shopperClient, "/api/v1/customer/discovery/advertising?q=Active");
         var fundedRows = await funded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();

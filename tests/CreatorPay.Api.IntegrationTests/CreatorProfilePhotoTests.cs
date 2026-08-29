@@ -94,6 +94,10 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
         var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+        var promotion = await Post(client, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl = "https://www.tiktok.com/@profile-photo/video/1234567890123456789" });
+        var promotionId = (await promotion.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{promotionId}/approve", new { reason = (string?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { })).StatusCode);
 
         var me = await Get(client, "/api/v1/creators/me");
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
@@ -156,6 +160,7 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
         var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", new { reason = (string?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(activeClient, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { })).StatusCode);
 
         var invited = await Post(merchant, "/api/v1/merchant/partnerships/invitations", new { creatorId = pendingCreator.CreatorId, introductoryMessage = "Join us" });
         Assert.Equal(HttpStatusCode.Created, invited.StatusCode);

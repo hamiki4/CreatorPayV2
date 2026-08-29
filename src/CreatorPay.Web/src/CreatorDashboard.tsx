@@ -302,7 +302,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                 <span>Confirmed Sales</span>
                 <strong>{earnings?.currentPeriodConfirmedSales ?? 0}</strong>
               </button>
-              <button type="button" className="creator-home-stat" onClick={() => setTab('payout')}>
+              <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('payout')}>
                 <span>Payout Amount</span>
                 <strong>{money(earnings?.currentPayoutAmount ?? 0, earnings?.currencyCode)}</strong>
               </button>

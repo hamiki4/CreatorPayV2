@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { login } from './auth-helpers'
 
 const widths = [375, 390, 393, 430]
+const screenshotDir = process.env.E2E_SCREENSHOT_DIR
 
 async function assertNoOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
@@ -52,6 +53,7 @@ async function assertNavGeometry(page: Page, selector: string, expectedCount: nu
 
 for (const width of widths) {
   test(`mobile customer, creator, and business layouts stay within ${width}px`, async ({ page }) => {
+    test.setTimeout(90_000)
     await page.setViewportSize({ width, height: 900 })
 
     await login(page, 'shopper@e2e.invalid')
@@ -109,11 +111,15 @@ for (const width of widths) {
     expect(settingsBox).not.toBeNull()
     expect(settingsBox!.x).toBeGreaterThanOrEqual(0)
     expect(settingsBox!.x + settingsBox!.width).toBeLessThanOrEqual(width)
+    if (screenshotDir) await page.screenshot({ path: `${screenshotDir}/creator-settings-${width}.png`, animations: 'disabled' })
     await settings.click()
+    await page.waitForTimeout(250)
+    if (screenshotDir) await page.screenshot({ path: `${screenshotDir}/creator-home-${width}.png`, animations: 'disabled' })
     await creatorNav.getByRole('button', { name: 'Find Businesses', exact: true }).click()
     await expect(page.locator('.business-discovery-card .business-card-days')).toHaveCount(0)
     await page.getByRole('button', { name: 'Active Ads', exact: true }).click()
     await expect(creatorNav.getByRole('button', { name: 'Active Ads', exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
     await expect(creatorNav.getByRole('button', { name: 'Find Businesses', exact: true })).not.toHaveAttribute('aria-current', 'page')
     await page.getByRole('button', { name: 'Requests', exact: true }).click()
     await expect(creatorNav.getByRole('button', { name: 'Requests', exact: true })).toHaveAttribute('aria-current', 'page')
@@ -128,11 +134,22 @@ for (const width of widths) {
     await expect(page.getByRole('heading', { name: 'Creator' })).toBeVisible()
     const activeRow = page.locator('.creator-ads-row.relationship-active').filter({ hasText: 'Active E2E Business' }).first()
     await expect(activeRow).toBeVisible()
-    await expect(activeRow.getByRole('button', { name: 'Add Promo Video' })).toBeVisible()
+    await expect(activeRow.getByRole('link', { name: 'View TikTok Video' })).toHaveAttribute('href', 'https://www.tiktok.com/@weymela-e2e/video/1234567890123456789')
+    const activeBadge = activeRow.locator('.creator-ad-status--live')
+    await expect(activeBadge).toHaveText('Active')
+    const badgeBox = await activeBadge.boundingBox()
+    expect(badgeBox).not.toBeNull()
+    expect(badgeBox!.width).toBeLessThanOrEqual(90)
+    await expect(activeRow.locator('.creator-ads-activated')).not.toBeEmpty()
     await expect(activeRow.locator('.creator-ads-days')).toContainText('days left')
+    await page.waitForTimeout(250)
+    if (screenshotDir) await page.screenshot({ path: `${screenshotDir}/creator-active-ads-${width}.png`, animations: 'disabled' })
     await page.getByRole('button', { name: 'Profile', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
     await expect(page.getByText('Creator ID', { exact: true })).toBeVisible()
+    await page.waitForTimeout(250)
+    if (screenshotDir) await page.screenshot({ path: `${screenshotDir}/creator-profile-${width}.png`, animations: 'disabled' })
     await assertNoOverflow(page)
 
     await login(page, 'business-1@e2e.invalid')
@@ -162,6 +179,7 @@ for (const width of widths) {
 }
 
 test('desktop role navigation stays in the top chrome and remains compact', async ({ page }) => {
+  test.setTimeout(90_000)
   await page.setViewportSize({ width: 1280, height: 900 })
 
   await login(page, 'shopper@e2e.invalid')
@@ -177,6 +195,7 @@ test('desktop role navigation stays in the top chrome and remains compact', asyn
   await expect(creatorNav.getByRole('button')).toHaveText(['Home', 'Find Businesses', 'Active Ads', 'Requests', 'Payout', 'Profile'])
   await assertNavIconSize(page, 'nav[aria-label="Creator sections"] .workspace-nav-icon svg')
   expect((await creatorNav.boundingBox())!.height).toBeLessThanOrEqual(64)
+  if (screenshotDir) await page.screenshot({ path: `${screenshotDir}/creator-home-desktop.png`, fullPage: true, animations: 'disabled' })
 
   await login(page, 'business-1@e2e.invalid')
   const businessNav = page.getByRole('navigation', { name: 'Business sections' })
