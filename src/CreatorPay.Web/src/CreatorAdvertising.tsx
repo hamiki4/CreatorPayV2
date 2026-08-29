@@ -217,27 +217,25 @@ export function CreatorConfirmedSales() {
       {rows.length === 0 ? (
         <p className="compact-empty">No confirmed sales yet.</p>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Business</th>
-                <th>Status</th>
-                <th>Creator Earned</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((x) => (
-                <tr key={x.transactionId}>
-                  <td>{new Date(x.confirmedAtUtc).toLocaleDateString()}</td>
-                  <td>{x.businessName}</td>
-                  <td><span className="status-badge">{x.status}</span></td>
-                  <td>{adMoney(x.creatorEarned, x.currencyCode)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="confirmed-sale-list creator-confirmed-sale-list">
+          {rows.map((x) => {
+            const confirmed = new Date(x.confirmedAtUtc)
+            return (
+              <article className="confirmed-sale-card" key={x.transactionId}>
+                <div className="confirmed-sale-heading">
+                  <strong>{x.businessName}</strong>
+                  <span className="status-badge"><span aria-hidden="true">●</span> {x.status}</span>
+                </div>
+                <time dateTime={x.confirmedAtUtc}>
+                  {confirmed.toLocaleDateString()} · {confirmed.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}
+                </time>
+                <div className="confirmed-sale-earned">
+                  <span>You earned</span>
+                  <strong>+{adMoney(x.creatorEarned, x.currencyCode)}</strong>
+                </div>
+              </article>
+            )
+          })}
         </div>
       )}
     </section>

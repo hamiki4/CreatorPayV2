@@ -280,6 +280,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
             {id: 'find', label: 'Find Businesses', icon: 'find', active: selectedTab === 'find', onSelect: () => setTab('find')},
             {id: 'ads', label: 'Active Ads', icon: 'ads', active: selectedTab === 'ads', onSelect: () => setTab('ads')},
             {id: 'requests', label: 'Requests', icon: 'requests', active: selectedTab === 'requests', onSelect: () => setTab('requests')},
+            {id: 'sales', label: 'Confirmed Sales', icon: 'sales', active: selectedTab === 'sales', onSelect: () => setTab('sales')},
             {id: 'payout', label: 'Payout', icon: 'payout', active: selectedTab === 'payout', onSelect: () => setTab('payout')},
             {id: 'profile', label: 'Profile', icon: 'profile', active: selectedTab === 'profile', onSelect: () => setTab('profile')},
           ]}
@@ -293,7 +294,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
               </article>
               <article className="summary-action-card" role="button" tabIndex={0} onClick={() => setTab('sales')} onKeyDown={(event) => event.key === 'Enter' && setTab('sales')}>
                 <span>Confirmed Sales</span>
-                <strong>{requests.filter((x) => x.status === 'Approved').length}</strong>
+                <strong>{earnings?.currentPeriodConfirmedSales ?? 0}</strong>
                 <small>View sales</small>
               </article>
               <article>

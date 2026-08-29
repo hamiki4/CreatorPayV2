@@ -35,6 +35,7 @@ const roles: RoleCase[] = [
       {label: 'Find Businesses', slug: 'find'},
       {label: 'Active Ads', slug: 'active-ads'},
       {label: 'Requests', slug: 'requests'},
+      {label: 'Confirmed Sales', slug: 'confirmed-sales'},
       {label: 'Payout', slug: 'payout'},
       {label: 'Profile', slug: 'profile'},
     ],
@@ -48,6 +49,7 @@ const roles: RoleCase[] = [
       {label: 'Creators', slug: 'creators'},
       {label: 'Active Ads', slug: 'active-ads'},
       {label: 'Requests', slug: 'requests'},
+      {label: 'Confirmed Sales', slug: 'confirmed-sales'},
       {label: 'Checkout', slug: 'checkout'},
       {label: 'Profile', slug: 'profile'},
     ],
@@ -91,7 +93,7 @@ async function assertLiveGeometry(page: Page, role: RoleCase, mobile: boolean) {
   )
   expect(buttons).toHaveLength(role.tabs.length)
   for (const button of buttons) {
-    expect(button.width).toBeGreaterThanOrEqual(mobile ? 60 : 100)
+    expect(button.width).toBeGreaterThanOrEqual(mobile ? 48 : 100)
     expect(button.height).toBeGreaterThanOrEqual(44)
     expect(button.display).not.toBe('none')
     expect(button.visibility).toBe('visible')

@@ -144,6 +144,132 @@
   }
 }
 
+.confirmed-sale-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: .75rem;
+}
+
+.confirmed-sale-card {
+  display: grid;
+  gap: .7rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #dbe5dd;
+  border-radius: .95rem;
+  background: #fff;
+  box-shadow: 0 2px 10px rgb(15 23 42 / .05);
+}
+
+.role-creator .confirmed-sale-card {
+  border-color: #ddd2ff;
+}
+
+.role-business .confirmed-sale-card {
+  border-color: #d7e2fa;
+}
+
+.confirmed-sale-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.confirmed-sale-heading > strong {
+  min-width: 0;
+  color: var(--shell-text);
+  font: 700 1rem/1.25 Manrope, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.confirmed-sale-heading .status-badge {
+  flex: 0 0 auto;
+}
+
+.confirmed-sale-card time {
+  color: var(--shell-muted);
+  font-size: .8rem;
+}
+
+.confirmed-sale-earned {
+  display: grid;
+  gap: .15rem;
+  padding-top: .65rem;
+  border-top: 1px solid #ece8f7;
+}
+
+.confirmed-sale-earned span,
+.confirmed-sales-summary span,
+.confirmed-sale-card dt {
+  color: var(--shell-muted);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.confirmed-sale-earned strong {
+  color: var(--role-accent);
+  font: 700 1.25rem/1.2 Manrope, sans-serif;
+}
+
+.confirmed-sales-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .7rem;
+  margin-bottom: .8rem;
+}
+
+.confirmed-sales-summary article {
+  display: grid;
+  gap: .35rem;
+  min-width: 0;
+  padding: .9rem 1rem;
+  border: 1px solid #d7e2fa;
+  border-radius: .85rem;
+  background: #fff;
+}
+
+.confirmed-sales-summary strong {
+  color: var(--shell-text);
+  font: 700 clamp(1rem, 3vw, 1.25rem)/1.2 Manrope, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.confirmed-sale-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem 1rem;
+  margin: 0;
+}
+
+.confirmed-sale-card dl > div {
+  min-width: 0;
+}
+
+.confirmed-sale-card dd {
+  margin: .15rem 0 0;
+  color: var(--shell-text);
+  font-size: .86rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width:650px) {
+  .account-shell.role-creator .workspace-nav,
+  .account-shell.role-business .workspace-nav {
+    padding-inline: .25rem;
+  }
+
+  .confirmed-sales-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .confirmed-sale-card dl {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (min-width:651px) {
   .account-shell .workspace-nav {
     gap: .25rem;
@@ -270,7 +396,8 @@
     min-width: 0;
   }
 
-  .role-creator .workspace-nav-label {
+  .role-creator .workspace-nav-label,
+  .role-business .workspace-nav-label {
     overflow: visible;
     white-space: normal;
     text-overflow: clip;

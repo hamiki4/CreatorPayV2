@@ -594,6 +594,74 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Confirmed_sales_are_transaction_backed_private_and_separate_from_payouts()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var seed = await seeded.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var creator = Token(UserRole.Creator, "30000000-0000-0000-0000-000000000004", creatorId: "30000000-0000-0000-0000-000000000001");
+        var otherCreator = Token(UserRole.Creator, "30000000-0000-0000-0000-000000000022", creatorId: "30000000-0000-0000-0000-000000000021");
+        var owner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000008", merchantId: "20000000-0000-0000-0000-000000000001");
+        var otherOwner = Token(UserRole.MerchantAdmin, "21000000-0000-0000-0000-000000000012", merchantId: "21000000-0000-0000-0000-000000000002");
+        var cashier = Token(UserRole.Cashier, "20000000-0000-0000-0000-000000000006", merchantId: "20000000-0000-0000-0000-000000000001", cashierId: "20000000-0000-0000-0000-000000000005");
+        var firstShopper = Token(UserRole.Customer, "10000000-0000-0000-0000-000000000002", customerId: "10000000-0000-0000-0000-000000000001");
+        var secondShopper = Token(UserRole.Customer, "11000000-0000-0000-0000-000000000011", customerId: "11000000-0000-0000-0000-000000000001");
+
+        var before = await (await Get(client, "/api/v1/creator/ads/performance", creator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(before.GetProperty("transactions").EnumerateArray());
+        Assert.Contains(before.GetProperty("businesses").EnumerateArray(), x => x.GetProperty("status").GetString() == "Active" && x.GetProperty("confirmedSales").GetInt32() == 0);
+
+        async Task<Guid> StartSale(string shopperPhone, string key)
+        {
+            var response = await Post(client, "/api/v1/cashier/checkouts/offer", cashier, new { qrPayload = seed.GetProperty("offerQrPayload").GetString(), merchantLocationId = seed.GetProperty("locationId").GetGuid(), shopperPhoneNumber = shopperPhone, purchaseAmount = 100m }, key);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            Assert.Equal("awaiting_shopper_confirmation", body.GetProperty("code").GetString());
+            return body.GetProperty("checkout").GetProperty("id").GetGuid();
+        }
+
+        var firstCheckout = await StartSale("0911000001", "confirmed-sales-one");
+        var unconfirmedCreator = await (await Get(client, "/api/v1/creator/ads/performance", creator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var unconfirmedMerchant = await (await Get(client, "/api/v1/merchant/confirmed-sales", owner)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(unconfirmedCreator.GetProperty("transactions").EnumerateArray());
+        Assert.Equal(0, unconfirmedMerchant.GetProperty("confirmedSales").GetInt32());
+
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/customer/checkouts/{firstCheckout}/approve", firstShopper, new { }, "confirmed-sales-one-approve")).StatusCode);
+        var secondCheckout = await StartSale("0922000001", "confirmed-sales-two");
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/customer/checkouts/{secondCheckout}/approve", secondShopper, new { }, "confirmed-sales-two-approve")).StatusCode);
+
+        var creatorReport = await (await Get(client, "/api/v1/creator/ads/performance", creator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var creatorSales = creatorReport.GetProperty("transactions").EnumerateArray().ToList();
+        Assert.Equal(2, creatorSales.Count);
+        Assert.All(creatorSales, sale =>
+        {
+            Assert.Equal("Confirmed", sale.GetProperty("status").GetString());
+            Assert.Equal(4m, sale.GetProperty("creatorEarned").GetDecimal());
+            Assert.False(sale.TryGetProperty("purchaseAmount", out _));
+            Assert.False(sale.TryGetProperty("saleAmount", out _));
+            Assert.False(sale.TryGetProperty("customer", out _));
+            Assert.False(sale.TryGetProperty("shopper", out _));
+        });
+        var otherCreatorReport = await (await Get(client, "/api/v1/creator/ads/performance", otherCreator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(otherCreatorReport.GetProperty("transactions").EnumerateArray());
+
+        var merchantReport = await (await Get(client, "/api/v1/merchant/confirmed-sales", owner)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(2, merchantReport.GetProperty("confirmedSales").GetInt32());
+        Assert.Equal(200m, merchantReport.GetProperty("totalSalesAmount").GetDecimal());
+        Assert.Equal(20m, merchantReport.GetProperty("totalCommissionAmount").GetDecimal());
+        Assert.Equal(2, merchantReport.GetProperty("sales").GetArrayLength());
+        var otherMerchantReport = await (await Get(client, "/api/v1/merchant/confirmed-sales", otherOwner)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(0, otherMerchantReport.GetProperty("confirmedSales").GetInt32());
+
+        var payoutSummary = await (await Get(client, "/api/v1/creator/earnings/summary", creator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(2, payoutSummary.GetProperty("currentPeriodConfirmedSales").GetInt32());
+        Assert.Equal(8m, payoutSummary.GetProperty("currentPayoutAmount").GetDecimal());
+        var payouts = await (await Get(client, "/api/v1/creator/payouts", creator)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(payouts.EnumerateArray());
+    }
+
+    [DockerFact]
     public async Task Business_creator_discovery_returns_only_active_approved_accounts_and_supports_name_public_id_and_handle()
     {
         using var client = factory!.CreateClient();
