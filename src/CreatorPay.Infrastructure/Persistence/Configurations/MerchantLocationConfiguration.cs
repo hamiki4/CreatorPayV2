@@ -8,7 +8,12 @@ public sealed class MerchantLocationConfiguration : IEntityTypeConfiguration<Mer
 {
     public void Configure(EntityTypeBuilder<MerchantLocation> builder)
     {
-        builder.ToTable("merchant_locations"); builder.ConfigureEntity();
+        builder.ToTable("merchant_locations", table =>
+        {
+            table.HasCheckConstraint("CK_merchant_locations_latitude", "\"Latitude\" IS NULL OR (\"Latitude\" >= -90 AND \"Latitude\" <= 90)");
+            table.HasCheckConstraint("CK_merchant_locations_longitude", "\"Longitude\" IS NULL OR (\"Longitude\" >= -180 AND \"Longitude\" <= 180)");
+        });
+        builder.ConfigureEntity();
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.AddressLine1).HasMaxLength(250).IsRequired();
         builder.Property(x => x.AddressLine2).HasMaxLength(250);

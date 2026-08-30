@@ -17,18 +17,6 @@ namespace CreatorPay.Infrastructure.Discovery;
 public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutOptions> checkoutOptions, IQrTokenService qrTokens, CreatorQrUrlBuilder qrUrls, ICreatorProfilePhotoStore profilePhotos) : IDiscoveryService
 {
     private readonly string currencyCode = checkoutOptions.Value.CurrencyCode;
-    private static readonly IReadOnlyDictionary<string, (double Latitude, double Longitude)> LocationHints = new Dictionary<string, (double, double)>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["Piazza"] = (9.0350, 38.7570),
-        ["Piassa"] = (9.0350, 38.7570),
-        ["Gotera"] = (8.9950, 38.7900),
-        ["Bole"] = (8.9990, 38.7890),
-        ["Kazanchis"] = (9.0105, 38.7690),
-        ["Megenagna"] = (9.0380, 38.8070),
-        ["Mexico"] = (8.9865, 38.7410),
-        ["Arat Kilo"] = (9.0358, 38.7505),
-        ["Addis Ababa"] = (9.0300, 38.7400),
-    };
 
     public async Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, double? latitude, double? longitude, CancellationToken ct)
     {
@@ -47,12 +35,21 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         if (!string.IsNullOrWhiteSpace(selectedCategory)) merchants = merchants.Where(x => x.Category != null && EF.Functions.ILike(x.Category, selectedCategory));
         var rows = await merchants.OrderBy(x => x.TradingName).Take(50).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, x.BusinessAddress, x.Region }).ToListAsync(ct);
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.Id), currencyCode, ct);
-        var lookup = rows.ToDictionary(x => x.Id);
+        var merchantIds = rows.Select(x => x.Id).ToArray();
+        var locationLookup = (await db.MerchantLocations.AsNoTracking()
+            .Where(x => merchantIds.Contains(x.MerchantId) && x.IsActive && x.Latitude.HasValue && x.Longitude.HasValue)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.MerchantId, x.Latitude, x.Longitude })
+            .ToListAsync(ct))
+            .GroupBy(x => x.MerchantId)
+            .ToDictionary(x => x.Key, x => x.First());
         var ordered = rows.Where(x => eligibleMerchantIds.Contains(x.Id))
             .Select(x => new ShopperBusinessDto(x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, true))
             .ToArray();
         return latitude.HasValue && longitude.HasValue
-            ? ordered.OrderBy(x => DistanceForMerchant(lookup[x.BusinessId].TradingName, lookup[x.BusinessId].BusinessAddress, lookup[x.BusinessId].City, lookup[x.BusinessId].Region, latitude, longitude)).ToArray()
+            ? ordered.OrderBy(x => locationLookup.TryGetValue(x.BusinessId, out var location)
+                ? DistanceForCoordinates(location.Latitude, location.Longitude, latitude, longitude) ?? double.MaxValue
+                : double.MaxValue).ThenBy(x => x.BusinessName).ToArray()
             : ordered;
     }
 
@@ -100,7 +97,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
                             join relationship in db.MerchantCreatorPartnerships.AsNoTracking() on campaign.MerchantCreatorPartnershipId equals relationship.Id
                             join merchant in db.Merchants.AsNoTracking() on relationship.MerchantId equals merchant.Id
                             join creator in db.Creators.AsNoTracking() on relationship.CreatorId equals creator.Id
-                            select new { RelationshipId = relationship.Id, MerchantId = merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.BusinessAddress, merchant.City, merchant.Region, merchant.BusinessType, CreatorId = creator.Id, creator.PublicCreatorId, creator.CreatorCode, creator.DisplayName, creator.ProfileImageFileName, relationship.EndDateUtc, campaign.ExpiresAtUtc };
+                            select new { RelationshipId = relationship.Id, MerchantId = merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.BusinessAddress, merchant.City, merchant.Region, merchant.BusinessType, CreatorId = creator.Id, creator.PublicCreatorId, creator.CreatorCode, creator.DisplayName, creator.ProfileImageFileName, relationship.EndDateUtc, campaign.StartsAtUtc, campaign.ExpiresAtUtc };
         var term = query?.Trim();
         if (!string.IsNullOrWhiteSpace(term)) relationships = relationships.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.BusinessAddress, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.DisplayName, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{term}%"));
         var selectedType = businessType?.Trim();
@@ -109,6 +106,21 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         var rows = campaignRows.GroupBy(x => x.RelationshipId).Select(x => x.OrderByDescending(y => y.ExpiresAtUtc).First()).Take(100).ToList();
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.MerchantId).Distinct(), currencyCode, ct);
         var relationshipIds = rows.Select(x => x.RelationshipId).Distinct().ToArray();
+        var merchantIds = rows.Select(x => x.MerchantId).Distinct().ToArray();
+        var creatorIds = rows.Select(x => x.CreatorId).Distinct().ToArray();
+        var locationLookup = (await db.MerchantLocations.AsNoTracking()
+            .Where(x => merchantIds.Contains(x.MerchantId) && x.IsActive)
+            .OrderByDescending(x => x.Latitude.HasValue && x.Longitude.HasValue)
+            .ThenBy(x => x.Name)
+            .Select(x => new { x.MerchantId, x.AddressLine1, x.AddressLine2, x.City, x.Region, x.Latitude, x.Longitude })
+            .ToListAsync(ct))
+            .GroupBy(x => x.MerchantId)
+            .ToDictionary(x => x.Key, x => x.First());
+        var followerCounts = await db.CreatorSocialProfiles.AsNoTracking()
+            .Where(x => creatorIds.Contains(x.CreatorId))
+            .GroupBy(x => x.CreatorId)
+            .Select(x => new { CreatorId = x.Key, Followers = x.Max(y => y.FollowerCount) })
+            .ToDictionaryAsync(x => x.CreatorId, x => x.Followers, ct);
         var promoVideos = await db.PromotionVideos.AsNoTracking()
             .Where(x => relationshipIds.Contains(x.MerchantCreatorPartnershipId))
             .OrderByDescending(x => x.SubmittedAtUtc)
@@ -118,13 +130,14 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
             var relationshipEnd = x.EndDateUtc ?? x.ExpiresAtUtc;
             var video = CurrentVideo(promoVideos, x.RelationshipId, relationshipEnd, now);
             if (video is null || video.Status != "Live") return null;
-            var distance = DistanceForMerchant(x.TradingName, x.BusinessAddress, x.City, x.Region, latitude, longitude);
-            return new ShopperAdvertisingRowDto(
+            locationLookup.TryGetValue(x.MerchantId, out var location);
+            var distance = DistanceForCoordinates(location?.Latitude, location?.Longitude, latitude, longitude);
+            var row = new ShopperAdvertisingRowDto(
                 x.RelationshipId,
                 x.MerchantId,
                 x.PublicMerchantId,
                 x.TradingName,
-                x.City,
+                location?.City ?? x.City,
                 x.CreatorId,
                 x.PublicCreatorId,
                 x.CreatorCode,
@@ -134,17 +147,31 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
                 true,
                 PhotoUrl(x.PublicCreatorId, x.ProfileImageFileName),
                 x.BusinessType,
-                x.BusinessAddress,
-                null,
-                x.Region,
+                location?.AddressLine1 ?? x.BusinessAddress,
+                location?.AddressLine2,
+                location?.Region ?? x.Region,
                 video is { Status: "Live" } ? video.VideoUrl : null,
                 video?.Platform,
                 video?.Status,
                 video?.RejectionReason,
                 video?.SubmittedAtUtc,
                 video?.ReviewedAtUtc,
-                distance);
-        }).Where(x => x is not null).Select(x => x!).OrderBy(x => latitude.HasValue && longitude.HasValue ? x.DistanceKm ?? double.MaxValue : 0).ThenBy(x => x.BusinessName).ThenBy(x => x.CreatorName).ToArray();
+                distance,
+                location?.Latitude,
+                location?.Longitude);
+            return new
+            {
+                Row = row,
+                Followers = followerCounts.GetValueOrDefault(x.CreatorId),
+                x.StartsAtUtc
+            };
+        }).Where(x => x is not null).Select(x => x!)
+            .OrderByDescending(x => x.Followers)
+            .ThenByDescending(x => x.StartsAtUtc)
+            .ThenBy(x => x.Row.BusinessName)
+            .ThenBy(x => x.Row.CreatorName)
+            .Select(x => x.Row)
+            .ToArray();
     }
 
     public async Task<ShopperCreatorQrDto> GetShopperCreatorQrAsync(Guid relationshipId, CancellationToken ct)
@@ -265,27 +292,10 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         return new(current.Id, current.VideoUrl, current.Platform, status, current.SubmittedAtUtc, current.ReviewedAtUtc, current.RejectionReason);
     }
 
-    private static double? DistanceForMerchant(string tradingName, string? businessAddress, string city, string? region, double? latitude, double? longitude)
+    private static double? DistanceForCoordinates(double? businessLatitude, double? businessLongitude, double? customerLatitude, double? customerLongitude)
     {
-        if (!latitude.HasValue || !longitude.HasValue) return null;
-        var combined = $"{tradingName} {businessAddress} {city} {region}".Trim();
-        if (!TryResolveCoordinates(combined, out var lat, out var lon)) return null;
-        return Haversine(latitude.Value, longitude.Value, lat, lon);
-    }
-
-    private static bool TryResolveCoordinates(string value, out double latitude, out double longitude)
-    {
-        foreach (var hint in LocationHints)
-        {
-            if (value.Contains(hint.Key, StringComparison.OrdinalIgnoreCase))
-            {
-                latitude = hint.Value.Latitude;
-                longitude = hint.Value.Longitude;
-                return true;
-            }
-        }
-        latitude = longitude = default;
-        return false;
+        if (!businessLatitude.HasValue || !businessLongitude.HasValue || !customerLatitude.HasValue || !customerLongitude.HasValue) return null;
+        return Haversine(customerLatitude.Value, customerLongitude.Value, businessLatitude.Value, businessLongitude.Value);
     }
 
     private static double Haversine(double lat1, double lon1, double lat2, double lon2)

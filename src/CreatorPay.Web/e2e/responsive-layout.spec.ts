@@ -2,7 +2,12 @@ import { expect, test } from './fixtures'
 import type { Page } from '@playwright/test'
 import { login } from './auth-helpers'
 
-const widths = [375, 390, 393, 430]
+const mobileViewports = [
+  {width:375,height:812},
+  {width:390,height:844},
+  {width:393,height:852},
+  {width:430,height:932},
+]
 const screenshotDir = process.env.E2E_SCREENSHOT_DIR
 
 async function assertNoOverflow(page: Page) {
@@ -61,33 +66,44 @@ async function assertNavGeometry(page: Page, selector: string, expectedCount: nu
   await expect(page.locator('main, .account-shell').first()).toBeVisible()
 }
 
-for (const width of widths) {
-  test(`mobile customer, creator, and business layouts stay within ${width}px`, async ({ page }) => {
+for (const {width,height} of mobileViewports) {
+  test(`mobile customer, creator, and business layouts stay within ${width}x${height}`, async ({ page }) => {
     test.setTimeout(90_000)
-    await page.setViewportSize({ width, height: 900 })
+    await page.setViewportSize({width,height})
 
     await login(page, 'shopper@e2e.invalid')
+    await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible()
+    const customerNav = page.getByRole('navigation', { name: 'Customer navigation' })
+    await expect(customerNav.getByRole('button')).toHaveText(['Home', 'Discover', 'Cashback', 'Profile'])
+    await expect(customerNav.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page')
+    await assertNavGeometry(page, 'nav[aria-label="Customer navigation"]', 4, 80)
+    await assertNavIconSize(page, 'nav[aria-label="Customer navigation"] .workspace-nav-icon svg')
+    await expect(page.getByText('Loading promotions…')).toBeHidden()
+    if (screenshotDir) await page.screenshot({ path: `${screenshotDir}/customer-home-${width}.png`, fullPage: true, animations: 'disabled' })
+    await customerNav.getByRole('button', { name: 'Discover', exact: true }).click()
+    await expect(customerNav.getByRole('button', { name: 'Discover', exact: true })).toHaveAttribute('aria-current', 'page')
     await expect(page.getByRole('heading', { name: 'Discover Promotions' })).toBeVisible()
     await expect(page.getByPlaceholder('Search business or creator')).toBeVisible()
-    const customerNav = page.getByRole('navigation', { name: 'Customer navigation' })
-    await expect(customerNav.getByRole('button')).toHaveText(['Discover', 'Cashback', 'Profile'])
-    await expect(customerNav.getByRole('button', { name: 'Discover', exact: true })).toHaveAttribute('aria-current', 'page')
-    await assertNavGeometry(page, 'nav[aria-label="Customer navigation"]', 3, 86)
-    await assertNavIconSize(page, 'nav[aria-label="Customer navigation"] .workspace-nav-icon svg')
-    await expect(page.getByLabel('Open filters')).toBeVisible()
-    await page.getByLabel('Open filters').click()
-    await expect(page.getByRole('dialog', { name: 'Filters' })).toBeVisible()
-    await expect(page.getByText('Business Type', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Hide filters')).toBeVisible()
+    await expect(page.getByLabel('Promotion filters')).toBeVisible()
     await expect(page.getByRole('combobox', { name: 'Business Type' })).toHaveValue('')
-    await expect(page.getByText('Nearest', { exact: true })).toBeVisible()
-    await expect(page.getByText('Recommended', { exact: true })).toBeVisible()
-    await expect(page.getByText('📍 Near Me')).toBeVisible()
-    await page.getByRole('button', { name: 'Done', exact: true }).click()
-    await expect(page.getByRole('dialog', { name: 'Filters' })).toBeHidden()
+    await expect(page.getByRole('combobox', { name: 'Distance' })).toHaveValue('')
+    await expect(page.getByRole('combobox', { name: 'Sort promotions' })).toHaveValue('recommended')
+    if (screenshotDir) await page.screenshot({ path: `${screenshotDir}/customer-discover-${width}.png`, fullPage: true, animations: 'disabled' })
     await page.getByRole('button', { name: 'Profile', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Help', exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible()
+    await expect(page.locator('.shopper-profile').getByRole('button', { name: 'Help', exact: true })).toHaveCount(0)
+    await expect(page.locator('.shopper-profile').getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Settings' }).click()
+    const customerSettings = page.getByRole('menu')
+    await expect(customerSettings.getByRole('menuitem', { name: /Enable device notifications/ })).toBeVisible()
+    await expect(customerSettings.getByRole('menuitem', { name: 'Help', exact: true })).toBeVisible()
+    await expect(customerSettings.getByRole('menuitem', { name: 'Sign out', exact: true })).toBeVisible()
+    const customerSettingsBox = await customerSettings.boundingBox()
+    expect(customerSettingsBox).not.toBeNull()
+    expect(customerSettingsBox!.x).toBeGreaterThanOrEqual(0)
+    expect(customerSettingsBox!.x + customerSettingsBox!.width).toBeLessThanOrEqual(width)
+    await page.getByRole('button', { name: 'Settings' }).click()
     await page.getByRole('button', { name: 'Cashback', exact: true }).click()
     await expect(page.getByText('Available Cashback', { exact: true })).toBeVisible()
     await assertNoOverflow(page)
@@ -233,9 +249,15 @@ test('desktop role navigation stays in the top chrome and remains compact', asyn
   await login(page, 'shopper@e2e.invalid')
   const customerNav = page.getByRole('navigation', { name: 'Customer navigation' })
   await expect(customerNav).not.toHaveCSS('position', 'fixed')
-  await expect(customerNav.getByRole('button')).toHaveText(['Discover', 'Cashback', 'Profile'])
+  await expect(customerNav.getByRole('button')).toHaveText(['Home', 'Discover', 'Cashback', 'Profile'])
   await assertNavIconSize(page, 'nav[aria-label="Customer navigation"] .workspace-nav-icon svg')
   expect((await customerNav.boundingBox())!.height).toBeLessThanOrEqual(64)
+  if (screenshotDir) {
+    await page.screenshot({ path: `${screenshotDir}/customer-home-desktop.png`, fullPage: true, animations: 'disabled' })
+    await customerNav.getByRole('button', { name: 'Discover', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Discover Promotions' })).toBeVisible()
+    await page.screenshot({ path: `${screenshotDir}/customer-discover-desktop.png`, fullPage: true, animations: 'disabled' })
+  }
 
   await login(page, 'creator@e2e.invalid')
   const creatorNav = page.getByRole('navigation', { name: 'Creator sections' })

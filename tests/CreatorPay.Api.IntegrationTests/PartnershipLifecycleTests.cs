@@ -420,6 +420,14 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.Equal(videoUrl, row.GetProperty("promotionVideoUrl").GetString());
         Assert.Equal("Live", row.GetProperty("promotionVideoStatus").GetString());
         Assert.Equal("TikTok", row.GetProperty("promotionVideoPlatform").GetString());
+
+        var located = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo&latitude=9.03&longitude=38.74");
+        Assert.Equal(HttpStatusCode.OK, located.StatusCode);
+        var locatedRows = await located.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var locatedRow = Assert.Single(locatedRows!.EnumerateArray(), x => x.GetProperty("relationshipId").GetGuid() == partnershipId);
+        Assert.Equal(9.03, locatedRow.GetProperty("businessLatitude").GetDouble(), 3);
+        Assert.Equal(38.74, locatedRow.GetProperty("businessLongitude").GetDouble(), 3);
+        Assert.InRange(locatedRow.GetProperty("distanceKm").GetDouble(), 0, 0.01);
     }
 
     [DockerFact]

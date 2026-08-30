@@ -21,6 +21,7 @@ const roles: RoleCase[] = [
     navigation: 'Customer navigation',
     accent: 'rgb(31, 138, 59)',
     tabs: [
+      {label: 'Home', slug: 'home'},
       {label: 'Discover', slug: 'discover'},
       {label: 'Cashback', slug: 'cashback'},
       {label: 'Profile', slug: 'profile'},
