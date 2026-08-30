@@ -21,6 +21,9 @@ export type NavIconName =
   | 'mapPin'
   | 'video'
   | 'filter'
+  | 'menu'
+  | 'close'
+  | 'shield'
 
 type NavIconProps = {
   name: NavIconName
@@ -181,6 +184,25 @@ export function NavIcon({name, size = 24, className}: NavIconProps) {
       return (
         <svg {...svgProps}>
           <path d="M4 5h16l-6.25 7.15v4.65L10.25 19v-6.85L4 5Z" />
+        </svg>
+      )
+    case 'menu':
+      return (
+        <svg {...svgProps}>
+          <path d="M4 6.5h16M4 12h16M4 17.5h16" />
+        </svg>
+      )
+    case 'close':
+      return (
+        <svg {...svgProps}>
+          <path d="m5 5 14 14M19 5 5 19" />
+        </svg>
+      )
+    case 'shield':
+      return (
+        <svg {...svgProps}>
+          <path d="M12 3 5 6v5c0 4.8 2.8 8.1 7 10 4.2-1.9 7-5.2 7-10V6l-7-3Z" />
+          <path d="m9.2 12 1.8 1.8 3.8-4" />
         </svg>
       )
   }

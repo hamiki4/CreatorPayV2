@@ -295,16 +295,16 @@ export function AdminPayoutWorkspace() {
               <tbody>
                 {lines.map((x) => (
                   <tr key={x.partyId}>
-                    <td>
+                    <td data-label={tab === "creators" ? "Creator Name" : "Customer Name"}>
                       {x.partyName}
                       {tab === "shoppers" && (
                         <small className="secondary-id">{x.partyId}</small>
                       )}
                     </td>
-                    {tab === "creators" && <td>{x.partyId}</td>}
-                    <td>{money(x.eligibleAmount, cycle.currencyCode)}</td>
-                    <td>{money(x.reservedAmount, cycle.currencyCode)}</td>
-                    <td>
+                    {tab === "creators" && <td data-label="Creator ID">{x.partyId}</td>}
+                    <td data-label={tab === "creators" ? "Eligible Amount" : "Eligible Cashback"}>{money(x.eligibleAmount, cycle.currencyCode)}</td>
+                    <td data-label="Reserved/In Batch">{money(x.reservedAmount, cycle.currencyCode)}</td>
+                    <td data-label="Payout Status">
                       {x.status === "PAID" ? (
                         <Badge value="PAID" />
                       ) : (
@@ -366,7 +366,7 @@ export function AdminPayoutWorkspace() {
   );
 }
 function RevenueHistory({rows,currency}:{rows:RevenueHistoryRow[];currency:string}) {
-  return <div className="table-wrap"><table className="platform-revenue-history"><thead><tr><th>Period Start</th><th>Period End</th><th>Transactions</th><th>Platform Revenue</th></tr></thead><tbody>{rows.map((x)=><tr key={x.periodStartUtc}><td>{displayDate(x.periodStartUtc)}</td><td>{displayDate(x.periodEndUtc)}</td><td>{x.transactionCount}</td><td>{money(x.platformRevenue,currency)}</td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table className="platform-revenue-history"><thead><tr><th>Period Start</th><th>Period End</th><th>Transactions</th><th>Platform Revenue</th></tr></thead><tbody>{rows.map((x)=><tr key={x.periodStartUtc}><td data-label="Period Start">{displayDate(x.periodStartUtc)}</td><td data-label="Period End">{displayDate(x.periodEndUtc)}</td><td data-label="Transactions">{x.transactionCount}</td><td data-label="Platform Revenue">{money(x.platformRevenue,currency)}</td></tr>)}</tbody></table></div>;
 }
 function History({ rows }: { rows: HistoryRow[] }) {
   return (
@@ -385,12 +385,12 @@ function History({ rows }: { rows: HistoryRow[] }) {
         <tbody>
           {rows.map((x, i) => (
             <tr key={`${x.cutoffAtUtc}-${i}`}>
-              <td>{displayDate(x.cycleStartUtc)}</td>
-              <td>{displayDateTime(x.cutoffAtUtc)}</td>
-              <td>{displayDate(x.payoutDateUtc)}</td>
-              <td>{x.partyCount}</td>
-              <td>{money(x.totalAmount)}</td>
-              <td>
+              <td data-label="Cycle Start">{displayDate(x.cycleStartUtc)}</td>
+              <td data-label="Cutoff">{displayDateTime(x.cutoffAtUtc)}</td>
+              <td data-label="Payout Date">{displayDate(x.payoutDateUtc)}</td>
+              <td data-label="Count">{x.partyCount}</td>
+              <td data-label="Total">{money(x.totalAmount)}</td>
+              <td data-label="Status">
                 <Badge value={x.status} />
               </td>
             </tr>
@@ -405,7 +405,7 @@ function PayoutHistoryTable({ page, currency, onPage }: { page?: PayoutHistoryPa
   const totalPages = Math.max(1, Math.ceil(page.totalCount / page.pageSize));
   return <>
     <div className="summary-grid payout-history-totals"><article><span>Payout records</span><strong>{page.totalCount}</strong></article><article><span>Total paid</span><strong>{money(page.totalPaidAmount, currency)}</strong></article></div>
-    <div className="table-wrap"><table className="admin-payout-history-table"><thead><tr><th>{"Name"}</th><th>Public ID</th><th>Cycle Start</th><th>Cutoff</th><th>Payout Date</th><th>Eligible Amount</th><th>Paid Amount</th><th>Status</th><th>Reference</th></tr></thead><tbody>{page.items.map((x) => <tr key={x.payoutReference}><td>{x.partyName}</td><td>{x.partyId}</td><td>{displayDate(x.cycleStartUtc)}</td><td>{displayDateTime(x.cutoffAtUtc)}</td><td>{x.payoutDateUtc ? displayDate(x.payoutDateUtc) : "—"}</td><td>{money(x.eligibleAmount, currency)}</td><td>{money(x.paidAmount, currency)}</td><td><Badge value={x.status} /></td><td><code>{x.payoutReference}</code>{x.batchReference && <small className="secondary-id">{x.batchReference}</small>}</td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table className="admin-payout-history-table"><thead><tr><th>{"Name"}</th><th>Public ID</th><th>Cycle Start</th><th>Cutoff</th><th>Payout Date</th><th>Eligible Amount</th><th>Paid Amount</th><th>Status</th><th>Reference</th></tr></thead><tbody>{page.items.map((x) => <tr key={x.payoutReference}><td data-label="Name">{x.partyName}</td><td data-label="Public ID">{x.partyId}</td><td data-label="Cycle Start">{displayDate(x.cycleStartUtc)}</td><td data-label="Cutoff">{displayDateTime(x.cutoffAtUtc)}</td><td data-label="Payout Date">{x.payoutDateUtc ? displayDate(x.payoutDateUtc) : "—"}</td><td data-label="Eligible Amount">{money(x.eligibleAmount, currency)}</td><td data-label="Paid Amount">{money(x.paidAmount, currency)}</td><td data-label="Status"><Badge value={x.status} /></td><td data-label="Reference"><code>{x.payoutReference}</code>{x.batchReference && <small className="secondary-id">{x.batchReference}</small>}</td></tr>)}</tbody></table></div>
     <div className="pagination-controls" aria-label="Payout history pages"><button disabled={page.page <= 1} onClick={() => onPage(page.page - 1)}>Previous</button><span>Page {page.page} of {totalPages}</span><button disabled={page.page >= totalPages} onClick={() => onPage(page.page + 1)}>Next</button></div>
   </>;
 }

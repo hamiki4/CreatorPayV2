@@ -19,3 +19,14 @@ test('platform admin accounts page exposes create account workflow',()=>{
   assert.doesNotMatch(create,/Birth Date|Date of Birth|DOB|Verify Email|Verify Phone|Phone Verified|Email Verified/)
   assert.match(create,/Business/)
 })
+
+test('normal admin create forms start empty and use examples only as placeholders',()=>{
+  for(const field of ['email','phoneNumber','password','confirmation','firstName','lastName','displayName','legalBusinessName','tradingName','businessType','primaryContactName','businessAddress','city','region','country','timeZone','preferredLanguage']) {
+    assert.match(create,new RegExp(`${field}: ""`))
+  }
+  for(const placeholder of ['name@example.com','Addis Ababa','Ethiopia','Africa/Addis_Ababa','en']) assert.match(create,new RegExp(`placeholder="${placeholder}"`))
+  assert.match(create,/Select a Business Type/)
+  assert.match(create,/autoComplete="new-password"/)
+  assert.doesNotMatch(create,/email: "admin@weymela\.com"/)
+  assert.doesNotMatch(create,/password: "[^\"]+"/)
+})

@@ -7,6 +7,7 @@ import { api as authenticatedApi } from "./apiClient";
 import { AdminAccountCreate } from "./AdminAccountCreate";
 import { businessTypes } from "./AuthWorkspace";
 import { formatDateTime, formatUserFacingText } from "./displayFormat";
+import { NavIcon, NavIconName } from "./navIcons";
 
 type Row = Record<string, unknown>;
 type Page<T = Row> = { items: T[]; page: number; total: number; totalPages: number };
@@ -49,6 +50,7 @@ type NavItem = {
   label: string;
   roles: AdminRole[];
   countKey?: keyof AdminCounts;
+  icon: NavIconName;
 };
 
 type Notice = {
@@ -99,23 +101,35 @@ const supportedPages = new Set<PageId>([
 ]);
 
 const platformNav: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", roles: ["PlatformAdmin"] },
-  { id: "reports", label: "Reports", roles: ["PlatformAdmin"] },
-  { id: "creator-review", label: "Creator Review", roles: adminRoles, countKey: "pendingCreatorApprovals" },
-  { id: "business-review", label: "Business Review", roles: adminRoles, countKey: "pendingMerchantApprovals" },
-  { id: "admin-accounts", label: "Admin Accounts", roles: ["PlatformAdmin"] },
-  { id: "password-reset-requests", label: "Password Reset Requests", roles: adminRoles, countKey: "openSupportRequests" },
-  { id: "business-accounts", label: "Business Accounts", roles: adminRoles },
-  { id: "creator-accounts", label: "Creator Accounts", roles: adminRoles },
-  { id: "customer-accounts", label: "Customer Accounts", roles: adminRoles },
-  { id: "cashier-accounts", label: "Cashier Accounts", roles: adminRoles },
-  { id: "commission", label: "Commission", roles: ["PlatformAdmin"] },
-  { id: "deposits", label: "Deposits", roles: adminRoles, countKey: "pendingDeposits" },
-  { id: "wallets", label: "Wallets", roles: adminRoles },
-  { id: "payouts", label: "Payouts", roles: adminRoles, countKey: "pendingPayouts" },
-  { id: "fraud", label: "Fraud", roles: adminRoles, countKey: "openFraudAlerts" },
-  { id: "system", label: "System", roles: ["PlatformAdmin"] },
+  { id: "dashboard", label: "Dashboard", roles: ["PlatformAdmin"], icon: "home" },
+  { id: "reports", label: "Reports", roles: ["PlatformAdmin"], icon: "sales" },
+  { id: "creator-review", label: "Creator Review", roles: adminRoles, countKey: "pendingCreatorApprovals", icon: "userPlus" },
+  { id: "business-review", label: "Business Review", roles: adminRoles, countKey: "pendingMerchantApprovals", icon: "ads" },
+  { id: "admin-accounts", label: "Admin Accounts", roles: ["PlatformAdmin"], icon: "shield" },
+  { id: "password-reset-requests", label: "Password Reset Requests", roles: adminRoles, countKey: "openSupportRequests", icon: "requests" },
+  { id: "business-accounts", label: "Business Accounts", roles: adminRoles, icon: "checkout" },
+  { id: "creator-accounts", label: "Creator Accounts", roles: adminRoles, icon: "creators" },
+  { id: "customer-accounts", label: "Customer Accounts", roles: adminRoles, icon: "profile" },
+  { id: "cashier-accounts", label: "Cashier Accounts", roles: adminRoles, icon: "cashier" },
+  { id: "commission", label: "Commission", roles: ["PlatformAdmin"], icon: "sales" },
+  { id: "deposits", label: "Deposits", roles: adminRoles, countKey: "pendingDeposits", icon: "wallet" },
+  { id: "wallets", label: "Wallets", roles: adminRoles, icon: "wallet" },
+  { id: "payouts", label: "Payouts", roles: adminRoles, countKey: "pendingPayouts", icon: "payout" },
+  { id: "fraud", label: "Fraud", roles: adminRoles, countKey: "openFraudAlerts", icon: "shield" },
+  { id: "system", label: "System", roles: ["PlatformAdmin"], icon: "settings" },
 ];
+
+const dashboardShortcuts: Record<string, { href: string; icon: NavIconName }> = {
+  pendingCreatorApprovals: { href: "/admin/creator-review", icon: "userPlus" },
+  pendingMerchantApprovals: { href: "/admin/business-review", icon: "ads" },
+  pendingDeposits: { href: "/admin/deposits", icon: "wallet" },
+  activeCreators: { href: "/admin/creator-accounts?status=Active", icon: "creators" },
+  activeBusinesses: { href: "/admin/business-accounts?status=Active", icon: "checkout" },
+  pendingPayouts: { href: "/admin/payouts", icon: "payout" },
+  openFraudAlerts: { href: "/admin/fraud", icon: "shield" },
+  failedCheckouts: { href: "/admin/fraud", icon: "checkout" },
+  systemHealth: { href: "/admin/system", icon: "settings" },
+};
 
 async function api<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
@@ -180,6 +194,7 @@ function notificationIcon(type: string) {
 export function AdminPortal({ operations }: { operations: Ops }) {
   const role = currentRole();
   const [summary, setSummary] = useState<AdminCounts>();
+  const [menuOpen, setMenuOpen] = useState(false);
   const part = location.pathname.split("/")[2] ?? "dashboard";
   const page = supportedPages.has(part as PageId)
     ? (part as PageId)
@@ -195,7 +210,7 @@ export function AdminPortal({ operations }: { operations: Ops }) {
   }, [blockedByRole]);
 
   useEffect(() => {
-    if (role !== "PlatformAdmin" && role !== "OperationsAdmin") return;
+    if (role !== "PlatformAdmin") return;
     let cancelled = false;
     const load = () =>
       api<AdminCounts>("/api/v1/admin/dashboard/summary")
@@ -246,35 +261,20 @@ export function AdminPortal({ operations }: { operations: Ops }) {
   const visibleNav = platformNav.filter((item) => role === "PlatformAdmin" || item.roles.includes(role));
 
   return (
-    <div className="admin-shell">
-      <style>{`
-        .admin-sidebar nav a {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: .6rem;
-        }
-        .admin-nav-badge {
-          display: inline-grid;
-          place-items: center;
-          min-width: 1.35rem;
-          height: 1.35rem;
-          padding: 0 .35rem;
-          border-radius: 999px;
-          background: #b42318;
-          color: #fff;
-          font-size: .72rem;
-          font-weight: 800;
-          line-height: 1;
-        }
-      `}</style>
+    <div className={`admin-shell admin-shell--${role === "PlatformAdmin" ? "platform" : "operations"}`}>
       <a className="skip" href="#admin-content">
         Skip to content
       </a>
-      <aside className="admin-sidebar">
-        <a className="admin-brand" href={role === "PlatformAdmin" ? "/admin/dashboard" : "/admin/creator-review"}>
-          Weymela <small>{navRoleLabel}</small>
-        </a>
+      {menuOpen && <button className="admin-menu-scrim" aria-label="Close admin menu" onClick={() => setMenuOpen(false)} />}
+      <aside className={`admin-sidebar${menuOpen ? " is-open" : ""}`} id="admin-navigation">
+        <div className="admin-sidebar-heading">
+          <a className="admin-brand" href={role === "PlatformAdmin" ? "/admin/dashboard" : "/admin/creator-review"}>
+            WEYMELA <small>{navRoleLabel} Admin</small>
+          </a>
+          <button type="button" className="admin-menu-close" aria-label="Close admin menu" onClick={() => setMenuOpen(false)}>
+            <NavIcon name="close" />
+          </button>
+        </div>
         <nav aria-label="Admin navigation">
           {visibleNav.map((item) => {
             const count = item.countKey ? Math.max(0, Number(summary?.[item.countKey] ?? 0)) : 0;
@@ -285,8 +285,9 @@ export function AdminPortal({ operations }: { operations: Ops }) {
                 href={`/admin/${item.id}`}
                 aria-current={item.id === page ? "page" : undefined}
                 aria-label={aria}
+                onClick={() => setMenuOpen(false)}
               >
-                {item.label}
+                <span className="admin-nav-label"><NavIcon name={item.icon} />{item.label}</span>
                 {count > 0 && (
                   <span className="admin-nav-badge" aria-hidden="true">
                     {count > 99 ? "99+" : count}
@@ -298,7 +299,7 @@ export function AdminPortal({ operations }: { operations: Ops }) {
         </nav>
       </aside>
       <div className="admin-main">
-        <AdminHeader role={role} showSearch={role === "PlatformAdmin"} />
+        <AdminHeader role={role} showSearch={role === "PlatformAdmin"} onMenu={() => setMenuOpen(true)} />
         <main id="admin-content" tabIndex={-1}>
           {blockedByRole ? null : denied ? (
             <Forbidden
@@ -651,7 +652,7 @@ function BusinessReview() {
   );
 }
 
-function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: boolean }) {
+function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showSearch: boolean; onMenu: () => void }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notice[]>([]);
@@ -734,6 +735,19 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
 
   return (
     <header className="admin-header">
+      <button
+        type="button"
+        className="admin-menu-toggle"
+        aria-label="Open admin menu"
+        aria-controls="admin-navigation"
+        onClick={onMenu}
+      >
+        <NavIcon name="menu" />
+      </button>
+      <div className="admin-mobile-identity" aria-label={`${role === "PlatformAdmin" ? "Platform" : "Operations"} Admin`}>
+        <strong>WEYMELA</strong>
+        <small>{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</small>
+      </div>
       {showSearch && (
         <form role="search" onSubmit={go}>
           <input
@@ -746,7 +760,7 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
           <button>Search</button>
         </form>
       )}
-      <span>{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</span>
+      <span className="admin-role-label">{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</span>
       <div className="account-actions">
         <button
           type="button"
@@ -757,6 +771,7 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
             setOpen((current) => !current);
           }}
         >
+          <NavIcon name="notifications" />
           {unread > 0 && <span className="notification-count">{unread > 99 ? "99+" : unread}</span>}
         </button>
         <button className="quiet" onClick={logout}>
@@ -770,7 +785,7 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
             <div className="notification-drawer-header">
               <h2>Notifications</h2>
               <button className="icon-button" aria-label="Close notifications" onClick={() => setOpen(false)}>
-                ×
+                <NavIcon name="close" />
               </button>
             </div>
             {message && <p className="friendly-error" role="alert">{message}</p>}
@@ -816,7 +831,7 @@ function Title({ text, children }: { text: string; children?: ReactNode }) {
   return (
     <div className="admin-title">
       <div>
-        <p className="eyebrow">Platform operations</p>
+        <p className="eyebrow">{currentRole() === "OperationsAdmin" ? "Operations Admin" : "Platform Admin"}</p>
         <h1>{text}</h1>
       </div>
       {children}
@@ -871,12 +886,17 @@ function Dashboard({ summary }: { summary?: AdminCounts }) {
         <>
           <PilotTestActorPanel />
           <div className="summary-grid">
-            {visible.filter((k) => data[k] !== undefined).map((k) => (
-              <article className="summary-card" key={k}>
-                <span>{label(k)}</span>
-                <strong>{String(data[k])}</strong>
-              </article>
-            ))}
+            {visible.filter((k) => data[k] !== undefined).map((k) => {
+              const shortcut = dashboardShortcuts[k];
+              return (
+                <a className="summary-card admin-metric-card" key={k} href={shortcut.href} aria-label={`${label(k)}: ${String(data[k])}`}>
+                  <span className="admin-metric-icon"><NavIcon name={shortcut.icon} /></span>
+                  <span>{label(k)}</span>
+                  <strong>{String(data[k])}</strong>
+                  <span className="admin-metric-chevron" aria-hidden="true">›</span>
+                </a>
+              );
+            })}
           </div>
         </>
       )}
@@ -924,7 +944,7 @@ function PilotTestActorPanel() {
   }
 
   return (
-    <section className="panel" aria-labelledby="pilot-actors-title">
+    <section className="panel admin-pilot-actors" aria-labelledby="pilot-actors-title">
       <h2 id="pilot-actors-title">PILOT test actors</h2>
       <p>Create one disposable, labeled batch for authenticated PILOT testing. Credentials are returned only to the protected response.</p>
       <button onClick={() => void create()} disabled={busy}>
@@ -1040,10 +1060,11 @@ function AccountPage({
   allowRemove = true,
   allowBusinessTypeEdit = false,
 }: AccountPageProps) {
+  const requestedStatus = new URLSearchParams(location.search).get("status") ?? "";
   const [data, setData] = useState<Page>();
   const [message, setMessage] = useState("");
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ q: "", status: "", business: "" });
+  const [filters, setFilters] = useState({ q: "", status: requestedStatus, business: "" });
   const [editing, setEditing] = useState<{ merchantId: string; name: string; businessType: string } | null>(null);
   const [editingBusinessType, setEditingBusinessType] = useState("Other");
   const [savingBusinessType, setSavingBusinessType] = useState(false);
@@ -1406,12 +1427,12 @@ function PasswordResetRequests() {
             ) : (
               items.map((x) => (
                 <tr key={String(x.id)}>
-                  <td>{cell("name", x.name)}</td>
-                  <td>{cell("phone", x.phone)}</td>
-                  <td>{cell("role", x.role)}</td>
-                  <td>{cell("requestedAtUtc", x.requestedAtUtc)}</td>
-                  <td>{cell("status", x.status)}</td>
-                  <td>
+                  <td data-label="Name">{cell("name", x.name)}</td>
+                  <td data-label="Phone">{cell("phone", x.phone)}</td>
+                  <td data-label="Role">{cell("role", x.role)}</td>
+                  <td data-label="Requested At">{cell("requestedAtUtc", x.requestedAtUtc)}</td>
+                  <td data-label="Status">{cell("status", x.status)}</td>
+                  <td data-label="Action">
                     <div className="actions">
                       {x.canApprove === true && (
                         <>
@@ -1499,17 +1520,18 @@ function Loading() {
 function Empty() {
   return (
     <div className="empty-state">
-      <h2>Nothing here yet</h2>
-      <p>No records match the current filters.</p>
+      <h2>No records found.</h2>
+      <p>Try changing the current filters.</p>
     </div>
   );
 }
 
 function ErrorBox({ text }: { text: string }) {
+  const friendly = /session|permission/i.test(text) ? text : "Unable to load data.";
   return (
     <div className="error-panel" role="alert">
       <h2>Unable to load</h2>
-      <p>{text}</p>
+      <p>{friendly}</p>
     </div>
   );
 }
