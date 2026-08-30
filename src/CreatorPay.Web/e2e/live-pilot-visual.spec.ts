@@ -46,10 +46,10 @@ const roles: RoleCase[] = [
     navigation: 'Business sections',
     accent: 'rgb(37, 99, 235)',
     tabs: [
+      {label: 'Home', slug: 'home'},
       {label: 'Creators', slug: 'creators'},
       {label: 'Active Ads', slug: 'active-ads'},
       {label: 'Requests', slug: 'requests'},
-      {label: 'Confirmed Sales', slug: 'confirmed-sales'},
       {label: 'Checkout', slug: 'checkout'},
       {label: 'Profile', slug: 'profile'},
     ],

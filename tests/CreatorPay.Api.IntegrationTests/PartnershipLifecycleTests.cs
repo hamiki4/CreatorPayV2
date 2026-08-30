@@ -301,6 +301,11 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
         var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
 
+        var merchantRequests = await (await Get(merchant, "/api/v1/merchant/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var creatorRequest = Assert.Single(merchantRequests.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId);
+        Assert.Equal("Pending", creatorRequest.GetProperty("status").GetString());
+        Assert.Equal("Creator", creatorRequest.GetProperty("initiatedBy").GetString());
+
         var permission = await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" });
         Assert.Equal(HttpStatusCode.OK, permission.StatusCode);
         var permissionBody = await permission.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -308,6 +313,8 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.False(permissionBody.GetProperty("promotionActive").GetBoolean());
         Assert.Equal(System.Text.Json.JsonValueKind.Null, permissionBody.GetProperty("activatedAtUtc").ValueKind);
         Assert.Equal(System.Text.Json.JsonValueKind.Null, permissionBody.GetProperty("expiresAtUtc").ValueKind);
+        merchantRequests = await (await Get(merchant, "/api/v1/merchant/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(merchantRequests.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId && x.GetProperty("status").GetString() == "Pending");
 
         var beforeVideo = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
         var beforeVideoRows = await beforeVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -318,6 +325,10 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var pending = await submitted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal("Pending", pending.GetProperty("status").GetString());
         Assert.Equal(videoUrl, pending.GetProperty("videoUrl").GetString());
+
+        var merchantVideoApprovals = await (await Get(merchant, "/api/v1/merchant/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var pendingVideoApproval = Assert.Single(merchantVideoApprovals.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId && x.GetProperty("promotionVideo").GetProperty("status").GetString() == "Pending");
+        Assert.Equal(videoUrl, pendingVideoApproval.GetProperty("promotionVideo").GetProperty("videoUrl").GetString());
 
         var pendingRelationships = await (await Get(creatorClient, "/api/v1/creator/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         var pendingRelationship = pendingRelationships.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == partnershipId);
@@ -348,6 +359,8 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.False(approvedRelationship.GetProperty("promotionActive").GetBoolean());
         Assert.Equal(System.Text.Json.JsonValueKind.Null, approvedRelationship.GetProperty("activatedAtUtc").ValueKind);
         Assert.Equal(System.Text.Json.JsonValueKind.Null, approvedRelationship.GetProperty("expiresAtUtc").ValueKind);
+        merchantVideoApprovals = await (await Get(merchant, "/api/v1/merchant/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.DoesNotContain(merchantVideoApprovals.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId && x.GetProperty("promotionVideo").GetProperty("status").GetString() == "Pending");
 
         var stillHidden = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
         var stillHiddenRows = await stillHidden.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -391,6 +404,10 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var expiresAt = liveBody.GetProperty("expiresAtUtc").GetDateTime();
         Assert.InRange(activatedAt, beforeGoLive, DateTime.UtcNow);
         Assert.Equal(activatedAt.AddDays(MerchantCreatorPartnership.ActivePeriodDays), expiresAt);
+
+        var merchantActiveAds = await (await Get(merchant, "/api/v1/merchant/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var activeAd = Assert.Single(merchantActiveAds.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId && x.GetProperty("relationshipState").GetString() == "Active");
+        Assert.Equal(videoUrl, activeAd.GetProperty("promotionVideo").GetProperty("videoUrl").GetString());
 
         var live = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
