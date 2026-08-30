@@ -73,6 +73,9 @@ type AccountPageProps = {
   allowCreate?: boolean;
   allowRemove?: boolean;
   allowBusinessTypeEdit?: boolean;
+  showBusinessFilter?: boolean;
+  showRoleFilter?: boolean;
+  searchPlaceholder?: string;
 };
 
 const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
@@ -1059,12 +1062,15 @@ function AccountPage({
   allowCreate = false,
   allowRemove = true,
   allowBusinessTypeEdit = false,
+  showBusinessFilter = true,
+  showRoleFilter = false,
+  searchPlaceholder = "Name, email, phone, Business or public ID",
 }: AccountPageProps) {
   const requestedStatus = new URLSearchParams(location.search).get("status") ?? "";
   const [data, setData] = useState<Page>();
   const [message, setMessage] = useState("");
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ q: "", status: requestedStatus, business: "" });
+  const [filters, setFilters] = useState({ q: "", status: requestedStatus, business: "", role: "" });
   const [editing, setEditing] = useState<{ merchantId: string; name: string; businessType: string } | null>(null);
   const [editingBusinessType, setEditingBusinessType] = useState("Other");
   const [savingBusinessType, setSavingBusinessType] = useState(false);
@@ -1072,12 +1078,13 @@ function AccountPage({
 
   const load = async (nextPage = 1, nextFilters = filters) => {
     const params = new URLSearchParams({ page: "1", pageSize: "100" });
-    Object.entries(nextFilters).forEach(([k, v]) => {
-      if (v) params.set(k, v);
-    });
+    if (nextFilters.q) params.set("q", nextFilters.q);
+    if (nextFilters.status) params.set("status", nextFilters.status);
+    if (showBusinessFilter && nextFilters.business) params.set("business", nextFilters.business);
+    const rolesToLoad = showRoleFilter && nextFilters.role ? [nextFilters.role as AccountRole] : roles;
     try {
       const responses = await Promise.all(
-        roles.map((roleName) => api<Page>(`/api/v1/admin/accounts?${params.toString()}&role=${encodeURIComponent(roleName)}`)),
+        rolesToLoad.map((roleName) => api<Page>(`/api/v1/admin/accounts?${params.toString()}&role=${encodeURIComponent(roleName)}`)),
       );
       const items = responses
         .flatMap((x) => x.items)
@@ -1226,7 +1233,7 @@ function AccountPage({
       >
         <label>
           General Search
-          <input value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} placeholder="Name, email, phone, Business or public ID" />
+          <input type="search" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} placeholder={searchPlaceholder} />
         </label>
         <label>
           Status
@@ -1239,17 +1246,29 @@ function AccountPage({
             ))}
           </select>
         </label>
-        <label>
-          Business
-          <input value={filters.business} onChange={(e) => setFilters({ ...filters, business: e.target.value })} placeholder="Business name or public ID" />
-        </label>
+        {showRoleFilter && (
+          <label>
+            Role
+            <select value={filters.role} onChange={(e) => setFilters({ ...filters, role: e.target.value })}>
+              <option value="">All Roles</option>
+              <option value="PlatformAdmin">Platform Admin</option>
+              <option value="OperationsAdmin">Operations Admin</option>
+            </select>
+          </label>
+        )}
+        {showBusinessFilter && (
+          <label>
+            Business
+            <input value={filters.business} onChange={(e) => setFilters({ ...filters, business: e.target.value })} placeholder="Business name or public ID" />
+          </label>
+        )}
         <div className="actions">
           <button>Search</button>
           <button
             type="button"
             className="quiet"
             onClick={() => {
-              const next = { q: "", status: "", business: "" };
+              const next = { q: "", status: "", business: "", role: "" };
               setFilters(next);
               void load(1, next);
             }}
@@ -1353,12 +1372,15 @@ function AdminAccountsPage() {
   return (
     <AccountPage
       title="Admin Accounts"
-      description="PlatformAdmin accounts and management."
-      roles={["PlatformAdmin"]}
-      createRoles={["PlatformAdmin"]}
+      description="Platform and Operations administrator accounts."
+      roles={["PlatformAdmin", "OperationsAdmin"]}
+      createRoles={["PlatformAdmin", "OperationsAdmin"]}
       columns={["name", "email", "phone", "role", "status", "isLocked", "lastLoginAtUtc"]}
       allowCreate
       allowRemove={false}
+      showBusinessFilter={false}
+      showRoleFilter
+      searchPlaceholder="Name, email, phone or admin ID"
     />
   );
 }

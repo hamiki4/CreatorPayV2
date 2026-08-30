@@ -5,6 +5,7 @@ namespace CreatorPay.Domain.Entities;
 
 public sealed class UserAccount : Entity
 {
+    public string? DisplayName { get; set; }
     public string Email { get; set; } = string.Empty;
     public string NormalizedEmail { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }

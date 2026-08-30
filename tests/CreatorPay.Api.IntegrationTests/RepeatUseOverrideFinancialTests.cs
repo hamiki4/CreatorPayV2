@@ -1254,6 +1254,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var created = await Post(client, "/api/v1/admin/accounts/create", admin, new
         {
             role = "OperationsAdmin",
+            displayName = "Pilot Operations Admin",
             email = "ops-admin@e2e.invalid",
             phoneNumber = "0911000999",
             password = "E2e-test-password-1!",
@@ -1262,7 +1263,10 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
         var page = await (await Get(client, "/api/v1/admin/accounts?page=1&pageSize=100&role=OperationsAdmin", admin)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.Contains(page!.GetProperty("items").EnumerateArray(), x => x.GetProperty("email").GetString() == "ops-admin@e2e.invalid" && x.GetProperty("role").GetString() == "OperationsAdmin");
+        Assert.Contains(page!.GetProperty("items").EnumerateArray(), x => x.GetProperty("email").GetString() == "ops-admin@e2e.invalid" && x.GetProperty("name").GetString() == "Pilot Operations Admin" && x.GetProperty("role").GetString() == "OperationsAdmin");
+
+        var nameSearch = await (await Get(client, "/api/v1/admin/accounts?page=1&pageSize=100&role=OperationsAdmin&q=Pilot%20Operations", admin)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains(nameSearch!.GetProperty("items").EnumerateArray(), x => x.GetProperty("email").GetString() == "ops-admin@e2e.invalid");
 
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ops-admin@e2e.invalid", password = "E2e-test-password-1!" });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
@@ -1273,9 +1277,9 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await Get(client, "/api/v1/admin/accounts?page=1&pageSize=100&role=PlatformAdmin", opsToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, "/api/v1/admin/accounts/create", opsToken, new
         {
-            role = "Customer",
+            role = "PlatformAdmin",
+            displayName = "Forbidden Escalation",
             email = "should-not-create@e2e.invalid",
-            phoneNumber = "0911000777",
             password = "E2e-test-password-1!",
             confirmation = "E2e-test-password-1!"
         })).StatusCode);

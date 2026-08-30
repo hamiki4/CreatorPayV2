@@ -3106,6 +3106,17 @@ body:has(.role-business) {
   -webkit-touch-callout:default;
 }
 
+/* Interaction hard-stop: visual selection rules must never disable a real form control. */
+:is(.account-shell,.admin-shell,.role-cashier,.public) :is(input,textarea,select,button,option) {
+  pointer-events:auto;
+}
+
+:is(.account-shell,.admin-shell,.role-cashier,.public) :is(input,textarea,select,option) {
+  -webkit-user-select:text;
+  user-select:text;
+  -webkit-touch-callout:default;
+}
+
 @media (hover:none), (pointer:coarse) {
   .admin-sidebar nav a:hover {background:transparent;color:#d8e7e8}
   .admin-sidebar nav a[aria-current="page"]:hover {background:#1a4b50;color:#fff}

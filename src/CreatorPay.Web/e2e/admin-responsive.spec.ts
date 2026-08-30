@@ -1,7 +1,7 @@
 import {mkdir} from 'node:fs/promises'
 import path from 'node:path'
 import {expect,test} from './fixtures'
-import type {APIRequestContext,Page} from '@playwright/test'
+import type {APIRequestContext,Locator,Page} from '@playwright/test'
 
 const api=process.env.E2E_API_URL!
 const password=process.env.E2E_ADMIN_PASSWORD!
@@ -41,7 +41,7 @@ async function createOperationsAdmin(request:APIRequestContext){
   const email='operations-responsive@e2e.invalid'
   const created=await request.post(`${api}/api/v1/admin/accounts/create`,{
     headers:{Authorization:`Bearer ${token}`},
-    data:{role:'OperationsAdmin',email,password,confirmation:password},
+    data:{role:'OperationsAdmin',displayName:'Responsive Operations Admin',email,password,confirmation:password},
   })
   expect([201,409]).toContain(created.status())
   return email
@@ -52,6 +52,26 @@ async function expectNoOverflow(page:Page){
     document:document.documentElement.scrollWidth<=document.documentElement.clientWidth,
     body:document.body.scrollWidth<=document.body.clientWidth,
   }))).toEqual({document:true,body:true})
+}
+
+async function expectEditable(field:Locator,value:string){
+  await field.click()
+  await expect(field).toBeFocused()
+  await field.fill(value)
+  await expect(field).toHaveValue(value)
+  await expect(field).toHaveCSS('pointer-events','auto')
+  await expect(field).toHaveCSS('-webkit-user-select','text')
+}
+
+async function verifySharedCreateFields(page:Page,path:string){
+  await page.goto(path)
+  const form=page.locator('.admin-create-card form')
+  await expect(form).toBeVisible()
+  await expectEditable(form.getByLabel('Email'),'typing-check@example.com')
+  await expectEditable(form.getByLabel('Phone'),'+251911000999')
+  await expectEditable(form.getByLabel('Temporary password'),'E2e-test-password-1!')
+  await expectEditable(form.getByLabel('Confirm password'),'E2e-test-password-1!')
+  await expectNoOverflow(page)
 }
 
 async function captureWidths(page:Page,role:'platform'|'operations'){
@@ -123,6 +143,48 @@ test.describe.serial('responsive admin workspace',()=>{
     await expect(page.getByLabel('Business type')).toHaveValue('')
     for(const input of await page.locator('.admin-create-card input:not([type=hidden])').all())await expect(input).toHaveValue('')
     await expectNoOverflow(page)
+
+    await page.goto('/admin/admin-accounts')
+    const adminCreate=page.locator('.admin-create-card form')
+    await expect(adminCreate.getByLabel('Role')).toHaveValue('PlatformAdmin')
+    await expect(adminCreate.getByLabel('Role').locator('option')).toHaveText(['Platform Admin','Operations Admin'])
+    await adminCreate.getByLabel('Role').selectOption('OperationsAdmin')
+    await expect(adminCreate.getByLabel('Role')).toHaveValue('OperationsAdmin')
+    await expectEditable(adminCreate.getByLabel('Full Name'),'Mobile Operations Admin')
+    await expect(page.locator('.account-filters').getByLabel('Business')).toHaveCount(0)
+    await expect(page.locator('.account-filters').getByLabel('Role')).toHaveValue('')
+
+    for(const path of ['/admin/admin-accounts','/admin/creator-accounts','/admin/business-accounts','/admin/customer-accounts','/admin/cashier-accounts']){
+      await verifySharedCreateFields(page,path)
+    }
+    await page.goto('/admin/creator-accounts')
+    await expectEditable(page.locator('.admin-create-card').getByLabel('First name'),'Creator')
+    await expectEditable(page.locator('.admin-create-card').getByLabel('Last name'),'Typing')
+    await expectEditable(page.locator('.admin-create-card').getByLabel('Display name'),'Creator Typing')
+    await page.goto('/admin/customer-accounts')
+    await expectEditable(page.locator('.admin-create-card').getByLabel('Display name'),'Customer Typing')
+    await page.goto('/admin/cashier-accounts')
+    await expectEditable(page.locator('.admin-create-card').getByLabel('First name'),'Cashier')
+    await expectEditable(page.locator('.admin-create-card').getByLabel('Last name'),'Typing')
+    await page.locator('.admin-create-card').getByLabel('Business').selectOption({index:0})
+    await page.goto('/admin/business-accounts')
+    await expectEditable(page.locator('.admin-create-card').getByLabel('Legal business name'),'Typing Business PLC')
+    await page.locator('.admin-create-card').getByLabel('Business type').selectOption('Professional Services')
+
+    for(const [name,viewport] of sizes){
+      await page.setViewportSize(viewport)
+      await page.goto('/admin/admin-accounts')
+      const card=page.locator('.admin-create-card')
+      await expect(card.getByLabel('Role')).toBeVisible()
+      await expect(card.getByLabel('Full Name')).toBeVisible()
+      await expect(card.getByLabel('Email')).toBeVisible()
+      await expectNoOverflow(page)
+      const cardBox=await card.boundingBox()
+      expect(cardBox).not.toBeNull()
+      expect(cardBox!.x).toBeGreaterThanOrEqual(0)
+      expect(cardBox!.x+cardBox!.width).toBeLessThanOrEqual(viewport.width)
+      await page.screenshot({path:path.join(output,`platform-admin-account-form-${name}.png`),fullPage:true})
+    }
 
     for(const [name,viewport] of sizes.filter(([,size])=>size.width<=430)){
       await page.setViewportSize(viewport)

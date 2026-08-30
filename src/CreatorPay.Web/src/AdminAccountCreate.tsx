@@ -22,8 +22,8 @@ type Page<T = Record<string, unknown>> = {
 };
 
 const roleLabels: Record<AdminRole, string> = {
-  PlatformAdmin: "PlatformAdmin",
-  OperationsAdmin: "OperationsAdmin",
+  PlatformAdmin: "Platform Admin",
+  OperationsAdmin: "Operations Admin",
   MerchantAdmin: "MerchantAdmin / Business",
   Cashier: "Cashier",
   Creator: "Creator",
@@ -176,9 +176,10 @@ export function AdminAccountCreate({
         <label>
           Email
           <input
+            type="email"
             required={showAdminFields}
             placeholder="name@example.com"
-            autoComplete="off"
+            autoComplete="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
@@ -187,12 +188,27 @@ export function AdminAccountCreate({
         <label>
           Phone
           <input
+            type="tel"
             placeholder="+251 9…"
+            autoComplete="tel"
             value={form.phoneNumber}
             onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
             required={!showAdminFields}
           />
         </label>
+
+        {showAdminFields && (
+          <label>
+            Full Name
+            <input
+              required
+              autoComplete="name"
+              placeholder="Full name"
+              value={form.displayName}
+              onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+            />
+          </label>
+        )}
 
         {showCashierFields && (
           <>
