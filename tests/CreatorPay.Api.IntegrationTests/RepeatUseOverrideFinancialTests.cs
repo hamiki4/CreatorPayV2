@@ -730,11 +730,13 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         await using (var promoDb = Db())
         {
             var activePartnerships = await promoDb.MerchantCreatorPartnerships.Where(x => x.MerchantId == Guid.Parse("20000000-0000-0000-0000-000000000001") && x.Status == PartnershipStatus.Approved).Select(x => new { x.Id, x.CreatorId }).ToListAsync();
+            var videoSequence = 0;
             foreach (var partnership in activePartnerships)
             {
+                videoSequence++;
                 var creatorUser = await promoDb.UserAccounts.SingleAsync(x => x.CreatorId == partnership.CreatorId && x.Role == UserRole.Creator);
                 var creatorToken = Token(UserRole.Creator, creatorUser.Id.ToString(), creatorId: partnership.CreatorId.ToString());
-                var videoUrl = $"https://www.tiktok.com/@e2e/video/{partnership.Id:N}";
+                var videoUrl = $"https://www.tiktok.com/@e2e/video/900000000000000{videoSequence:D4}";
                 var submitted = await Post(client, $"/api/v1/creator/partnerships/{partnership.Id}/promotion-video", creatorToken, new { videoUrl }, $"promo-{partnership.Id:N}");
                 Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
                 var promoVideoId = (await submitted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();

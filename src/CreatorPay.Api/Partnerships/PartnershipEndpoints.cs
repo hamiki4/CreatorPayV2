@@ -38,7 +38,7 @@ public static class PartnershipEndpoints
         creator.MapPost("/partnerships/{id:guid}/stop-promoting", (Guid id, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct) => CreatorRevoke(id, u, db, h, ct, "CreatorStoppedPromoting"));
         creator.MapPost("/partnerships/{id:guid}/accept-invitation", (Guid id, ICurrentUserService u, ApplicationDbContext db, ICommissionEngine commissions, IOptions<CampaignOptions> campaignOptions, INotificationService notifications, HttpContext h, CancellationToken ct) => CreatorInvitationDecision(id, true, u, db, commissions, campaignOptions, notifications, h, ct));
         creator.MapPost("/partnerships/{id:guid}/decline-invitation", (Guid id, ICurrentUserService u, ApplicationDbContext db, ICommissionEngine commissions, IOptions<CampaignOptions> campaignOptions, INotificationService notifications, HttpContext h, CancellationToken ct) => CreatorInvitationDecision(id, false, u, db, commissions, campaignOptions, notifications, h, ct));
-        creator.MapPost("/partnerships/{id:guid}/promotion-video", (Guid id, SubmitPromotionVideoRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, IOptions<CampaignOptions> campaignOptions, HttpContext h, CancellationToken ct) => SubmitPromotionVideo(id, request, u, db, notifications, campaignOptions, h, ct));
+        creator.MapPost("/partnerships/{id:guid}/promotion-video", (Guid id, SubmitPromotionVideoRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, ITikTokVideoUrlResolver videoUrls, IOptions<CampaignOptions> campaignOptions, HttpContext h, CancellationToken ct) => SubmitPromotionVideo(id, request, u, db, notifications, videoUrls, campaignOptions, h, ct));
         creator.MapPost("/partnerships/{id:guid}/go-live", (Guid id, ICurrentUserService u, ApplicationDbContext db, ICommissionEngine commissions, IOptions<CampaignOptions> campaignOptions, CancellationToken ct) => GoLive(id, u, db, commissions, campaignOptions, ct));
         creator.MapGet("/promotion-videos", (ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => CreatorPromotionVideos(u, db, ct));
 
@@ -265,14 +265,15 @@ public static class PartnershipEndpoints
         return Results.Ok(partnerships.Select(x => ItemWithPromotion(x, videos, active.Contains(x.Id) && x.IsTransactionEligibleAt(now), now)));
     }
 
-    private static async Task<IResult> SubmitPromotionVideo(Guid partnershipId, SubmitPromotionVideoRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, IOptions<CampaignOptions> campaignOptions, HttpContext h, CancellationToken ct)
+    private static async Task<IResult> SubmitPromotionVideo(Guid partnershipId, SubmitPromotionVideoRequest request, ICurrentUserService u, ApplicationDbContext db, INotificationService notifications, ITikTokVideoUrlResolver videoUrls, IOptions<CampaignOptions> campaignOptions, HttpContext h, CancellationToken ct)
     {
         if (u.CreatorId is null) return Problem(401, "Creator authentication is required.");
-        if (!TryValidateTikTokVideoUrl(request.VideoUrl, out var normalizedUrl, out var error)) return Problem(400, error);
         var now = DateTime.UtcNow;
         var partnership = await db.MerchantCreatorPartnerships.Include(x => x.Merchant).Include(x => x.Creator).FirstOrDefaultAsync(x => x.Id == partnershipId && x.CreatorId == u.CreatorId.Value, ct);
         if (partnership is null) return NotFound();
         if (partnership.Status != PartnershipStatus.Approved) return Problem(409, "Business permission is required before submitting a promotion video.");
+        var resolvedVideo = await videoUrls.ResolveAsync(request.VideoUrl, ct);
+        if (!resolvedVideo.Accepted) return Problem(400, resolvedVideo.Error);
         var currencyCode = campaignOptions.Value.CurrencyCode;
         var eligibility = await BusinessAdvertisingEligibility.EvaluateAsync(db, partnership.MerchantId, currencyCode, ct);
         if (!eligibility.Eligible) return Problem(409, $"Advertising is restricted until the available wallet balance reaches {eligibility.Minimum:0.00} {currencyCode}.");
@@ -287,7 +288,7 @@ public static class PartnershipEndpoints
             MerchantCreatorPartnershipId = partnership.Id,
             MerchantId = partnership.MerchantId,
             CreatorId = partnership.CreatorId,
-            VideoUrl = normalizedUrl,
+            VideoUrl = resolvedVideo.VideoUrl!,
             Platform = "TikTok",
             SubmittedAtUtc = now,
             CreatedAtUtc = now,
@@ -377,19 +378,6 @@ public static class PartnershipEndpoints
             ActivationRequired = false,
             PromotionVideo = CurrentPromotionVideo([video], partnership.Id, true)
         });
-    }
-
-    private static bool TryValidateTikTokVideoUrl(string? value, out string normalizedUrl, out string error)
-    {
-        normalizedUrl = string.Empty;
-        error = "A valid TikTok video URL is required.";
-        if (string.IsNullOrWhiteSpace(value)) return false;
-        if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps) { error = "Only https TikTok video URLs are allowed."; return false; }
-        var host = uri.Host.ToLowerInvariant();
-        if (!(host == "tiktok.com" || host.EndsWith(".tiktok.com", StringComparison.OrdinalIgnoreCase))) { error = "Only TikTok video URLs are supported."; return false; }
-        if (!System.Text.RegularExpressions.Regex.IsMatch(uri.AbsolutePath, @"^/@[^/]+/video/\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) { error = "Paste the exact TikTok video link, not a profile page."; return false; }
-        normalizedUrl = uri.GetLeftPart(UriPartial.Path) + uri.Query;
-        return true;
     }
 
     private static async Task<IResult> CreatorRevoke(Guid id, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct, string eventType)

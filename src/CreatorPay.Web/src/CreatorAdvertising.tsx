@@ -275,6 +275,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
   }
 
   const promptForVideo = (relationship: AdvertisingRequest, video?: PromotionVideo) => {
+    setMessage('')
     setEditing({id: relationship.id, businessName: relationship.merchantName, video})
     setVideoUrl(video?.videoUrl ?? '')
   }
@@ -298,7 +299,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
   return (
     <section className="creator-section">
       <h2>Active Ads</h2>
-      {message && <p className={message.includes('submitted') || message.includes('now live') ? 'success-note' : 'friendly-error'} role="status">{message}</p>}
+      {message && !editing && <p className={message.includes('submitted') || message.includes('now live') ? 'success-note' : 'friendly-error'} role="status">{message}</p>}
       {approvedRelationships.length === 0 ? (
         <p className="compact-empty">No approved advertising relationships yet.</p>
       ) : (
@@ -362,7 +363,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
           <section className="help-dialog promo-video-dialog" role="dialog" aria-modal="true" aria-labelledby="promo-video-title">
             <h2 id="promo-video-title">Add Promo Video</h2>
             <p><strong>{editing.businessName}</strong></p>
-            <p>Paste the link to the exact TikTok video promoting this business.</p>
+            <p className="promo-video-instruction">Paste the exact TikTok video link, not a profile page.</p>
             <form onSubmit={(e) => void submit(e)}>
               <label>
                 Promotion Video Link
@@ -370,11 +371,14 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
                   placeholder="https://www.tiktok.com/@creator/video/1234567890"
+                  type="url"
+                  required
                 />
               </label>
+              {message && <p className="friendly-error promo-video-error" role="alert">{message}</p>}
               <div className="actions">
-                <button type="submit" disabled={saving}>{saving ? 'Submitting…' : 'Submit for Approval'}</button>
-                <button type="button" className="quiet" onClick={() => setEditing(null)}>Cancel</button>
+                <button type="submit" className="creator-promo-submit" disabled={saving}>{saving ? 'Submitting…' : 'Submit for Approval'}</button>
+                <button type="button" className="quiet" onClick={() => { setMessage(''); setEditing(null) }}>Cancel</button>
               </div>
             </form>
           </section>

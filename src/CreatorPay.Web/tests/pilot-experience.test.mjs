@@ -163,6 +163,17 @@ test('Promotion video workflow stays wired through creator, business, and custom
   assert.doesNotMatch(customer,/creator profile/i)
 })
 
+test('Creator promotion-video modal keeps errors visible and the submit action purple',()=>{
+  assert.match(creatorAds,/Paste the exact TikTok video link, not a profile page\./)
+  assert.match(creatorAds,/type="url"/)
+  assert.match(creatorAds,/required/)
+  assert.match(creatorAds,/friendly-error promo-video-error/)
+  assert.match(creatorAds,/creator-promo-submit/)
+  assert.match(stylesCompact,/role-creator.*promo-video-dialog.*creator-promo-submit.*background:var\(--role-accent\).*color:#fff/)
+  assert.match(stylesCompact,/promo-video-instruction.*color:#32235c.*font-weight:700/)
+  assert.match(stylesCompact,/promo-video-dialog.*actions.*grid-template-columns:minmax\(0,1\.35fr\)minmax\(0,\.8fr\)/)
+})
+
 test('Creator tap states and compact ad badges stay inside the purple role system',()=>{
   assert.match(styles,/Creator interactions use the role accent/)
   assert.match(styles,/-webkit-tap-highlight-color:\s*rgb\(124 77 255 \/ \.12\)/)

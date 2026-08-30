@@ -38,10 +38,17 @@ async function assertPurpleCurrent(nav: Locator, name: string) {
   await expect(item).toHaveCSS('color', 'rgb(124, 77, 255)')
 }
 
-for (const width of [390, 393]) {
+const mobileViewports = [
+  {width: 375, height: 812},
+  {width: 390, height: 844},
+  {width: 393, height: 852},
+  {width: 430, height: 932},
+]
+
+for (const {width, height} of mobileViewports) {
   test(`Creator iOS interactions remain control-like and purple at ${width}px`, async ({page}) => {
     test.setTimeout(90_000)
-    await page.setViewportSize({width, height: width === 390 ? 844 : 852})
+    await page.setViewportSize({width, height})
     await login(page, 'creator@e2e.invalid')
 
     const nav = page.getByRole('navigation', {name: 'Creator sections'})
@@ -92,6 +99,24 @@ for (const width of [390, 393]) {
     expect(addVideoBox!.width).toBeLessThanOrEqual(140)
     await expect(awaiting.locator('.creator-ads-activated')).toBeEmpty()
     await expect(awaiting.locator('.creator-ads-days')).toBeEmpty()
+
+    await addVideo.tap()
+    const dialog = page.getByRole('dialog', {name: 'Add Promo Video'})
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText('Paste the exact TikTok video link, not a profile page.')).toBeVisible()
+    const submit = dialog.getByRole('button', {name: 'Submit for Approval'})
+    await expect(submit).toHaveCSS('background-color', 'rgb(124, 77, 255)')
+    await expect(submit).toHaveCSS('color', 'rgb(255, 255, 255)')
+    const dialogBox = await dialog.boundingBox()
+    expect(dialogBox).not.toBeNull()
+    expect(dialogBox!.x).toBeGreaterThanOrEqual(0)
+    expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(width)
+    expect(dialogBox!.height).toBeLessThan(height)
+    await dialog.getByLabel('Promotion Video Link').fill('https://www.tiktok.com/@profile-only')
+    await submit.tap()
+    await expect(dialog.getByRole('alert')).toHaveText('Enter a TikTok video link, not a profile link.')
+    await dialog.getByRole('button', {name: 'Cancel'}).tap()
+    await expect(dialog).toBeHidden()
 
     const header = page.locator('.role-creator .account-header')
     const avatar = header.locator('.account-header-avatar')
