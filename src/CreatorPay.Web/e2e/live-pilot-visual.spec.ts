@@ -160,8 +160,8 @@ for (const viewport of [
         const avatarBox = await page.locator('.account-identity-avatar').boundingBox()
         expect(nameBox).not.toBeNull()
         expect(avatarBox).not.toBeNull()
-        expect(avatarBox!.x).toBeGreaterThan(nameBox!.x)
         if (viewport.width < 651) {
+          expect(avatarBox!.x).toBeGreaterThan(nameBox!.x)
           const settings = page.getByRole('button', {name: 'Settings', exact: true})
           await settings.click()
           const menu = page.getByRole('menu')
@@ -173,6 +173,8 @@ for (const viewport of [
           await page.mouse.move(0, 0)
           await page.screenshot({path: `${shots}/creator-settings-${viewport.name}.png`, animations: 'disabled'})
           await settings.click()
+        } else {
+          expect(avatarBox!.x).toBeLessThan(nameBox!.x)
         }
       }
       for (const tab of role.tabs.filter((item) => !selectedTab || item.slug === selectedTab)) {

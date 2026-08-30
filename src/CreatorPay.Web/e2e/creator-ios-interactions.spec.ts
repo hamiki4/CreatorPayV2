@@ -3,6 +3,7 @@ import {expect, test} from './fixtures'
 import {login} from './auth-helpers'
 
 const iphone = devices['iPhone 13']
+const screenshotDir = process.env.E2E_SCREENSHOT_DIR
 test.use({
   userAgent: iphone.userAgent,
   deviceScaleFactor: iphone.deviceScaleFactor,
@@ -46,7 +47,7 @@ const mobileViewports = [
 ]
 
 for (const {width, height} of mobileViewports) {
-  test(`Creator iOS interactions remain control-like and purple at ${width}px`, async ({page}) => {
+  test(`Creator iOS interactions remain control-like and purple at ${width}px`, async ({page, browserName}) => {
     test.setTimeout(90_000)
     await page.setViewportSize({width, height})
     await login(page, 'creator@e2e.invalid')
@@ -120,20 +121,31 @@ for (const {width, height} of mobileViewports) {
 
     const header = page.locator('.role-creator .account-header')
     const avatar = header.locator('.account-header-avatar')
-    const identity = header.locator('.account-header-creator-copy')
+    const title = header.getByRole('heading', {name: 'Creator', exact: true})
+    const identity = header.locator('.account-identity--creator')
     const actions = header.locator('.account-actions')
-    const [headerBox, avatarBox, identityBox, actionsBox] = await Promise.all([
-      header.boundingBox(), avatar.boundingBox(), identity.boundingBox(), actions.boundingBox(),
+    const [headerBox, avatarBox, titleBox, identityBox, actionsBox] = await Promise.all([
+      header.boundingBox(), avatar.boundingBox(), title.boundingBox(), identity.boundingBox(), actions.boundingBox(),
     ])
     expect(headerBox).not.toBeNull()
     expect(avatarBox).not.toBeNull()
+    expect(titleBox).not.toBeNull()
     expect(identityBox).not.toBeNull()
     expect(actionsBox).not.toBeNull()
-    expect(avatarBox!.x).toBeLessThan(identityBox!.x)
-    expect(identityBox!.x + identityBox!.width).toBeLessThanOrEqual(actionsBox!.x)
+    expect(avatarBox!.x - (titleBox!.x + titleBox!.width)).toBeGreaterThanOrEqual(8)
+    expect(avatarBox!.x - (titleBox!.x + titleBox!.width)).toBeLessThanOrEqual(12)
+    expect(Math.abs((avatarBox!.y + avatarBox!.height / 2) - (titleBox!.y + titleBox!.height / 2))).toBeLessThanOrEqual(1)
+    expect(avatarBox!.width).toBeGreaterThanOrEqual(44)
+    expect(avatarBox!.width).toBeLessThanOrEqual(48)
+    expect(avatarBox!.height).toBeGreaterThanOrEqual(44)
+    expect(avatarBox!.height).toBeLessThanOrEqual(48)
+    expect(identityBox!.y).toBeGreaterThanOrEqual(avatarBox!.y + avatarBox!.height)
+    expect(avatarBox!.x + avatarBox!.width).toBeLessThanOrEqual(actionsBox!.x)
+    expect(headerBox!.x + headerBox!.width - (actionsBox!.x + actionsBox!.width)).toBeLessThanOrEqual(1)
     expect(headerBox!.height).toBeLessThanOrEqual(104)
 
     await assertNoOverflow(page)
     expect(await page.evaluate(() => getSelection()?.toString() ?? '')).toBe('')
+    if (screenshotDir) await page.screenshot({path: `${screenshotDir}/creator-header-${browserName}-${width}.png`, animations: 'disabled'})
   })
 }

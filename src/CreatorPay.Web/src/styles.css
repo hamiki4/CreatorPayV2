@@ -961,6 +961,62 @@
   }
 }
 
+/* Creator mobile header-only correction: title, avatar, then identity. */
+@media (max-width:650px) {
+  .role-creator .account-header {
+    min-width: 0;
+    padding-block: .25rem;
+  }
+
+  .role-creator .account-header-copy--creator {
+    display: grid;
+    grid-template-columns: max-content 2.875rem minmax(0, 1fr);
+    grid-template-rows: auto 2.875rem auto;
+    align-items: center;
+    column-gap: .625rem;
+    row-gap: .08rem;
+    min-width: 0;
+  }
+
+  .role-creator .account-header-creator-copy {
+    display: contents;
+  }
+
+  .role-creator .account-header .eyebrow {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .role-creator .account-header h1 {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: center;
+  }
+
+  .role-creator .account-header-avatar {
+    grid-column: 2;
+    grid-row: 2;
+    width: 2.875rem;
+    height: 2.875rem;
+  }
+
+  .role-creator .account-identity-avatar {
+    width: 2.875rem;
+    height: 2.875rem;
+    min-width: 2.875rem;
+  }
+
+  .role-creator .account-identity--creator {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    min-width: 0;
+  }
+
+  .role-creator .account-actions {
+    align-self: center;
+  }
+}
+
 /* Creator visibility refinement: heavier outlines, unchanged icon bounds. */
 .role-creator .workspace-nav-icon svg,
 .role-creator .icon-button svg,

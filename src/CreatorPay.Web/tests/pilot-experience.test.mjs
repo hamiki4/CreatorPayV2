@@ -320,6 +320,9 @@ test('Creator presentation uses stronger bounded icons and a contained right-sid
   assert.match(accountChrome,/settings-row-control/)
   assert.match(styles,/\.role-creator \.settings-menu[\s\S]*width: min\(18rem, calc\(100vw - 1\.3rem\)\)/)
   assert.match(styles,/\.role-creator \.account-identity-avatar[\s\S]*width: 2\.6rem/)
+  assert.match(styles,/Creator mobile header-only correction/)
+  assert.match(styles,/grid-template-columns: max-content 2\.875rem minmax\(0, 1fr\)/)
+  assert.match(styles,/\.role-creator \.account-header-avatar[\s\S]*grid-column: 2;[\s\S]*grid-row: 2;[\s\S]*width: 2\.875rem/)
 })
 test('Creator mobile controls suppress iOS selection and inherited green hover without hiding copyable data',()=>{
   assert.match(styles,/\.role-creator button,[\s\S]*-webkit-user-select: none;[\s\S]*-webkit-touch-callout: none;[\s\S]*-webkit-tap-highlight-color: rgb\(124 77 255 \/ \.12\)/)
