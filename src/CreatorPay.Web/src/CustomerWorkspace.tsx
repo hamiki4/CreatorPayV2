@@ -91,16 +91,25 @@ async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> 
 
 const money = (v?: number, _currency?: string) => formatAmount(v)
 const locationRadiusOptions = [1, 3, 5, 10, 20] as const
+const missingDisplayValues = new Set(['not provided', 'n/a', 'na', 'unknown'])
+
+function displayText(value?: string) {
+  const text = value?.trim()
+  return text && !missingDisplayValues.has(text.toLocaleLowerCase()) ? text : undefined
+}
 
 function businessTypeLabel(value?: string) {
-  if (!value) return undefined
-  return businessTypes.find((item) => item.value === value)?.en ?? value
+  const text = displayText(value)
+  if (!text) return undefined
+  return displayText(businessTypes.find((item) => item.value === text)?.en ?? text)
 }
 
 function businessAddress(row: AdvertisingRow) {
   return [row.addressLine1, row.addressLine2, row.city, row.region]
-    .map((part) => part?.trim())
-    .filter((part, index, parts): part is string => Boolean(part) && parts.indexOf(part) === index)
+    .flatMap((part) => part?.split(',') ?? [])
+    .map((part) => displayText(part))
+    .filter((part): part is string => Boolean(part))
+    .filter((part, index, parts) => parts.findIndex((candidate) => candidate.toLocaleLowerCase() === part.toLocaleLowerCase()) === index)
     .join(', ')
 }
 
@@ -600,7 +609,7 @@ function PromotionCard({row, compact = false}: {row: AdvertisingRow; compact?: b
         <div>
           <span>Promoted by</span>
           <strong>{row.creatorName}</strong>
-          <small>Creator ID {row.creatorCode}</small>
+          <small className="customer-creator-id"><span>Creator ID</span>{' '}<b>{row.creatorCode}</b></small>
         </div>
       </div>
       <div className="customer-promotion-actions">

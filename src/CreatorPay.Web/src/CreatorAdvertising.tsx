@@ -321,7 +321,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
               const statusTone = live ? 'live' : promo?.status === 'Rejected' ? 'rejected' : promo?.status === 'Approved' ? 'approved' : 'pending'
               const action =
                 live ? (
-                  <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer"><NavIcon name="video" size={20} />View TikTok Video</a>
+                  <a className="creator-video-link" href={promo.videoUrl} target="_blank" rel="noopener noreferrer"><NavIcon name="video" size={20} />View TikTok Video</a>
                 ) : promo?.status === 'Pending' ? (
                   <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer">View Submitted Link</a>
                 ) : promo?.status === 'Approved' ? (

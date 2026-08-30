@@ -336,7 +336,7 @@ test("Business creates phone-only Cashier; OTP activation routes Cashier dashboa
   }
   await signIn(page, cashier);
   await expect(
-    page.getByRole("heading", { name: "Cashier Dashboard" }),
+    page.getByRole("heading", { name: "Cashier", exact: true }),
   ).toBeVisible();
   await noOverflow(page);
 });

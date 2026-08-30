@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "./apiClient";
 import { AccountStatusBadge } from "./AccountChrome";
 import { formatAmount, formatDate, formatTime } from "./displayFormat";
+import { NavIcon } from "./navIcons";
 
 type Mode = "cashier" | "merchant";
 type Staff = {
@@ -20,6 +21,7 @@ type Purchase = {
   purchaseAmount: number;
   confirmedAtUtc?: string;
   creatorDisplayName: string;
+  creatorPublicId: string;
 };
 type Result = {
   status: string;
@@ -43,6 +45,10 @@ type Tab = "purchase" | "recent" | "profile";
 const money = formatAmount;
 const transactionDate = formatDate;
 const transactionTime = formatTime;
+const shortReference = (value: string) => {
+  const readable = value.replace(/[^a-z0-9]/gi, "");
+  return `#${readable.slice(-4).toUpperCase()}`;
+};
 
 export function CashierCheckoutWorkspace({
   initialQrPayload,
@@ -182,7 +188,13 @@ export function CashierCheckoutWorkspace({
             className={tab === id ? "active" : ""}
             onClick={() => setTab(id)}
           >
-            {label}
+            {!merchantMode && (
+              <NavIcon
+                name={id === "purchase" ? "checkout" : id === "recent" ? "sales" : "profile"}
+                size={24}
+              />
+            )}
+            <span>{label}</span>
           </button>
         ))}
       </nav>
@@ -289,8 +301,11 @@ export function CashierCheckoutWorkspace({
               <div className="cashier-transaction-row headings">
                 <span>Amount</span>
                 <span>Status</span>
+                <span>Creator</span>
+                <span>Creator ID</span>
                 <span>Date</span>
                 <span>Time</span>
+                <span>Reference</span>
               </div>
               {[...recent]
                 .sort(
@@ -309,11 +324,20 @@ export function CashierCheckoutWorkspace({
                     <span data-label="Status">
                       <span className="status-badge">{x.status}</span>
                     </span>
+                    <span data-label="Creator" className="cashier-transaction-creator">
+                      {x.creatorDisplayName}
+                    </span>
+                    <strong data-label="Creator ID" className="cashier-transaction-creator-id">
+                      {x.creatorPublicId}
+                    </strong>
                     <span data-label="Date">
                       {transactionDate(x.confirmedAtUtc)}
                     </span>
                     <span data-label="Time">
                       {transactionTime(x.confirmedAtUtc)}
+                    </span>
+                    <span data-label="Reference" className="cashier-short-reference" title="Short transaction reference">
+                      {shortReference(x.publicTransactionId)}
                     </span>
                   </article>
                 ))}

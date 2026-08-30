@@ -50,6 +50,7 @@ import { ContactSupport, HelpCenter, HelpLink, LegalPage } from "./PublicPages";
 import { PilotExperience } from "./PilotExperience";
 import { CreatorDashboard } from "./CreatorDashboard";
 import { BusinessDashboard } from "./BusinessDashboard";
+import { NavIcon } from "./navIcons";
 
 type Location = {
   id: string;
@@ -681,15 +682,20 @@ function App({initialQrPayload}:{initialQrPayload?:string}={}) {
         <a className="skip" href="#workspace-content">
           Skip to content
         </a>
-        <header>
-          <div>
+        <header className="cashier-header">
+          <div className="cashier-header-identity">
             <p className="eyebrow">{brand.productName}</p>
-            <h1>Cashier Dashboard</h1>
+            <h1>Cashier</h1>
           </div>
-          <div className="header-actions">
-            <HelpLink category="Cashiers and Supervisors" />
-            <SignOutButton />
-          </div>
+          <details className="cashier-settings">
+            <summary className="icon-button" aria-label="Settings">
+              <NavIcon name="settings" size={24} />
+            </summary>
+            <div className="cashier-settings-menu" role="menu">
+              <a role="menuitem" href="/help?category=Cashiers%20and%20Supervisors">Help</a>
+              <button role="menuitem" className="signout-action" onClick={() => void signOut()}>Sign out</button>
+            </div>
+          </details>
         </header>
         <div id="workspace-content" tabIndex={-1}>
           <CashierCheckoutWorkspace initialQrPayload={initialQrPayload}/>

@@ -2801,3 +2801,218 @@ body:has(.role-business) {
     white-space: normal;
   }
 }
+
+/* Final PILOT polish: Cashier shell and recent transactions stay role-scoped. */
+.role-cashier > .cashier-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: .85rem;
+}
+
+.cashier-header-identity {
+  display: grid;
+  gap: .18rem;
+  min-width: 0;
+}
+
+.cashier-header-identity .eyebrow,
+.cashier-header-identity h1 {
+  margin: 0;
+}
+
+.cashier-settings {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.cashier-settings > summary {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid #d4dfd7;
+  border-radius: .75rem;
+  background: #fff;
+  color: #273a2e;
+  cursor: pointer;
+  list-style: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cashier-settings > summary::-webkit-details-marker {display:none}
+.cashier-settings > summary::marker {content:""}
+.cashier-settings > summary svg {stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.cashier-settings[open] > summary {border-color:var(--role-accent);color:var(--role-accent)}
+
+.cashier-settings-menu {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + .45rem);
+  right: 0;
+  display: grid;
+  width: min(14rem,calc(100vw - 2rem));
+  padding: .45rem;
+  overflow: hidden;
+  border: 1px solid #d4dfd7;
+  border-radius: .85rem 0 .85rem .85rem;
+  background: #fff;
+  box-shadow: 0 .8rem 2rem rgb(17 37 24 / .16);
+}
+
+.cashier-settings-menu a,
+.cashier-settings-menu button {
+  display: flex;
+  align-items: center;
+  min-height: 2.65rem;
+  padding: .55rem .7rem;
+  border-radius: .55rem;
+  background: transparent;
+  color: #273a2e;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cashier-settings-menu .signout-action {color:#b42318}
+
+.role-cashier .cashier-tabs {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  overflow: visible;
+}
+
+.role-cashier .cashier-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-width: 0;
+  padding-inline: .45rem;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.role-cashier .cashier-tabs svg {flex:0 0 auto;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.role-cashier .cashier-tabs button.active {background:var(--role-accent-soft);color:var(--role-accent);box-shadow:inset 0 -2px 0 var(--role-accent)}
+.role-cashier .cashier-transactions {overflow:visible}
+.role-cashier .cashier-transaction-row {grid-template-columns:minmax(6.5rem,.9fr) minmax(6.5rem,.8fr) minmax(9rem,1.2fr) minmax(6rem,.65fr) minmax(6.7rem,.75fr) minmax(5.5rem,.65fr) minmax(5rem,.55fr)}
+.cashier-short-reference {font-weight:800;letter-spacing:.04em}
+.cashier-transaction-creator-id {color:var(--role-accent)}
+
+@media (hover:hover) and (pointer:fine) {
+  .cashier-settings > summary:hover,
+  .cashier-settings-menu a:hover,
+  .cashier-settings-menu button:hover,
+  .role-cashier .cashier-tabs button:hover {background:var(--role-accent-soft);color:var(--role-accent)}
+  .cashier-settings-menu .signout-action:hover {background:#fff1f0;color:#b42318}
+}
+
+@media (hover:none) {
+  .cashier-settings > summary:hover {background:#fff;color:#273a2e}
+  .cashier-settings[open] > summary:hover {color:var(--role-accent)}
+  .cashier-settings-menu a:hover,
+  .cashier-settings-menu button:hover {background:transparent;color:#273a2e}
+  .cashier-settings-menu .signout-action:hover {color:#b42318}
+  .role-cashier .cashier-tabs button:hover {background:transparent;color:#273a2e}
+  .role-cashier .cashier-tabs button.active:hover {background:var(--role-accent-soft);color:var(--role-accent)}
+}
+
+@media (max-width:650px) {
+  .role-cashier > .cashier-header {
+    flex-direction: row;
+    align-items: center;
+    margin-inline: -1rem;
+    padding: .7rem 1rem;
+    background: #f8faf7;
+  }
+  .cashier-header-identity h1 {font-size:1.55rem}
+  .cashier-settings-menu {position:fixed;top:4.55rem;right:max(1rem,env(safe-area-inset-right));width:min(14rem,calc(100vw - 2rem))}
+  .role-cashier .cashier-tabs {gap:.2rem;margin-top:.7rem;padding:.25rem}
+  .role-cashier .cashier-tabs button {display:grid;justify-items:center;gap:.12rem;min-height:3.7rem;padding:.35rem .15rem;font-size:.68rem;line-height:1.05}
+  .role-cashier .cashier-transaction-row.headings {display:none}
+  .role-cashier .cashier-transactions {display:grid;gap:.55rem;border:0;background:transparent}
+  .role-cashier .cashier-transaction-row {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:.45rem .75rem;
+    padding:.75rem .8rem;
+    border:1px solid #dce8df;
+    border-radius:.75rem;
+    background:#fff;
+    font-size:.8rem;
+  }
+  .role-cashier .cashier-transaction-row > [data-label]::before {display:block;margin-bottom:.1rem;color:#64736a;content:attr(data-label);font-size:.64rem;font-weight:700;letter-spacing:.02em;text-transform:none}
+  .role-cashier .cashier-transaction-row [data-label="Creator"] {grid-column:1/-1}
+  .role-cashier .cashier-transaction-row .status-badge {display:inline-flex;width:fit-content}
+}
+
+/* Creator-only fitting and final mobile identity alignment. */
+.role-creator .creator-ads-promo .creator-video-link {
+  display: inline-flex;
+  justify-self: start;
+  width: fit-content !important;
+  max-width: 100%;
+  align-items: center;
+  gap: .4rem;
+  padding: .45rem .65rem;
+  border-radius: .55rem;
+}
+
+@media (max-width:650px) {
+  .role-creator .account-header-copy--creator {
+    grid-template-columns: max-content 2.875rem;
+    grid-template-rows: auto 2.875rem auto;
+    column-gap: .5625rem;
+    row-gap: 0;
+    width: fit-content;
+    max-width: 100%;
+  }
+  .role-creator .account-header-avatar,
+  .role-creator .account-identity-avatar {
+    width: 2.875rem;
+    height: 2.875rem;
+    min-width: 2.875rem;
+  }
+  .role-creator .account-identity--creator {margin-top:0}
+}
+
+/* Customer-only omission and compact checkout identity emphasis. */
+.role-customer .customer-creator-id {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: .32rem;
+  margin-top: .12rem;
+}
+
+.role-customer .customer-creator-id span {
+  color: #65746a;
+  font-size: .69rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.role-customer .customer-creator-id b {
+  padding: .12rem .38rem;
+  border-radius: 999px;
+  background: var(--customer-green-soft);
+  color: var(--customer-green-dark);
+  font-size: .72rem;
+  font-variant-numeric: tabular-nums;
+}
