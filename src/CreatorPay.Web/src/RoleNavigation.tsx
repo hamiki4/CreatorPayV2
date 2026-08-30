@@ -35,7 +35,7 @@ export function RoleNavigation({
             }}
           >
             <span className="workspace-nav-icon" aria-hidden="true">
-              <NavIcon name={item.icon} size={22} />
+              <NavIcon name={item.icon} size={24} />
             </span>
             <span className="workspace-nav-label">{item.label}</span>
           </button>

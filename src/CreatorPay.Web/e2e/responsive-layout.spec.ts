@@ -14,15 +14,25 @@ async function assertNavIconSize(page: Page, selector: string) {
   const sizes = await page.locator(selector).evaluateAll((nodes) =>
     nodes.map((node) => {
       const style = getComputedStyle(node)
-      return { width: Number.parseFloat(style.width), height: Number.parseFloat(style.height) }
+      return {
+        width: Number.parseFloat(style.width),
+        height: Number.parseFloat(style.height),
+        stroke: Number.parseFloat(node.getAttribute('stroke-width') ?? ''),
+        linecap: node.getAttribute('stroke-linecap'),
+        linejoin: node.getAttribute('stroke-linejoin'),
+      }
     }),
   )
   expect(sizes.length).toBeGreaterThan(0)
   for (const size of sizes) {
-    expect(size.width).toBeGreaterThanOrEqual(18)
-    expect(size.width).toBeLessThanOrEqual(26)
-    expect(size.height).toBeGreaterThanOrEqual(18)
-    expect(size.height).toBeLessThanOrEqual(26)
+    expect(size.width).toBeGreaterThanOrEqual(23)
+    expect(size.width).toBeLessThanOrEqual(24)
+    expect(size.height).toBeGreaterThanOrEqual(23)
+    expect(size.height).toBeLessThanOrEqual(24)
+    expect(size.stroke).toBeGreaterThanOrEqual(1.8)
+    expect(size.stroke).toBeLessThanOrEqual(2)
+    expect(size.linecap).toBe('round')
+    expect(size.linejoin).toBe('round')
   }
 }
 
@@ -88,8 +98,6 @@ for (const width of widths) {
     await expect(creatorNav.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page')
     await assertNavGeometry(page, 'nav[aria-label="Creator sections"]', 6, 48)
     await assertNavIconSize(page, 'nav[aria-label="Creator sections"] .workspace-nav-icon svg')
-    const creatorStroke = await creatorNav.locator('svg').first().getAttribute('stroke-width')
-    expect(Number(creatorStroke)).toBeGreaterThanOrEqual(2.2)
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
     await expect(page.locator('.creator-home-stat')).toHaveCount(3)
     await expect(page.locator('.creator-home-stat').filter({ hasText: 'Confirmed Sales' }).locator('strong')).toHaveText('2')

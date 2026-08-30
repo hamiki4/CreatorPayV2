@@ -7,6 +7,7 @@ import {api as request} from './apiClient'
 import {ProfileAvatar} from './profileMedia'
 import {businessTypes} from './AuthWorkspace'
 import {RoleNavigation} from './RoleNavigation'
+import {NavIcon} from './navIcons'
 import {formatAmount, formatDate, formatDateTime, formatTime} from './displayFormat'
 
 type Wallet = {
@@ -329,9 +330,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
                 aria-expanded={filtersOpen}
                 onClick={() => setFiltersOpen(!filtersOpen)}
               >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M4 5h16l-6 7v5l-4 2v-7z" />
-                </svg>
+                <NavIcon name="filter" size={18} />
                 <span className="filter-toggle-label">Filter</span>
               </button>
               <div className="search-actions">

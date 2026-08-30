@@ -89,7 +89,7 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
               if (!notificationsOpen) void refresh()
             }}
           >
-            <NavIcon name="notifications" size={20} />
+            <NavIcon name="notifications" size={24} />
             {unread > 0 && <span className="notification-count">{unread > 99 ? '99+' : unread}</span>}
           </button>
           <button
@@ -103,7 +103,7 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
               setNotificationsOpen(false)
             }}
           >
-            <NavIcon name="settings" size={20} />
+            <NavIcon name="settings" size={24} />
           </button>
           {settingsOpen && (
             <div ref={settingsRef} className="settings-menu" role="menu">

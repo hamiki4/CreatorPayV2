@@ -181,7 +181,7 @@ function ProfilePanel({
               setCopy('Copied')
             }}
           >
-            <NavIcon name="copy" size={16} />
+            <NavIcon name="copy" size={18} />
             Copy Creator ID
           </button>
           {copy && <small role="status">{copy}</small>}

@@ -312,9 +312,13 @@ test('Creator dashboard presents the permanent four-digit Creator ID',()=>{
   assert.doesNotMatch(creatorDashboard,/apiBlob|Download PNG|Creator QR code/)
   assert.match(styles,/\.creator-id-profile/)
 })
-test('Creator presentation uses stronger bounded icons and a contained right-side settings sheet',()=>{
-  assert.match(navIcons,/strokeWidth: 2\.35/)
-  assert.match(navIcons,/size = 22/)
+test('Creator presentation uses polished bounded icons and a contained right-side settings sheet',()=>{
+  assert.match(navIcons,/strokeWidth: 1\.9/)
+  assert.match(navIcons,/size = 24/)
+  assert.match(accountChrome,/NavIcon name="notifications" size=\{24\}/)
+  assert.match(accountChrome,/NavIcon name="settings" size=\{24\}/)
+  assert.match(styles,/\.business-dashboard-icon svg \{[\s\S]*width: 24px;[\s\S]*stroke-width: 1\.9;/)
+  assert.match(styles,/\.business-quick-actions button svg \{[\s\S]*width: 24px;[\s\S]*stroke-width: 1\.9;/)
   assert.match(accountChrome,/settings-notification-row/)
   assert.match(accountChrome,/Enable device<br \/>notifications/)
   assert.match(accountChrome,/settings-row-control/)

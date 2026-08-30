@@ -67,15 +67,25 @@ async function assertLiveGeometry(page: Page, role: RoleCase, mobile: boolean) {
   const icons = await nav.locator('.workspace-nav-icon svg').evaluateAll((nodes) =>
     nodes.map((node) => {
       const box = node.getBoundingClientRect()
-      return {width: box.width, height: box.height}
+      return {
+        width: box.width,
+        height: box.height,
+        stroke: Number.parseFloat(node.getAttribute('stroke-width') ?? ''),
+        linecap: node.getAttribute('stroke-linecap'),
+        linejoin: node.getAttribute('stroke-linejoin'),
+      }
     }),
   )
   expect(icons).toHaveLength(role.tabs.length)
   for (const icon of icons) {
-    expect(icon.width).toBeGreaterThanOrEqual(18)
-    expect(icon.width).toBeLessThanOrEqual(mobile ? 24 : 20)
-    expect(icon.height).toBeGreaterThanOrEqual(18)
-    expect(icon.height).toBeLessThanOrEqual(mobile ? 24 : 20)
+    expect(icon.width).toBeGreaterThanOrEqual(23)
+    expect(icon.width).toBeLessThanOrEqual(24)
+    expect(icon.height).toBeGreaterThanOrEqual(23)
+    expect(icon.height).toBeLessThanOrEqual(24)
+    expect(icon.stroke).toBeGreaterThanOrEqual(1.8)
+    expect(icon.stroke).toBeLessThanOrEqual(2)
+    expect(icon.linecap).toBe('round')
+    expect(icon.linejoin).toBe('round')
   }
   const buttons = await nav.locator('button').evaluateAll((nodes) =>
     nodes.map((node) => {
@@ -148,6 +158,17 @@ for (const viewport of [
       test.setTimeout(90_000)
       await page.setViewportSize({width: viewport.width, height: viewport.height})
       await login(page, role.identity)
+      const headerIcons = page.locator('.account-actions .icon-button svg')
+      await expect(headerIcons).toHaveCount(2)
+      for (const icon of await headerIcons.evaluateAll((nodes) => nodes.map((node) => {
+        const box = node.getBoundingClientRect()
+        return {width: box.width, height: box.height, stroke: Number.parseFloat(node.getAttribute('stroke-width') ?? '')}
+      }))) {
+        expect(icon.width).toBe(24)
+        expect(icon.height).toBe(24)
+        expect(icon.stroke).toBeGreaterThanOrEqual(1.8)
+        expect(icon.stroke).toBeLessThanOrEqual(2)
+      }
       const scriptAsset = await page.locator('script[type="module"]').getAttribute('src')
       const cssAsset = await page.locator('link[rel="stylesheet"]').getAttribute('href')
       expect(scriptAsset).toMatch(/^\/assets\/index-[A-Za-z0-9_-]+\.js$/)
@@ -191,6 +212,21 @@ for (const viewport of [
           await expect(page.locator('.creator-next-payout')).toBeVisible()
           await expect(page.locator('.creator-start-card')).toBeVisible()
           await expect(page.locator('.creator-recent-ad').first()).toBeVisible()
+        }
+        if (role.role === 'business' && tab.slug === 'home') {
+          for (const selector of ['.business-dashboard-icon svg', '.business-quick-actions button svg']) {
+            const featureIcons = await page.locator(selector).evaluateAll((nodes) => nodes.map((node) => {
+              const box = node.getBoundingClientRect()
+              return {width: box.width, height: box.height, stroke: Number.parseFloat(node.getAttribute('stroke-width') ?? '')}
+            }))
+            expect(featureIcons.length).toBeGreaterThan(0)
+            for (const icon of featureIcons) {
+              expect(icon.width).toBe(24)
+              expect(icon.height).toBe(24)
+              expect(icon.stroke).toBeGreaterThanOrEqual(1.8)
+              expect(icon.stroke).toBeLessThanOrEqual(2)
+            }
+          }
         }
         if (role.role === 'creator' && tab.slug === 'active-ads') {
           await expect(page.locator('.creator-ads-row.relationship-active .creator-ads-days').first()).toContainText('days left')

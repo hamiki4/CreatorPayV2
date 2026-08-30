@@ -107,7 +107,7 @@ function CreatorIdentity({
       <div className="creator-identity-text">
         <strong>{name}</strong>
         {phoneNumber && <small style={{ display: 'block' }}>{phoneNumber}</small>}
-        {city && <small className="business-creator-city"><NavIcon name="mapPin" size={14} />{city}</small>}
+        {city && <small className="business-creator-city"><NavIcon name="mapPin" size={16} />{city}</small>}
       </div>
     </div>
   );

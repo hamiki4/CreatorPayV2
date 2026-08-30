@@ -115,7 +115,7 @@ export function FindBusinesses({onRequested}: {onRequested: () => void}) {
             ))}
           </select>
         </label>
-        <button disabled={loading}><NavIcon name="find" size={18} />{loading ? 'Searching…' : 'Search'}</button>
+        <button disabled={loading}><NavIcon name="find" size={20} />{loading ? 'Searching…' : 'Search'}</button>
       </form>
       {message && <p className={message.includes('sent') || message.includes('Active') ? 'success-note' : 'friendly-error'} role="status">{message}</p>}
       {!loading && items.length === 0 ? (
@@ -129,7 +129,7 @@ export function FindBusinesses({onRequested}: {onRequested: () => void}) {
                 <div className="business-card-top">
                   <strong>{x.tradingName}</strong>
                   <span>{x.businessType}</span>
-                  <small className="business-location"><NavIcon name="mapPin" size={16} /> {x.city}</small>
+                  <small className="business-location"><NavIcon name="mapPin" size={18} /> {x.city}</small>
                 </div>
                 <div className="business-card-meta">
                   <span className="status-badge">{state.label}</span>
@@ -321,7 +321,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
               const statusTone = live ? 'live' : promo?.status === 'Rejected' ? 'rejected' : promo?.status === 'Approved' ? 'approved' : 'pending'
               const action =
                 live ? (
-                  <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer"><NavIcon name="video" size={18} />View TikTok Video</a>
+                  <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer"><NavIcon name="video" size={20} />View TikTok Video</a>
                 ) : promo?.status === 'Pending' ? (
                   <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer">View Submitted Link</a>
                 ) : promo?.status === 'Approved' ? (
