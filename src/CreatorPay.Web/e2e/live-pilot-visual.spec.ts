@@ -173,6 +173,34 @@ for (const viewport of [
       const cssAsset = await page.locator('link[rel="stylesheet"]').getAttribute('href')
       expect(scriptAsset).toMatch(/^\/assets\/index-[A-Za-z0-9_-]+\.js$/)
       expect(cssAsset).toMatch(/^\/assets\/index-[A-Za-z0-9_-]+\.css$/)
+      const notificationTrigger = page.getByRole('button', {name: 'Notifications', exact: true})
+      await notificationTrigger.click()
+      const notificationDrawer = page.getByRole('complementary', {name: 'Notifications'})
+      await expect(notificationDrawer).toBeVisible()
+      await expect(notificationTrigger).toHaveAttribute('aria-expanded', 'true')
+      await expect(notificationTrigger).toHaveCSS('color', role.accent)
+      const notificationControlStyle = await notificationTrigger.evaluate((node) => {
+        const style = getComputedStyle(node)
+        return {
+          background: style.backgroundColor,
+          userSelect: style.userSelect || style.getPropertyValue('-webkit-user-select'),
+          tapHighlight: style.getPropertyValue('-webkit-tap-highlight-color'),
+        }
+      })
+      expect(notificationControlStyle.background).not.toBe('rgb(32, 93, 57)')
+      expect(notificationControlStyle.userSelect).toBe('none')
+      expect(notificationControlStyle.tapHighlight).toBe('rgba(0, 0, 0, 0)')
+      const unreadBadge = notificationTrigger.locator('.notification-count')
+      if (await unreadBadge.count()) await expect(unreadBadge).toHaveCSS('background-color', 'rgb(216, 50, 43)')
+      const notificationRows = notificationDrawer.locator('.notification-item')
+      for (const background of await notificationRows.evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).backgroundColor))) {
+        expect(background).not.toBe('rgb(32, 93, 57)')
+      }
+      await page.mouse.move(0, 0)
+      await page.screenshot({path: `${shots}/${role.role}-notifications-${viewport.name}.png`, animations: 'disabled'})
+      await notificationDrawer.locator('.notification-close').click()
+      await expect(notificationDrawer).toBeHidden()
+      expect(await page.evaluate(() => getSelection()?.toString() ?? '')).toBe('')
       const nav = page.getByRole('navigation', {name: role.navigation})
       await expect(nav.getByRole('button')).toHaveText(role.tabs.map((tab) => tab.label))
       if (role.role === 'creator') {

@@ -79,7 +79,7 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
         <div className="account-actions">
           <button
             type="button"
-            className="icon-button"
+            className="icon-button notification-trigger"
             aria-label="Notifications"
             aria-expanded={notificationsOpen}
             onClick={() => {
@@ -116,7 +116,7 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
         </div>
       </header>
     {children}
-    {notificationsOpen&&<><button className="drawer-scrim" aria-label="Close notifications" onClick={()=>setNotificationsOpen(false)}/><aside className="notification-drawer" aria-label="Notifications"><div className="notification-drawer-header"><h2>Notifications</h2><button className="icon-button" aria-label="Close notifications" onClick={()=>setNotificationsOpen(false)}>×</button></div>{notificationError&&<p className="friendly-error" role="alert">{notificationError}</p>}{items.length===0&&!notificationError?<p className="compact-empty">No notifications yet.</p>:<div className="notification-list">{items.map(notice=><button type="button" className={`notification-item${notice.readAtUtc?'':' unread'}`} key={notice.notificationId} onClick={()=>void markRead(notice)}><span className="notification-type-icon" aria-hidden="true">{iconFor(notice.type)}</span><span><strong>{notice.title}</strong><small>{formatUserFacingText(notice.body)}</small><time dateTime={notice.createdAtUtc}>{formatDateTime(notice.createdAtUtc)}</time></span>{!notice.readAtUtc&&<i aria-label="Unread"/>}</button>)}</div>}{unread>0&&<button className="mark-all-read" onClick={()=>void markAll()}>Mark all as read</button>}</aside></>}
+    {notificationsOpen&&<><button className="drawer-scrim" aria-label="Close notifications" onClick={()=>setNotificationsOpen(false)}/><aside className="notification-drawer" aria-label="Notifications"><div className="notification-drawer-header"><h2>Notifications</h2><button className="icon-button notification-close" aria-label="Close notifications" onClick={()=>setNotificationsOpen(false)}>×</button></div>{notificationError&&<p className="friendly-error" role="alert">{notificationError}</p>}{items.length===0&&!notificationError?<p className="compact-empty">No notifications yet.</p>:<div className="notification-list">{items.map(notice=><button type="button" className={`notification-item${notice.readAtUtc?'':' unread'}`} key={notice.notificationId} onClick={()=>void markRead(notice)}><span className="notification-type-icon" aria-hidden="true">{iconFor(notice.type)}</span><span><strong>{notice.title}</strong><small>{formatUserFacingText(notice.body)}</small><time dateTime={notice.createdAtUtc}>{formatDateTime(notice.createdAtUtc)}</time></span>{!notice.readAtUtc&&<i aria-label="Unread"/>}</button>)}</div>}{unread>0&&<button className="mark-all-read notification-action" onClick={()=>void markAll()}>Mark all as read</button>}</aside></>}
     </div>
   )
 }
