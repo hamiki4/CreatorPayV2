@@ -52,27 +52,29 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
   return (
     <div className={`account-shell role-${role.toLowerCase()}`} style={roleStyles[role]}>
       <header className="account-header">
-        <div className="account-header-copy">
-          <p className="eyebrow">WEYMELA</p>
-          <h1>{role}</h1>
-          {role === 'Creator' ? (
-            <div className="account-identity account-identity--creator">
-              <strong className="account-identity-name">{name ?? role}</strong>
-              {status && <AccountStatusBadge status={status} />}
-            </div>
-          ) : (
-            <>
-              <p className="account-identity">
-                <span>{name ?? role}</span>
+        {role === 'Creator' ? (
+          <div className="account-header-copy account-header-copy--creator">
+            <span className="account-header-avatar">
+              {identityMedia ?? <ProfileAvatar name={name ?? role} photoUrl={photoUrl} className="account-identity-avatar" />}
+            </span>
+            <div className="account-header-creator-copy">
+              <p className="eyebrow">WEYMELA</p>
+              <h1>{role}</h1>
+              <div className="account-identity account-identity--creator">
+                <strong className="account-identity-name">{name ?? role}</strong>
                 {status && <AccountStatusBadge status={status} />}
-              </p>
-            </>
-          )}
-        </div>
-        {role === 'Creator' && (
-          <span className="account-header-avatar">
-            {identityMedia ?? <ProfileAvatar name={name ?? role} photoUrl={photoUrl} className="account-identity-avatar" />}
-          </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="account-header-copy">
+            <p className="eyebrow">WEYMELA</p>
+            <h1>{role}</h1>
+            <p className="account-identity">
+              <span>{name ?? role}</span>
+              {status && <AccountStatusBadge status={status} />}
+            </p>
+          </div>
         )}
         <div className="account-actions">
           <button

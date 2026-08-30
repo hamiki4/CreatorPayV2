@@ -84,7 +84,8 @@ test('Creator Home preserves Confirmed Sales transaction history without merging
   assert.match(creatorDashboard,/label: 'Home', icon: 'home'/)
   assert.match(creatorDashboard,/className="creator-home-stat creator-home-stat--accent" onClick=\{\(\) => setTab\('sales'\)\}/)
   assert.match(creatorDashboard,/className="creator-home-stat creator-home-stat--accent" onClick=\{\(\) => setTab\('payout'\)\}/)
-  assert.match(creatorDashboard,/currentPeriodConfirmedSales \?\? 0/)
+  assert.match(creatorDashboard,/confirmedSalesCount \?\? 0/)
+  assert.match(creatorDashboard,/currentRequests\.filter\(\(request\) => request\.status === 'Pending'\)\.length/)
   assert.match(creatorDashboard,/tab === 'sales'.*CreatorConfirmedSales/s)
   assert.match(creatorAds,/\/api\/v1\/creator\/ads\/performance/)
   const sales=creatorAds.slice(creatorAds.indexOf('export function CreatorConfirmedSales'),creatorAds.indexOf('export function ActiveAds'))
@@ -153,7 +154,7 @@ test('Promotion video workflow stays wired through creator, business, and custom
 
 test('Creator tap states and compact ad badges stay inside the purple role system',()=>{
   assert.match(styles,/Creator interactions use the role accent/)
-  assert.match(styles,/-webkit-tap-highlight-color:\s*transparent/)
+  assert.match(styles,/-webkit-tap-highlight-color:\s*rgb\(124 77 255 \/ \.12\)/)
   assert.match(styles,/\.role-creator \.creator-start-card:active/)
   assert.match(styles,/background:\s*linear-gradient\(135deg,\s*#f4efff,\s*#e9dfff\)/)
   assert.match(styles,/\.role-creator \.creator-ads-status \.status-badge[\s\S]*?width:\s*fit-content/)
@@ -296,7 +297,16 @@ test('Creator presentation uses stronger bounded icons and a contained right-sid
   assert.match(accountChrome,/Enable device<br \/>notifications/)
   assert.match(accountChrome,/settings-row-control/)
   assert.match(styles,/\.role-creator \.settings-menu[\s\S]*width: min\(18rem, calc\(100vw - 1\.3rem\)\)/)
-  assert.match(styles,/\.role-creator \.account-identity-avatar[\s\S]*width: 2\.5rem/)
+  assert.match(styles,/\.role-creator \.account-identity-avatar[\s\S]*width: 2\.6rem/)
+})
+test('Creator mobile controls suppress iOS selection and inherited green hover without hiding copyable data',()=>{
+  assert.match(styles,/\.role-creator button,[\s\S]*-webkit-user-select: none;[\s\S]*-webkit-touch-callout: none;[\s\S]*-webkit-tap-highlight-color: rgb\(124 77 255 \/ \.12\)/)
+  assert.match(styles,/@media \(hover: hover\) and \(pointer: fine\)/)
+  assert.match(styles,/\.role-creator \.creator-start-card:hover[\s\S]*linear-gradient\(135deg, #fbf9ff, #f2edff\)/)
+  assert.match(styles,/\.role-creator \.creator-start-card:focus-visible[\s\S]*outline: 3px solid #9d7aff/)
+  assert.doesNotMatch(styles,/\.role-creator \.creator-id-profile[^}]*user-select:\s*none/)
+  assert.match(accountChrome,/account-header-copy account-header-copy--creator[\s\S]*account-header-avatar[\s\S]*account-header-creator-copy/)
+  assert.match(styles,/\.role-creator \.creator-ads-promo \.creator-add-video[\s\S]*width: fit-content;[\s\S]*min-height: 2rem/)
 })
 test('standard amounts omit currency text and dates use the shared day-first formatter',()=>{
   assert.match(displayFormat,/day: '2-digit'/)

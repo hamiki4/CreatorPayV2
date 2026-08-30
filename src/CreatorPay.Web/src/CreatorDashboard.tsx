@@ -35,6 +35,7 @@ type Earnings = {
   scheduledBalance: number
   currentPayoutAmount: number
   currentPeriodConfirmedSales: number
+  confirmedSalesCount: number
   upcomingPayoutAmount: number
   nextEstimatedPayoutAtUtc?: string
   lastPayoutAtUtc?: string
@@ -258,8 +259,9 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
     }
   }, [])
 
-  const pending = requests.filter((x) => x.status === 'Pending').length
-  const activeAds = currentPartnerships(requests, (request) => request.merchantId)
+  const currentRequests = currentPartnerships(requests, (request) => request.merchantId)
+  const pending = currentRequests.filter((request) => request.status === 'Pending').length
+  const activeAds = currentRequests
     .filter((request) => request.status === 'Approved' && relationshipState(request).label === 'Active')
     .slice(0, 3)
   const photo = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
@@ -315,7 +317,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
               </button>
               <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('sales')}>
                 <span>Confirmed Sales</span>
-                <strong>{earnings?.currentPeriodConfirmedSales ?? 0}</strong>
+                <strong>{earnings?.confirmedSalesCount ?? 0}</strong>
               </button>
               <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('payout')}>
                 <span>Upcoming Payout</span>

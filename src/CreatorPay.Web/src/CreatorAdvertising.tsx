@@ -328,9 +328,9 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
                 ) : promo?.status === 'Rejected' ? (
                   <button type="button" className="quiet" onClick={() => promptForVideo(x, promo)}>Submit New Video</button>
                 ) : promo?.status === 'Expired' ? (
-                  <button type="button" className="quiet" onClick={() => promptForVideo(x, promo)}>Add Promo Video</button>
+                  <button type="button" className="quiet creator-add-video" onClick={() => promptForVideo(x, promo)}>Add Promo Video</button>
                 ) : (
-                  <button type="button" className="quiet" onClick={() => promptForVideo(x, promo)}>Add Promo Video</button>
+                  <button type="button" className="quiet creator-add-video" onClick={() => promptForVideo(x, promo)}>Add Promo Video</button>
                 )
 
               return (
