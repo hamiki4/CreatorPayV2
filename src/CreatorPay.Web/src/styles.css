@@ -3016,3 +3016,114 @@ body:has(.role-business) {
   font-size: .72rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* Final release-readiness corrections: admin forms, payout filters, revision feedback, and touch behavior. */
+.admin-create-card,
+.admin-create-card form,
+.admin-create-card form > *,
+.admin-create-card label,
+.admin-create-card input,
+.admin-create-card select,
+.admin-create-card textarea,
+.admin-create-card button {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-create-card {width:100%}
+.admin-create-card form,
+.admin-create-card label,
+.admin-create-card input,
+.admin-create-card select,
+.admin-create-card textarea {width:100%}
+
+.payout-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(14rem,2fr) repeat(3,minmax(8rem,1fr)) auto;
+  align-items: end;
+  gap: .65rem;
+}
+
+.payout-filter-bar > *,
+.payout-filter-bar label,
+.payout-filter-bar input,
+.payout-filter-bar select {min-width:0;max-width:100%;width:100%}
+.payout-filter-actions {display:flex;gap:.45rem;align-items:end}
+.payout-filter-actions button {min-width:5.5rem;white-space:nowrap}
+.payout-cycle-summary {grid-template-columns:repeat(3,minmax(0,1fr))}
+.payout-cycle-summary article {min-height:0;padding:.75rem .85rem}
+.payout-cycle-summary article strong {margin-top:.15rem;font-size:clamp(.9rem,1.5vw,1.15rem);line-height:1.2;overflow-wrap:anywhere}
+
+.role-creator .creator-ads-promo {display:grid;justify-items:start;gap:.55rem;min-width:0}
+.role-creator .creator-video-feedback {
+  display:grid;
+  gap:.18rem;
+  width:100%;
+  max-width:30rem;
+  padding:.55rem .65rem;
+  border:1px solid #e7d8ff;
+  border-left:3px solid #7c4dff;
+  border-radius:.55rem;
+  background:#faf7ff;
+  color:#32224f;
+}
+.role-creator .creator-video-feedback strong {font-size:.74rem;color:#5b36b5}
+.role-creator .creator-video-feedback p {margin:0;font-size:.78rem;line-height:1.35;overflow-wrap:anywhere}
+
+@media (min-width:801px) {
+  .admin-main td[data-label="Action"] .actions button,
+  .admin-main .actions button {white-space:nowrap}
+}
+
+@media (max-width:800px) {
+  .admin-create-card {margin-inline:0;padding:.85rem}
+  .admin-create-card form {grid-template-columns:minmax(0,1fr)}
+  .payout-filter-bar {grid-template-columns:minmax(0,1fr)}
+  .payout-filter-bar > *,
+  .payout-filter-bar .payout-filter-search,
+  .payout-filter-actions {grid-column:1;width:100%}
+  .payout-filter-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .payout-filter-actions button {width:100%;min-width:0}
+  .payout-cycle-summary {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .payout-cycle-summary article {padding:.65rem .7rem}
+}
+
+/* Controls behave like controls on touch; deliberately copyable values and fields remain selectable. */
+.account-shell :is(button,nav,summary,.status-badge,.summary-card,.role-summary-list,.creator-ads-row,.customer-promotion-card),
+.admin-shell :is(button,nav,.admin-metric-card,.summary-card,th),
+.role-cashier :is(button,nav,summary,.cashier-transaction-row),
+.public :is(.public-nav,.category-filter button,.help-card-chevron) {
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;
+}
+
+:is(.account-shell,.admin-shell,.role-cashier,.public) :is(input,textarea,[contenteditable="true"],code,.business-copyable-id,.cashier-short-reference,.cashier-transaction-creator-id,.customer-creator-id,.creator-id-profile,.secondary-id,a[href^="mailto:"],a[href^="tel:"]) {
+  -webkit-user-select:text;
+  user-select:text;
+  -webkit-touch-callout:default;
+}
+
+@media (hover:none), (pointer:coarse) {
+  .admin-sidebar nav a:hover {background:transparent;color:#d8e7e8}
+  .admin-sidebar nav a[aria-current="page"]:hover {background:#1a4b50;color:#fff}
+  .admin-header button:hover:not(:disabled),
+  .admin-main button:hover:not(:disabled) {background:var(--admin-accent);color:#fff}
+  .admin-header .quiet:hover:not(:disabled),
+  .admin-main .quiet:hover:not(:disabled) {background:var(--admin-accent-soft);color:var(--admin-accent-dark)}
+  .admin-header .icon-button:hover:not(:disabled) {background:transparent;color:#26383e}
+  .admin-main .danger:hover:not(:disabled) {background:#9f2f27;color:#fff}
+  .admin-shell .notification-item:hover:not(:disabled) {background:#fff;color:var(--admin-ink)}
+  .admin-shell .notification-item.unread:hover:not(:disabled) {background:#f8fbfb}
+
+  .account-shell .workspace-nav button:hover:not(:disabled) {background:transparent !important;color:#2f3b35 !important}
+  .account-shell .workspace-nav button.is-active:hover:not(:disabled) {background:var(--role-accent-soft) !important;color:var(--role-accent) !important}
+  .account-shell .icon-button:hover:not(:disabled),
+  .account-shell .settings-menu button:hover:not(:disabled) {background:#fff;color:var(--shell-text)}
+  .account-shell .notification-trigger[aria-expanded="true"]:hover:not(:disabled) {background:var(--role-accent-soft) !important;color:var(--role-accent) !important}
+  .account-shell button:not(.quiet):not(.danger):not(.icon-button):not(.notification-item):hover:not(:disabled) {background:var(--role-accent);color:#fff}
+  .account-shell .quiet:hover:not(:disabled) {background:var(--role-accent-soft);color:var(--role-accent)}
+  .account-shell .danger:hover:not(:disabled) {background:#9f2f27;color:#fff}
+}

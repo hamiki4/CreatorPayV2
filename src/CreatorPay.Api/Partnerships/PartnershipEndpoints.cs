@@ -319,7 +319,7 @@ public static class PartnershipEndpoints
         var rejectionReason = string.IsNullOrWhiteSpace(request.Reason) ? "Please contact the business for more information." : request.Reason.Trim();
         video.Reject(now, u.UserAccountId!.Value, rejectionReason);
         await db.SaveChangesAsync(ct);
-        await NotifyCreator(notifications, db, video.CreatorId, NotificationType.PromotionVideoRejected, $"promotion-video:{video.Id}:rejected", "Promotion video rejected", $"Your promotion video for {video.MerchantCreatorPartnership.Merchant.TradingName} was not approved. {rejectionReason}", "/?view=ads", h.TraceIdentifier, video.MerchantCreatorPartnershipId, ct);
+        await NotifyCreator(notifications, db, video.CreatorId, NotificationType.PromotionVideoRejected, $"promotion-video:{video.Id}:rejected", "Promotion video rejected", $"{video.MerchantCreatorPartnership.Merchant.TradingName} rejected your promotion video. Review the Business feedback before resubmitting.", "/?view=ads", h.TraceIdentifier, video.MerchantCreatorPartnershipId, ct);
         return Results.Ok(new { id = video.Id, videoUrl = video.VideoUrl, platform = video.Platform, status = video.Status.ToString(), submittedAtUtc = video.SubmittedAtUtc, reviewedAtUtc = video.ReviewedAtUtc, rejectionReason = video.RejectionReason });
     }
 

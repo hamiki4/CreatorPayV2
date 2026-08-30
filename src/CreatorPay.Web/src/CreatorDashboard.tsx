@@ -290,7 +290,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
       status={profile?.effectiveStatus}
       photoUrl={photo}
       onProfile={() => setTab('profile')}
-      onHelp={() => location.assign('/help')}
+      onHelp={() => location.assign('/help?category=Content%20Creators')}
       onSignOut={onSignOut}
       onNavigate={navigate}
     >

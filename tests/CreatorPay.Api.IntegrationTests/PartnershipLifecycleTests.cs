@@ -481,7 +481,7 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
     }
 
     [DockerFact]
-    public async Task Rejected_promotion_video_uses_default_reason_and_never_becomes_customer_visible()
+    public async Task Rejected_promotion_video_preserves_feedback_history_and_can_be_revised_until_go_live()
     {
         var creator = await AddCreator("Rejected Promo Creator");
         using var creatorClient = Client(creator.UserId, creator.CreatorId);
@@ -500,9 +500,66 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Conflict, (await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { })).StatusCode);
         var rows = await (await Get(customer, "/api/v1/customer/discovery/advertising?q=Rejected")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.DoesNotContain(rows!.EnumerateArray(), x => x.GetProperty("businessName").GetString() == "Active E2E Business");
-        await using var verify = Db();
-        Assert.False(await verify.CreatorMerchantCampaigns.AnyAsync(x => x.MerchantCreatorPartnershipId == partnershipId && x.Status == CampaignStatus.Active));
-        Assert.Single(await verify.Notifications.Where(x => x.IdempotencyKey == $"promotion-video:{videoId}:rejected").ToListAsync());
+        await using (var verify = Db())
+        {
+            Assert.False(await verify.CreatorMerchantCampaigns.AnyAsync(x => x.MerchantCreatorPartnershipId == partnershipId && x.Status == CampaignStatus.Active));
+            var notice = Assert.Single(await verify.Notifications.Where(x => x.IdempotencyKey == $"promotion-video:{videoId}:rejected").ToListAsync());
+            Assert.DoesNotContain("Please contact the business", notice.Body, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Review the Business feedback", notice.Body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var creatorRejected = await (await Get(creatorClient, "/api/v1/creator/promotion-videos")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var rejectedItem = Assert.Single(creatorRejected.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId);
+        Assert.Equal("Rejected", rejectedItem.GetProperty("promotionVideo").GetProperty("status").GetString());
+        Assert.Equal("Please contact the business for more information.", rejectedItem.GetProperty("promotionVideo").GetProperty("rejectionReason").GetString());
+
+        const string firstRevisionUrl = "https://www.tiktok.com/@weymela/video/3333333333333333333";
+        var firstRevision = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl = firstRevisionUrl });
+        Assert.Equal(HttpStatusCode.Created, firstRevision.StatusCode);
+        var firstRevisionId = (await firstRevision.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.NotEqual(videoId, firstRevisionId);
+        var merchantPending = await (await Get(merchant, "/api/v1/merchant/promotion-videos")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var pendingItem = Assert.Single(merchantPending.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId);
+        Assert.Equal("Pending", pendingItem.GetProperty("promotionVideo").GetProperty("status").GetString());
+        Assert.Equal(firstRevisionUrl, pendingItem.GetProperty("promotionVideo").GetProperty("videoUrl").GetString());
+        Assert.Empty((await (await Get(customer, "/api/v1/customer/discovery/advertising?q=Rejected")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).EnumerateArray());
+
+        const string customReason = "Show the product and price more clearly.";
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{firstRevisionId}/reject", new { reason = customReason })).StatusCode);
+        var customRejectedRows = await (await Get(creatorClient, "/api/v1/creator/promotion-videos")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var customRejected = Assert.Single(customRejectedRows.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId);
+        Assert.Equal(customReason, customRejected.GetProperty("promotionVideo").GetProperty("rejectionReason").GetString());
+
+        const string approvedReplacementUrl = "https://www.tiktok.com/@weymela/video/4444444444444444444";
+        var approvedReplacement = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl = approvedReplacementUrl });
+        Assert.Equal(HttpStatusCode.Created, approvedReplacement.StatusCode);
+        var approvedReplacementId = (await approvedReplacement.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.NotEqual(firstRevisionId, approvedReplacementId);
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{approvedReplacementId}/approve", new { reason = (string?)null })).StatusCode);
+        Assert.Empty((await (await Get(customer, "/api/v1/customer/discovery/advertising?q=Rejected")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).EnumerateArray());
+
+        var beforeGoLive = DateTime.UtcNow;
+        var live = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { });
+        Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+        var liveBody = await live.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var activatedAt = liveBody.GetProperty("activatedAtUtc").GetDateTime();
+        Assert.InRange(activatedAt, beforeGoLive, DateTime.UtcNow);
+        Assert.Equal(activatedAt.AddDays(MerchantCreatorPartnership.ActivePeriodDays), liveBody.GetProperty("expiresAtUtc").GetDateTime());
+        var visibleRows = await (await Get(customer, "/api/v1/customer/discovery/advertising?q=Rejected")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var visible = Assert.Single(visibleRows.EnumerateArray());
+        Assert.Equal(approvedReplacementUrl, visible.GetProperty("promotionVideoUrl").GetString());
+
+        await using (var verify = Db())
+        {
+            var history = await verify.PromotionVideos.Where(x => x.MerchantCreatorPartnershipId == partnershipId).OrderBy(x => x.SubmittedAtUtc).ToListAsync();
+            Assert.Equal(3, history.Count);
+            Assert.Equal([PromotionVideoStatus.Rejected, PromotionVideoStatus.Rejected, PromotionVideoStatus.Approved], history.Select(x => x.Status).ToArray());
+            Assert.Equal("Please contact the business for more information.", history[0].RejectionReason);
+            Assert.Equal(customReason, history[1].RejectionReason);
+            Assert.Null(history[2].RejectionReason);
+            Assert.Single(await verify.Notifications.Where(x => x.IdempotencyKey == $"promotion-video:{firstRevisionId}:rejected").ToListAsync());
+            Assert.Single(await verify.Notifications.Where(x => x.IdempotencyKey == $"promotion-video:{approvedReplacementId}:approved").ToListAsync());
+        }
     }
 
     [DockerFact]

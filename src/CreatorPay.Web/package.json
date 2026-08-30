@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
-    "test": "node --test tests/account-simplification.test.mjs tests/admin-account-create.test.mjs tests/admin-badges.test.mjs tests/admin-responsive.test.mjs tests/auth-localization.test.mjs tests/mobile-foundation.test.mjs tests/pin-security.test.mjs tests/shopper-discovery.test.mjs tests/public-help.test.mjs tests/operations-dashboard.test.mjs tests/pilot-operations.test.mjs tests/pilot-experience.test.mjs tests/cashier-reset.test.mjs tests/payout-history.test.mjs",
+    "test": "node --test tests/account-simplification.test.mjs tests/admin-account-create.test.mjs tests/admin-badges.test.mjs tests/admin-responsive.test.mjs tests/auth-localization.test.mjs tests/mobile-foundation.test.mjs tests/pin-security.test.mjs tests/shopper-discovery.test.mjs tests/public-help.test.mjs tests/operations-dashboard.test.mjs tests/pilot-operations.test.mjs tests/pilot-experience.test.mjs tests/cashier-reset.test.mjs tests/payout-history.test.mjs tests/release-readiness.test.mjs",
     "test:e2e": "node scripts/run-e2e.mjs",
     "mobile:pilot": "vite build --mode mobile-pilot",
     "mobile:production": "vite build --mode mobile-production",

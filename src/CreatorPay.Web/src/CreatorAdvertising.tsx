@@ -277,7 +277,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
   const promptForVideo = (relationship: AdvertisingRequest, video?: PromotionVideo) => {
     setMessage('')
     setEditing({id: relationship.id, businessName: relationship.merchantName, video})
-    setVideoUrl(video?.videoUrl ?? '')
+    setVideoUrl(video?.status === 'Rejected' || video?.status === 'Expired' ? '' : video?.videoUrl ?? '')
   }
 
   async function goLive(relationship: AdvertisingRequest) {
@@ -327,7 +327,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
                 ) : promo?.status === 'Approved' ? (
                   <button type="button" onClick={() => void goLive(x)} disabled={saving}>Go Live</button>
                 ) : promo?.status === 'Rejected' ? (
-                  <button type="button" className="quiet" onClick={() => promptForVideo(x, promo)}>Submit New Video</button>
+                  <button type="button" className="quiet" onClick={() => promptForVideo(x, promo)}>Revise &amp; Resubmit</button>
                 ) : promo?.status === 'Expired' ? (
                   <button type="button" className="quiet creator-add-video" onClick={() => promptForVideo(x, promo)}>Add Promo Video</button>
                 ) : (
@@ -340,6 +340,12 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
                     <strong>{x.merchantName}</strong>
                   </div>
                   <div className="creator-ads-promo" role="cell" data-label="Promo Video">
+                    {promo?.status === 'Rejected' && (
+                      <div className="creator-video-feedback" role="note">
+                        <strong>Business feedback</strong>
+                        <p>{promo.rejectionReason?.trim() || 'Please contact the business for more information.'}</p>
+                      </div>
+                    )}
                     {action}
                   </div>
                   <div className="creator-ads-status" role="cell" data-label="Status">
@@ -361,7 +367,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
       {editing && (
         <div className="modal-backdrop">
           <section className="help-dialog promo-video-dialog" role="dialog" aria-modal="true" aria-labelledby="promo-video-title">
-            <h2 id="promo-video-title">Add Promo Video</h2>
+            <h2 id="promo-video-title">{editing.video?.status === 'Rejected' ? 'Revise Promotion Video' : 'Add Promo Video'}</h2>
             <p><strong>{editing.businessName}</strong></p>
             <p className="promo-video-instruction">Paste the exact TikTok video link, not a profile page.</p>
             <form onSubmit={(e) => void submit(e)}>

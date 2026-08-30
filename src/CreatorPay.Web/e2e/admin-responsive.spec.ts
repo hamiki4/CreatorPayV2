@@ -124,6 +124,49 @@ test.describe.serial('responsive admin workspace',()=>{
     for(const input of await page.locator('.admin-create-card input:not([type=hidden])').all())await expect(input).toHaveValue('')
     await expectNoOverflow(page)
 
+    for(const [name,viewport] of sizes.filter(([,size])=>size.width<=430)){
+      await page.setViewportSize(viewport)
+      await page.goto('/admin/business-accounts')
+      const card=page.locator('.admin-create-card')
+      await expect(card).toBeVisible()
+      const cardBox=await card.boundingBox()
+      expect(cardBox).not.toBeNull()
+      expect(cardBox!.x).toBeGreaterThanOrEqual(0)
+      expect(cardBox!.x+cardBox!.width).toBeLessThanOrEqual(viewport.width)
+      for(const field of await card.locator('input:not([type=hidden]),select,textarea,button').all()){
+        const box=await field.boundingBox()
+        if(!box)continue
+        expect(box.x).toBeGreaterThanOrEqual(cardBox!.x)
+        expect(box.x+box.width).toBeLessThanOrEqual(cardBox!.x+cardBox!.width+1)
+      }
+      await expectNoOverflow(page)
+      await page.screenshot({path:path.join(output,`platform-business-account-form-${name}.png`),fullPage:true})
+    }
+
+    for(const [name,viewport] of sizes.filter(([,size])=>size.width<=430)){
+      await page.setViewportSize(viewport)
+      await page.goto('/admin/payouts')
+      await page.getByRole('button',{name:'Customers',exact:true}).click()
+      const filters=page.locator('.payout-filter-bar')
+      await expect(filters.getByLabel('Search Customer Name')).toBeVisible()
+      const fromField=filters.locator('label').filter({hasText:/^From/}).locator('input')
+      const toField=filters.locator('label').filter({hasText:/^To/}).locator('input')
+      const statusField=filters.locator('label').filter({hasText:/^Status/}).locator('select')
+      await expect(fromField).toBeVisible();await expect(toField).toBeVisible();await expect(statusField).toBeVisible()
+      const toBox=await toField.boundingBox()
+      const statusBox=await statusField.boundingBox()
+      expect(toBox).not.toBeNull();expect(statusBox).not.toBeNull()
+      expect(toBox!.y+toBox!.height).toBeLessThanOrEqual(statusBox!.y+1)
+      await expect(page.locator('.payout-cycle-summary article')).toHaveCount(6)
+      await expectNoOverflow(page)
+      await page.screenshot({path:path.join(output,`platform-customer-payout-${name}.png`),fullPage:true})
+    }
+
+    await page.setViewportSize({width:1440,height:1000})
+    await page.goto('/admin/business-accounts')
+    const desktopAction=page.locator('td[data-label="Action"] .actions button').first()
+    if(await desktopAction.count())await expect(desktopAction).toHaveCSS('white-space','nowrap')
+
     await page.setViewportSize({width:375,height:812})
     await page.getByRole('button',{name:'Open admin menu'}).click()
     for(const tab of platformTabs)await expect(page.getByRole('navigation',{name:'Admin navigation'}).getByText(tab,{exact:true})).toBeVisible()

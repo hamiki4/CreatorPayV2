@@ -1,5 +1,6 @@
 import { KeychainAccess, SecureStorage } from '@aparajita/capacitor-secure-storage'
 import { isNativePlatform } from './runtimePlatform'
+import { createUuid } from './uuid'
 
 const keys = {
   accessToken: 'creatorpay_access_token',
@@ -56,7 +57,7 @@ export function isSessionHydrated() { return hydrated }
 export function getAccessToken() { assertHydrated(); return state.accessToken }
 export function getRefreshToken() { assertHydrated(); return state.refreshToken }
 export function getTrustedPhone() { assertHydrated(); return state.trustedPhone }
-export async function getInstallationId() { assertHydrated(); if (state.installationId) return state.installationId; const value = crypto.randomUUID(); await write(keys.installationId, value); state = { ...state, installationId: value }; return value }
+export async function getInstallationId() { assertHydrated(); if (state.installationId) return state.installationId; const value = createUuid(); await write(keys.installationId, value); state = { ...state, installationId: value }; return value }
 
 export async function setSessionTokens(accessToken: string, refreshToken: string) {
   assertHydrated()

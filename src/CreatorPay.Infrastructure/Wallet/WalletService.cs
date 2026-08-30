@@ -98,7 +98,29 @@ public sealed class WalletService(ApplicationDbContext db, IOptions<WalletOption
         return new ConfirmedSalesReportDto(all.Count, all.Sum(x => x.PurchaseAmount), all.Sum(x => snapshots[x.CommissionCalculationSnapshotId].TotalCommissionAmount), rows, performance);
     }
     private IQueryable<PurchaseTransaction> Query() => db.PurchaseTransactions.AsNoTracking().Include(x => x.CommissionSnapshot);
-    private async Task<MerchantWallet> EnsureWallet(Guid merchantId, CancellationToken ct) { var w = await db.MerchantWallets.SingleOrDefaultAsync(x => x.MerchantId == merchantId && x.CurrencyCode == settings.CurrencyCode, ct); if (w is not null) return w; var m = await db.Merchants.FindAsync([merchantId], ct) ?? throw new KeyNotFoundException(); if (m.Status is MerchantStatus.Rejected or MerchantStatus.Closed) throw new InvalidOperationException("Merchant is not eligible for a wallet."); w = new() { Id = Guid.NewGuid(), MerchantId = merchantId, CurrencyCode = settings.CurrencyCode, CreatedAtUtc = DateTime.UtcNow }; db.Add(w); Audit(merchantId, null, "WalletCreated", "Currency=ETB"); await db.SaveChangesAsync(ct); return w; }
+    private async Task<MerchantWallet> EnsureWallet(Guid merchantId, CancellationToken ct)
+    {
+        var wallet = await db.MerchantWallets.SingleOrDefaultAsync(x => x.MerchantId == merchantId && x.CurrencyCode == settings.CurrencyCode, ct);
+        if (wallet is not null) return wallet;
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({merchantId + ":" + settings.CurrencyCode}, 0))", ct);
+        wallet = await db.MerchantWallets.SingleOrDefaultAsync(x => x.MerchantId == merchantId && x.CurrencyCode == settings.CurrencyCode, ct);
+        if (wallet is not null)
+        {
+            await transaction.CommitAsync(ct);
+            return wallet;
+        }
+
+        var merchant = await db.Merchants.FindAsync([merchantId], ct) ?? throw new KeyNotFoundException();
+        if (merchant.Status is MerchantStatus.Rejected or MerchantStatus.Closed) throw new InvalidOperationException("Merchant is not eligible for a wallet.");
+        wallet = new() { Id = Guid.NewGuid(), MerchantId = merchantId, CurrencyCode = settings.CurrencyCode, CreatedAtUtc = DateTime.UtcNow };
+        db.Add(wallet);
+        Audit(merchantId, null, "WalletCreated", $"Currency={settings.CurrencyCode}");
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return wallet;
+    }
     private void Audit(Guid merchant, Guid? actor, string type, string detail) => db.MerchantAuditEvents.Add(new() { Id = Guid.NewGuid(), MerchantId = merchant, ActorUserAccountId = actor, EventType = type, Detail = detail, CreatedAtUtc = DateTime.UtcNow, CreatedBy = actor?.ToString() });
     private static MerchantWalletEntry Entry(MerchantWallet w, Guid merchant, decimal amount, (decimal Before, decimal After) b, Guid? deposit, Guid actor, string key, MerchantWalletEntryType type, Guid? transaction = null) => new() { Id = Guid.NewGuid(), MerchantWalletId = w.Id, MerchantId = merchant, EntryType = type, Amount = amount, CurrencyCode = w.CurrencyCode, BalanceBefore = b.Before, BalanceAfter = b.After, RelatedDepositId = deposit, RelatedTransactionId = transaction, IdempotencyKey = key, Description = type.ToString(), CreatedAtUtc = DateTime.UtcNow, CreatedByUserId = actor, CreatedBy = actor.ToString(), CorrelationId = key };
     private static FinancialJournal Journal(DateTime now, string reference, Guid? transaction, Guid? deposit, params (JournalAccount Account, JournalLineType Type, decimal Amount)[] lines) { var j = new FinancialJournal { Id = Guid.NewGuid(), Reference = reference, Description = reference, RelatedTransactionId = transaction, RelatedDepositId = deposit, CreatedAtUtc = now }; foreach (var x in lines) j.Lines.Add(new() { Id = Guid.NewGuid(), Account = x.Account, Type = x.Type, Amount = x.Amount, CurrencyCode = "ETB", Description = reference, CreatedAtUtc = now }); j.Post(now); return j; }

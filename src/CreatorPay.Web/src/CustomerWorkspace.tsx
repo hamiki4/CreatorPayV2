@@ -9,6 +9,7 @@ import {businessTypes} from './AuthWorkspace'
 import {RoleNavigation} from './RoleNavigation'
 import {NavIcon} from './navIcons'
 import {formatAmount, formatDate, formatDateTime, formatTime} from './displayFormat'
+import {createUuid} from './uuid'
 
 type Wallet = {
   availableCashback: number
@@ -84,7 +85,7 @@ const token = getAccessToken
 async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   return request<T>(path, {
     method,
-    headers: method === 'GET' ? undefined : {'Idempotency-Key': crypto.randomUUID()},
+    headers: method === 'GET' ? undefined : {'Idempotency-Key': createUuid()},
     body: body === undefined ? undefined : JSON.stringify(body),
   })
 }
@@ -383,7 +384,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
       name={profile?.name}
       status={profile?.effectiveStatus}
       onProfile={() => setView('profile')}
-      onHelp={() => location.assign('/help')}
+      onHelp={() => location.assign('/help?category=Customers')}
       onSignOut={onSignOut}
       onNavigate={navigate}
     >

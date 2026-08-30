@@ -43,6 +43,13 @@ test('admin forms and operational records stack without page-level overflow',()=
   assert.match(styles,/\.admin-create-card form,\.admin-main \.account-filters \{grid-template-columns:1fr\}/)
   assert.match(styles,/\.admin-main \.admin-payout-table \{min-width:0\}/)
   assert.match(styles,/\.admin-main td\[data-label="Action"\] \.actions \{display:grid/)
+  assert.match(styles,/\.admin-create-card input,[\s\S]*\.admin-create-card select,[\s\S]*max-width: 100%/)
+  assert.match(styles,/@media \(min-width:801px\)[\s\S]*white-space:nowrap/)
+  assert.match(styles,/\.payout-filter-bar \{[\s\S]*grid-template-columns/)
+  assert.match(styles,/@media \(max-width:800px\)[\s\S]*\.payout-filter-bar \{grid-template-columns:minmax\(0,1fr\)\}/)
+  assert.match(styles,/\.payout-cycle-summary \{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)\}/)
+  assert.match(earnings,/className="filter-bar payout-filter-bar"/)
+  assert.match(earnings,/className="payout-filter-actions"/)
   for(const label of ['Payout Status','Eligible Amount','Cycle Start','Reference']) assert.match(earnings,new RegExp(`data-label="${label}"`))
 })
 

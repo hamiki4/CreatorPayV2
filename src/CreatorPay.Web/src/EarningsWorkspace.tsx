@@ -241,7 +241,7 @@ export function AdminPayoutWorkspace() {
             </article>
           </div>
           <form
-            className="filter-bar"
+            className="filter-bar payout-filter-bar"
             onSubmit={(e) => {
               e.preventDefault();
               setAppliedSearch(search);
@@ -249,7 +249,7 @@ export function AdminPayoutWorkspace() {
               void loadHistory(1, search);
             }}
           >
-            <label>
+            <label className="payout-filter-search">
               {tab === "creators"
                 ? "Search Creator Name or Creator ID"
                 : "Search Customer Name"}
@@ -259,21 +259,23 @@ export function AdminPayoutWorkspace() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <button>Search</button>
             <label>From <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
             <label>To <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></label>
             <label>Status <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">All</option><option value="Paid">Paid</option><option value="Requested">Requested</option><option value="Processing">Processing</option><option value="Scheduled">Scheduled</option><option value="Failed">Failed</option><option value="Cancelled">Cancelled</option></select></label>
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                setSearch("");
-                setAppliedSearch("");
-                setFromDate(""); setToDate(""); setStatusFilter(""); setHistoryPage(1); void loadHistory(1, "", { from: "", to: "", status: "" });
-              }}
-            >
-              Clear
-            </button>
+            <div className="payout-filter-actions">
+              <button>Search</button>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setSearch("");
+                  setAppliedSearch("");
+                  setFromDate(""); setToDate(""); setStatusFilter(""); setHistoryPage(1); void loadHistory(1, "", { from: "", to: "", status: "" });
+                }}
+              >
+                Clear
+              </button>
+            </div>
           </form>
           <div className="table-wrap">
             <table className="admin-payout-table">

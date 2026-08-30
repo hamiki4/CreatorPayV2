@@ -3,6 +3,7 @@ import { api } from "./apiClient";
 import { AccountStatusBadge } from "./AccountChrome";
 import { formatAmount, formatDate, formatTime } from "./displayFormat";
 import { NavIcon } from "./navIcons";
+import { createUuid } from "./uuid";
 
 type Mode = "cashier" | "merchant";
 type Staff = {
@@ -66,7 +67,7 @@ export function CashierCheckoutWorkspace({
   const [result, setResult] = useState<Result>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const submissionKey = useRef(crypto.randomUUID());
+  const submissionKey = useRef(createUuid());
   const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -88,7 +89,7 @@ export function CashierCheckoutWorkspace({
     setValidation(undefined);
     setResult(undefined);
     setMessage("");
-    submissionKey.current = crypto.randomUUID();
+    submissionKey.current = createUuid();
   };
   const showResultThenReset = (nextMessage: string) => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -230,7 +231,7 @@ export function CashierCheckoutWorkspace({
                       e.target.value.replace(/\D/g, "").slice(0, 4),
                     );
                     setValidation(undefined);
-                    submissionKey.current = crypto.randomUUID();
+                    submissionKey.current = createUuid();
                   }}
                   placeholder="Creator ID"
                 />

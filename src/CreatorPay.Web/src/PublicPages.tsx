@@ -4,14 +4,28 @@ import { brand } from './brand'
 const apiBase = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
 const faqs = [
-  ['General', 'What is Weymela?', 'Weymela connects customers, content creators, and Businesses through trackable advertising, cashback, and creator earnings.'],
-  ['Content Creators', 'How do I advertise for a Business?', 'Open Find Businesses, search for the Business, and send an Advertising Request. After approval, the Business must select Activate Ad.'],
-  ['Content Creators', 'When are Creator earnings recorded?', 'Earnings are recorded after a valid customer-confirmed purchase is successfully posted.'],
-  ['Content Creators', 'How do I use My QR?', 'Show or share your Creator QR when promoting an approved Business. Do not alter the QR.'],
-  ['Businesses', 'How are Creators approved?', 'The Business reviews Creator advertising requests and approves or rejects them.'],
-  ['Customers', 'How does a Customer earn cashback?', 'Use active Creator advertising at a participating Business and confirm the checkout.'],
-  ['Accounts', 'How can suspicious activity be reported?', 'Stop the transaction, retain the public reference, and contact support. Never send passwords, one-time codes, or full QR tokens.'],
+  ['General', 'What is Weymela?', 'Weymela connects Customers, Creators, and Businesses through live promotions, confirmed purchases, cashback, and Creator earnings.'],
+  ['Content Creators', 'How to start promoting', 'Find a Business, request permission to advertise, and wait for relationship approval. Post the promotion on TikTok, submit the exact promotion video link to Weymela, and wait for Business video approval. If approved, press Go Live. The 30-day promotion period starts only when you press Go Live.'],
+  ['Content Creators', 'What if my video is rejected?', 'Open Active Ads to read the Business feedback. Choose Revise & Resubmit, enter a new exact TikTok promotion video link, and submit it for approval again. A rejected or pending video is never visible to Customers.'],
+  ['Content Creators', 'When is a promotion active?', 'After Business video approval, press Go Live. Customers can then discover the promotion, the Business sees it as Active, and the 30-day period begins. Business approval by itself does not publish the promotion.'],
+  ['Content Creators', 'How can an active promotion end early?', 'Weymela does not delete content from TikTok. The current Creator interface does not provide a self-service early-end action. Contact the Business or Weymela Support if an active Weymela promotion needs to end early; removing a TikTok post alone does not update Weymela status.'],
+  ['Content Creators', 'When are Creator earnings recorded?', 'Creator earnings are recorded only after an eligible purchase is confirmed through the current Weymela checkout flow.'],
+  ['Businesses', 'How do I work with Creators?', 'Review Creator Requests separately from Video Approvals. After approving a relationship, review the exact TikTok promotion video and approve or reject it. Video approval does not publish the promotion; the Creator must press Go Live.'],
+  ['Businesses', 'How do I reject a promotion video?', 'Enter a short reason when possible and reject the video. The Creator can read the feedback, revise the promotion, and submit a new exact TikTok video link for another review.'],
+  ['Businesses', 'When does a promotion become active?', 'After the Creator presses Go Live, Customers can discover the promotion, Active Ads shows it, and the 30-day period begins.'],
+  ['Businesses', 'Can I end an active promotion early?', 'The current Business interface does not expose a self-service early-end action. Contact Weymela Support when an active promotion must end before 30 days. Already-confirmed transactions remain part of the financial and audit record.'],
+  ['Customers', 'How do I discover promotions?', 'Discover shows only currently Live, eligible promotions. Watch Promotion opens the exact TikTok video approved by the Business and activated by the Creator.'],
+  ['Customers', 'How do nearby promotions and directions work?', 'If you allow location access, Weymela can show approximate distance to eligible Businesses. Get Directions opens navigation to the Business when location data is available. Search and other filters remain usable without location access.'],
+  ['Customers', 'How does cashback work?', 'Cashback is recorded according to Weymela’s current configured rules after an eligible purchase is confirmed. Your Cashback screen shows the amounts and payout information available to your account.'],
+  ['Customers', 'What do I provide at checkout?', 'Give the Cashier the public Creator ID shown on the promotion. The Cashier enters the Creator ID, your phone number when required, and the purchase amount using the Weymela checkout flow.'],
+  ['Cashiers and Supervisors', 'How do I record a new purchase?', 'Enter the Creator public ID, the Customer phone number when required, and the purchase amount. Review the details before submitting.'],
+  ['Cashiers and Supervisors', 'What can I see in Recent Transactions?', 'Recent Transactions shows only the transaction information authorized for the Cashier, including status, amount, Creator context, date, time, and a short reference where available.'],
+  ['Platform Admin', 'What can Platform Admin manage?', 'Platform Admin Help applies only to areas authorized by the current role, including platform review, account administration, financial configuration, deposits, wallets, payouts, fraud, reports, and system oversight. Authorization checks still apply to every route and action.'],
+  ['Operations Admin', 'What can Operations Admin manage?', 'Operations Admin can use only the operational review and account areas granted to that role. Platform Admin-only areas such as Admin Accounts, Commission configuration, Reports, Dashboard, and System are not available to Operations Admin.'],
+  ['Accounts', 'How can suspicious activity be reported?', 'Stop the transaction, retain the public reference, and contact support. Never send passwords, one-time codes, payment credentials, or private authentication data.'],
 ] as const
+
+const helpCategories = ['All', 'General', 'Content Creators', 'Businesses', 'Customers', 'Cashiers and Supervisors', 'Platform Admin', 'Operations Admin', 'Accounts'] as const
 
 type LegalSection = [string, ReactNode]
 
@@ -23,7 +37,7 @@ const legal = {
     effectiveDate: 'August 6, 2026',
     sections: [
       ['Platform role', 'Weymela connects users and records eligible activity; it is not the seller of a Business’s goods.'],
-      ['Acceptable use', 'Do not commit fraud, misrepresent advertising, alter QR codes, scrape private data, or share passwords and one-time codes.'],
+      ['Acceptable use', 'Do not commit fraud, misrepresent advertising, manipulate checkout identifiers, scrape private data, or share passwords and one-time codes.'],
       ['Business funding', 'Businesses must maintain sufficient funds for eligible transactions.'],
       ['Records', 'Authenticated transaction and financial ledgers remain the operational record.'],
       ['Contact', 'Questions may be submitted through Contact Support.'],
@@ -102,8 +116,10 @@ export function PublicShell({ children }: { children: ReactNode }) {
 }
 
 export function HelpCenter() {
-  const [category, setCategory] = useState('All')
-  const categories = ['All', 'General', 'Content Creators', 'Businesses', 'Customers', 'Accounts']
+  const [category, setCategory] = useState(() => {
+    const requested = new URLSearchParams(location.search).get('category')
+    return helpCategories.includes(requested as (typeof helpCategories)[number]) ? requested! : 'All'
+  })
   const shown = useMemo(() => faqs.filter((x) => category === 'All' || x[0] === category), [category])
   return (
     <PublicShell>
@@ -112,7 +128,7 @@ export function HelpCenter() {
         <h1>Help Center</h1>
         <p>Clear answers for using Weymela safely.</p>
         <div className="category-filter">
-          {categories.map((x) => (
+          {helpCategories.map((x) => (
             <button className={category === x ? '' : 'quiet'} onClick={() => setCategory(x)} key={x}>
               {x}
             </button>
@@ -184,7 +200,7 @@ export function ContactSupport() {
     <PublicShell>
       <form className="panel form support-form" onSubmit={submit}>
         <h1>Contact Support</h1>
-        <p>Do not include passwords, one-time codes, full QR tokens, or payment credentials.</p>
+        <p>Do not include passwords, one-time codes, private authentication data, or payment credentials.</p>
         <label>
           Name
           <input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />

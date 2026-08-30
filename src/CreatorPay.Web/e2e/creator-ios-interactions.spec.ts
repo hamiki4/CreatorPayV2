@@ -30,7 +30,7 @@ async function assertCreatorControl(control: Locator) {
   expect(style.backgroundColor).not.toBe('rgb(21, 60, 39)')
   expect(style.backgroundColor).not.toBe('rgb(32, 93, 57)')
   expect(style.backgroundImage).not.toContain('rgb(21, 60, 39)')
-  expect(style.tapHighlight).toContain('124, 77, 255')
+  expect(style.tapHighlight).toBe('rgba(0, 0, 0, 0)')
 }
 
 async function assertPurpleCurrent(nav: Locator, name: string) {

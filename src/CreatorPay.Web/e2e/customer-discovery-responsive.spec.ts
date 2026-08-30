@@ -53,6 +53,13 @@ for(const count of [1,3,10]){
 test('Customer location permission displays km distances and nearest ordering',async({page,context})=>{
   await context.grantPermissions(['geolocation'])
   await context.setGeolocation({latitude:9.03,longitude:38.74})
+  // Container-hosted HTTP origins are not treated as secure contexts by Chromium,
+  // so provide the same granted-position result deterministically in this runner.
+  await page.addInitScript(()=>{
+    Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+      getCurrentPosition(success:PositionCallback){success({coords:{latitude:9.03,longitude:38.74,accuracy:5,altitude:null,altitudeAccuracy:null,heading:null,speed:null},timestamp:Date.now()} as GeolocationPosition)},
+    }})
+  })
   await mockPromotionFeed(page,3)
   await login(page,'shopper@e2e.invalid')
   await page.getByRole('navigation',{name:'Customer navigation'}).getByRole('button',{name:'Discover',exact:true}).click()
