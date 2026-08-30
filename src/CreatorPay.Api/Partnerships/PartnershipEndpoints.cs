@@ -103,15 +103,21 @@ public static class PartnershipEndpoints
     { var query = Query(db).Where(x => x.CreatorId == u.CreatorId); if (Enum.TryParse<PartnershipStatus>(status, true, out var s)) query = query.Where(x => x.Status == s); return Results.Ok(await ItemsWithInitiator(query, db, campaignOptions.Value.CurrencyCode, ct)); }
     private static async Task<IResult> CreatorPartnership(Guid id, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => await Query(db).FirstOrDefaultAsync(x => x.Id == id && x.CreatorId == u.CreatorId, ct) is { } p ? Results.Ok(Item(p)) : NotFound();
 
-    private static async Task<IResult> SearchCreators(string? q, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct)
+    private static async Task<IResult> SearchCreators(string? q, string? sort, ICurrentUserService u, ApplicationDbContext db, IOptions<CampaignOptions> campaignOptions, CancellationToken ct)
     {
+        var now = DateTime.UtcNow;
         var eligibility = await BusinessAdvertisingEligibility.EvaluateAsync(db, u.MerchantId!.Value, campaignOptions.Value.CurrencyCode, ct);
         if (!eligibility.Eligible) return Problem(409, $"Advertising is restricted until the available wallet balance reaches {eligibility.Minimum:0.00} {campaignOptions.Value.CurrencyCode}.");
         q = q?.Trim();
         var current = db.MerchantCreatorPartnerships.Where(x => x.MerchantId == u.MerchantId && (x.Status == PartnershipStatus.Pending || x.Status == PartnershipStatus.Approved)).Select(x => x.CreatorId);
-        var query = db.Creators.AsNoTracking().Where(x => x.Status == CreatorStatus.Active && db.UserAccounts.Any(u => u.CreatorId == x.Id && u.Status == AccountStatus.Active) && !current.Contains(x.Id));
+        var query = db.Creators.AsNoTracking().Where(x => x.Status == CreatorStatus.Active && db.UserAccounts.Any(account => account.CreatorId == x.Id && account.Role == UserRole.Creator && account.Status == AccountStatus.Active && (account.LockoutEndUtc == null || account.LockoutEndUtc <= now)) && !current.Contains(x.Id));
         if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => EF.Functions.ILike(x.DisplayName, $"%{q}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{q}%") || x.SocialProfiles.Any(s => EF.Functions.ILike(s.Handle, $"%{q}%")));
-        var rows = await query.OrderBy(x => x.DisplayName).Take(50).Select(x => new
+        var rankByFollowers = string.Equals(sort, "followers", StringComparison.OrdinalIgnoreCase);
+        if (rankByFollowers) query = query.Where(x => x.SocialProfiles.Any());
+        var ordered = rankByFollowers
+            ? query.OrderByDescending(x => x.SocialProfiles.OrderByDescending(s => s.IsPrimary).Select(s => (long?)s.FollowerCount).FirstOrDefault() ?? -1L).ThenBy(x => x.DisplayName)
+            : query.OrderBy(x => x.DisplayName);
+        var rows = await ordered.Take(50).Select(x => new
         {
             x.Id,
             x.PublicCreatorId,

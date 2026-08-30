@@ -519,6 +519,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         using var client = factory!.CreateClient();
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" })).StatusCode);
         var owner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000008", merchantId: "20000000-0000-0000-0000-000000000001");
+
         var otherOwner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000099", merchantId: "20000000-0000-0000-0000-000000000002");
         var admin = Token(UserRole.PlatformAdmin, "90000000-0000-0000-0000-000000000001");
         var before = await WalletBalance();
@@ -672,6 +673,17 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" })).StatusCode);
         var owner = Token(UserRole.MerchantAdmin, "20000000-0000-0000-0000-000000000008", merchantId: "20000000-0000-0000-0000-000000000001");
 
+        await using (var db = Db())
+        {
+            var now = DateTime.UtcNow;
+            var locked = await db.Creators.SingleAsync(x => x.DisplayName == "Desktop Invite Creator");
+            var ranked = await db.Creators.SingleAsync(x => x.DisplayName == "Mobile Invite Creator");
+            (await db.CreatorSocialProfiles.SingleAsync(x => x.CreatorId == locked.Id && x.IsPrimary)).FollowerCount = 250_000;
+            (await db.CreatorSocialProfiles.SingleAsync(x => x.CreatorId == ranked.Id && x.IsPrimary)).FollowerCount = 125_000;
+            (await db.UserAccounts.SingleAsync(x => x.CreatorId == locked.Id && x.Role == UserRole.Creator)).LockoutEndUtc = now.AddHours(1);
+            await db.SaveChangesAsync();
+        }
+
         foreach (var query in new[] { "Selam", "CRE-0000000000000001", "weymela-e2e" })
         {
             var response = await Get(client, $"/api/v1/merchant/creators/search?q={Uri.EscapeDataString(query)}", owner);
@@ -684,6 +696,13 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         var creators = await all.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.DoesNotContain(creators.EnumerateArray(), x => x.GetProperty("displayName").GetString()!.Contains("Pending Creator"));
         Assert.DoesNotContain(creators.EnumerateArray(), x => x.GetProperty("displayName").GetString() == "Suspended Creator");
+
+        var top = await Get(client, "/api/v1/merchant/creators/search?q=&sort=followers", owner);
+        Assert.Equal(HttpStatusCode.OK, top.StatusCode);
+        var rankedCreators = (await top.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).EnumerateArray().ToList();
+        Assert.DoesNotContain(rankedCreators, x => x.GetProperty("displayName").GetString() == "Desktop Invite Creator");
+        Assert.Equal("Mobile Invite Creator", rankedCreators[0].GetProperty("displayName").GetString());
+        Assert.Equal(125_000, rankedCreators[0].GetProperty("followerCount").GetInt64());
     }
 
     [DockerFact]

@@ -1152,6 +1152,8 @@
   display: grid;
   gap: .9rem;
   width: min(100%, 48rem);
+  min-width: 0;
+  max-width: 100%;
   margin-inline: auto;
 }
 
@@ -1403,6 +1405,50 @@
   background-color: #fff !important;
 }
 
+.business-top-creators {min-width:0;max-width:100%;margin-top:1rem;overflow:hidden}
+.business-top-creators > h3 {margin:0 0 .65rem;color:var(--role-accent);font-size:1rem}
+.business-top-creators-list {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;width:100%;min-width:0;max-width:100%}
+.business-top-creator-card {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:.6rem .75rem;
+  min-width:0;
+  padding:.75rem;
+  border:1px solid #dbe4f2;
+  border-radius:.75rem;
+  background:#fff;
+  box-shadow:0 2px 8px rgb(15 23 42 / .04);
+}
+.business-top-creator-heading {display:flex;align-items:center;gap:.55rem;min-width:0}
+.business-top-creator-heading .avatar {width:2.55rem;height:2.55rem;min-width:2.55rem;font-size:.9rem;background:#e8f0ff;color:var(--role-accent)}
+.business-top-creator-heading > div {display:grid;gap:.08rem;min-width:0}
+.business-top-creator-heading strong {overflow:hidden;color:#1f2a44;font-size:.82rem;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}
+.business-top-creator-heading span {overflow:hidden;color:#64748b;font-size:.67rem;font-weight:600;letter-spacing:0;text-overflow:ellipsis;text-transform:none;white-space:nowrap}
+.business-top-creator-followers {display:grid;align-content:center;justify-items:end;gap:.05rem}
+.business-top-creator-followers span {color:#64748b;font-size:.62rem;font-weight:700;letter-spacing:0;text-transform:none}
+.business-top-creator-followers strong {color:var(--role-accent);font-size:.82rem}
+.business-top-creator-card > button {grid-column:1/-1;min-height:2.25rem;padding:.4rem .65rem;border-radius:.5rem;color:#fff;font-size:.72rem}
+
+.role-business .cashier-tabs {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  max-width:30rem;
+  overflow:visible;
+}
+.role-business .cashier-tabs button {
+  min-width:0;
+  background:#fff !important;
+  color:#17213a;
+  overflow-wrap:anywhere;
+  white-space:normal;
+}
+.role-business .cashier-tabs button.active {
+  background:var(--role-accent) !important;
+  color:#fff !important;
+  box-shadow:none;
+}
+.role-business .cashier-sale > button.full {background:var(--role-accent) !important;color:#fff !important}
+
 .role-business .business-dashboard .quiet,
 .role-business .business-short-reference {
   background: var(--role-accent-soft);
@@ -1523,6 +1569,7 @@
   .role-business .business-dashboard-cards > button:hover,
   .role-business .business-quick-actions button:hover,
   .role-business .business-recent-activity button:hover,
+  .role-business .cashier-tabs button:hover,
   .role-business .workspace-nav button:hover,
   .role-business .icon-button:hover,
   .role-business .settings-menu button:hover {
@@ -1530,6 +1577,9 @@
     background: var(--role-accent-soft) !important;
     color: var(--role-accent);
   }
+
+  .role-business .cashier-tabs button.active:hover {background:var(--role-accent) !important;color:#fff !important}
+  .role-business .cashier-tabs button:not(.active):hover {background:var(--role-accent-soft) !important;color:#17213a}
 
   .role-business .business-dashboard button:not(.quiet):not(.danger):not(.business-short-reference):hover:not(:disabled) {
     background: #1d4ed8;
@@ -1540,6 +1590,7 @@
   .role-business .business-dashboard-cards > button:hover,
   .role-business .business-quick-actions button:hover,
   .role-business .business-recent-activity button:hover,
+  .role-business .cashier-tabs button:hover,
   .role-business .workspace-nav button:hover,
   .role-business .icon-button:hover,
   .role-business .settings-menu button:hover {
@@ -1550,6 +1601,8 @@
   .role-business .business-quick-actions button:hover,
   .role-business .business-recent-activity button:hover,
   .role-business .workspace-nav button:hover {background:#fff !important}
+  .role-business .cashier-tabs button:hover {background:#fff !important;color:#17213a}
+  .role-business .cashier-tabs button.active:hover {background:var(--role-accent) !important;color:#fff !important}
   .role-business .icon-button:hover,.role-business .settings-menu button:hover {background:transparent}
 }
 
@@ -1570,12 +1623,13 @@
   .role-business .settings-menu {
     position: fixed;
     top: 4.65rem;
-    right: max(.75rem,env(safe-area-inset-right));
+    right: max(1rem,env(safe-area-inset-right));
     left: auto;
-    width: min(17rem,calc(100vw - 1.5rem));
-    max-width: calc(100vw - 1.5rem);
+    width: min(17rem,calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
     border-radius: .8rem;
     box-shadow: 0 .9rem 2.4rem rgb(15 23 42 / .18);
+    transform: none;
   }
 
   .role-business .settings-menu button {
@@ -1621,6 +1675,21 @@
   .business-request-actions {grid-column:1/-1}
   .business-request-actions {justify-content:stretch}
   .business-request-actions button {flex:1}
+
+  .business-top-creators-list {
+    grid-template-columns:none;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(11rem,72%);
+    gap:.55rem;
+    max-width:100%;
+    padding-bottom:.25rem;
+    overflow-x:auto;
+    overscroll-behavior-inline:contain;
+    scroll-snap-type:inline proximity;
+    scrollbar-width:none;
+  }
+  .business-top-creators-list::-webkit-scrollbar {display:none}
+  .business-top-creator-card {scroll-snap-align:start}
 }
 
 @media (max-width:390px) {

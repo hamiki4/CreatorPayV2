@@ -5,7 +5,7 @@ import { currentPartnerships } from "./partnershipState";
 import { rankMatches, useTypeahead } from "./typeahead";
 import { ProfileAvatar } from "./profileMedia";
 import { NavIcon } from "./navIcons";
-type Creator = {
+export type BusinessCreator = {
   id: string;
   publicCreatorId: string;
   displayName: string;
@@ -15,7 +15,7 @@ type Creator = {
   contentCategories: string;
   socialPlatform?: string;
   socialProfileUrl?: string;
-  followerCount?: number;
+  followerCount?: number | null;
   profileImageUrl?: string;
 };
 export type BusinessRelationship = {
@@ -112,9 +112,9 @@ function CreatorIdentity({
     </div>
   );
 }
-export function FindCreators({ refresh }: { refresh: () => void }) {
-  const [q, setQ] = useState(""),
-    [items, setItems] = useState<Creator[]>([]),
+export function FindCreators({ refresh, initialQuery = "" }: { refresh: () => void; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery),
+    [items, setItems] = useState<BusinessCreator[]>([]),
     [relationships, setRelationships] = useState<BusinessRelationship[]>([]),
     [message, setMessage] = useState(""),
     [loading, setLoading] = useState(true);
@@ -127,7 +127,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
     setMessage("");
     try {
       return rankMatches(
-        await api<Creator[]>(
+        await api<BusinessCreator[]>(
           `/api/v1/merchant/creators/search?q=${encodeURIComponent(term)}`,
         ),
         term,
@@ -149,7 +149,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
   useEffect(() => {
     void load();
   }, []);
-  async function invite(x: Creator) {
+  async function invite(x: BusinessCreator) {
     try {
       await api("/api/v1/merchant/partnerships/invitations", {
         method: "POST",
@@ -163,7 +163,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
       setMessage("We couldn't send that invitation.");
     }
   }
-  async function reactivate(x: Creator, relationship: BusinessRelationship) {
+  async function reactivate(x: BusinessCreator, relationship: BusinessRelationship) {
     try {
       await api(`/api/v1/merchant/partnerships/${relationship.id}/reactivate`, {
         method: "POST",
@@ -178,7 +178,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
     }
   }
   const currentRelationships = currentPartnerships(relationships, (x) => x.creatorId);
-  function stateFor(creator: Creator) {
+  function stateFor(creator: BusinessCreator) {
     const relationship = currentRelationships.find((x) => x.creatorId === creator.id);
     if (!relationship)
       return { label: "NO RELATIONSHIP", daysText: null, canInvite: true };
