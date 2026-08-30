@@ -8,6 +8,8 @@ import { prepareProfilePhoto, profilePhotoAccept, profilePhotoProcessingMessage,
 import { RoleNavigation } from './RoleNavigation'
 import { currentPartnerships } from './partnershipState'
 import { daysLeftText, relationshipState } from './relationshipTime'
+import { formatAmount, formatDate } from './displayFormat'
+import { NavIcon } from './navIcons'
 
 type Tab = 'home' | 'find' | 'ads' | 'requests' | 'sales' | 'payout' | 'profile'
 type Profile = {
@@ -33,12 +35,18 @@ type Earnings = {
   scheduledBalance: number
   currentPayoutAmount: number
   currentPeriodConfirmedSales: number
+  upcomingPayoutAmount: number
   nextEstimatedPayoutAtUtc?: string
   lastPayoutAtUtc?: string
 }
-
-const money = (value: number, currency = 'ETB') =>
-  new Intl.NumberFormat('en-ET', { style: 'currency', currency }).format(value)
+type CreatorPayout = {
+  id: string
+  publicPayoutId: string
+  amount: number
+  status: string
+  scheduledAtUtc: string
+  paidAtUtc?: string
+}
 
 function ProfilePanel({
   profile,
@@ -172,6 +180,7 @@ function ProfilePanel({
               setCopy('Copied')
             }}
           >
+            <NavIcon name="copy" size={16} />
             Copy Creator ID
           </button>
           {copy && <small role="status">{copy}</small>}
@@ -186,6 +195,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [profile, setProfile] = useState<Profile>()
   const [profileError, setProfileError] = useState('')
   const [earnings, setEarnings] = useState<Earnings>()
+  const [payouts, setPayouts] = useState<CreatorPayout[]>([])
   const [requests, setRequests] = useState<AdvertisingRequest[]>([])
   const [earningsError, setEarningsError] = useState('')
   const [relationshipsError, setRelationshipsError] = useState('')
@@ -207,12 +217,18 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   const loadSupporting = () =>
     Promise.allSettled([
       api<Earnings>('/api/v1/creator/earnings/summary'),
+      api<CreatorPayout[]>('/api/v1/creator/payouts'),
       api<AdvertisingRequest[]>('/api/v1/creator/partnerships'),
     ]).then((results) => {
-      const [e, a] = results
+      const [e, p, a] = results
       if (e.status === 'fulfilled') {
         setEarnings(e.value)
         setEarningsError('')
+      } else {
+        setEarningsError("We couldn't load payout information right now.")
+      }
+      if (p.status === 'fulfilled') {
+        setPayouts(p.value)
       } else {
         setEarningsError("We couldn't load payout information right now.")
       }
@@ -246,7 +262,6 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   const activeAds = currentPartnerships(requests, (request) => request.merchantId)
     .filter((request) => request.status === 'Approved' && relationshipState(request).label === 'Active')
     .slice(0, 3)
-  const date = (value?: string) => (value ? new Intl.DateTimeFormat('en-GB').format(new Date(value)) : '—')
   const photo = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
   const navigate = (target: string) =>
     setTab(
@@ -303,14 +318,14 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                 <strong>{earnings?.currentPeriodConfirmedSales ?? 0}</strong>
               </button>
               <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('payout')}>
-                <span>Payout Amount</span>
-                <strong>{money(earnings?.currentPayoutAmount ?? 0, earnings?.currencyCode)}</strong>
+                <span>Upcoming Payout</span>
+                <strong>{formatAmount(earnings?.upcomingPayoutAmount)}</strong>
               </button>
             </div>
             <button type="button" className="creator-next-payout" onClick={() => setTab('payout')}>
               <span>
                 <span>Next Payout Date</span>
-                <strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong>
+                <strong>{formatDate(earnings?.nextEstimatedPayoutAtUtc)}</strong>
               </span>
               <span aria-hidden="true">›</span>
             </button>
@@ -345,7 +360,7 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                       <button type="button" className="creator-recent-ad" key={ad.id} onClick={() => setTab('ads')}>
                         <span className="creator-recent-ad-main">
                           <strong>{ad.merchantName}</strong>
-                          <span>Activated {date(ad.activatedAtUtc)}</span>
+                          <span>Activated {formatDate(ad.activatedAtUtc)}</span>
                           <span>{promoState}</span>
                         </span>
                         <span className="creator-recent-ad-state">
@@ -366,16 +381,35 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
         {tab === 'sales' && <><CreatorConfirmedSales />{earningsError && <p className="friendly-error">{earningsError}</p>}</>}
         {tab === 'payout' && (
           <section className="creator-section">
-            <h2>Payout</h2>
-            <div className="summary-grid">
+            <h2>Payout Overview</h2>
+            <div className="summary-grid creator-payout-overview">
               <article className="summary-card">
-                <span>Payout Amount</span>
-                <strong>{money(earnings?.currentPayoutAmount ?? 0, earnings?.currencyCode)}</strong>
+                <span>Upcoming Payout</span>
+                <strong>{formatAmount(earnings?.upcomingPayoutAmount)}</strong>
               </article>
               <article className="summary-card">
                 <span>Next Payout Date</span>
-                <strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong>
+                <strong>{formatDate(earnings?.nextEstimatedPayoutAtUtc)}</strong>
               </article>
+            </div>
+            <div className="creator-payout-history">
+              <h3>Payout History</h3>
+              {payouts.length === 0 ? (
+                <p className="compact-empty">No payout history yet.</p>
+              ) : (
+                <div className="creator-payout-history-list">
+                  {payouts.map((payout) => (
+                    <article className="creator-payout-history-item" key={payout.id}>
+                      <span>
+                        <time dateTime={payout.paidAtUtc ?? payout.scheduledAtUtc}>{formatDate(payout.paidAtUtc ?? payout.scheduledAtUtc)}</time>
+                        <small>{payout.publicPayoutId}</small>
+                      </span>
+                      <strong>{formatAmount(payout.amount)}</strong>
+                      <span className={`creator-payout-status creator-payout-status--${payout.status.toLowerCase()}`}>{payout.status}</span>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
             {earningsError && <p className="friendly-error">{earningsError}</p>}
           </section>

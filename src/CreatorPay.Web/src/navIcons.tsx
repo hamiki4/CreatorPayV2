@@ -14,6 +14,10 @@ export type NavIconName =
   | 'creators'
   | 'checkout'
   | 'wallet'
+  | 'settings'
+  | 'copy'
+  | 'mapPin'
+  | 'video'
 
 type NavIconProps = {
   name: NavIconName
@@ -26,7 +30,7 @@ const iconProps: SVGProps<SVGSVGElement> = {
   'aria-hidden': true as const,
   fill: 'none',
   stroke: 'currentColor',
-  strokeWidth: 1.9,
+  strokeWidth: 2.35,
   strokeLinecap: 'round',
   strokeLinejoin: 'round',
 }
@@ -124,6 +128,35 @@ export function NavIcon({name, size = 22, className}: NavIconProps) {
           <path d="M8 7.5V5.8A2.8 2.8 0 0 1 10.8 3h2.4A2.8 2.8 0 0 1 16 5.8v1.7" />
           <path d="M8.5 12h7" />
           <path d="M8.5 15h3.5" />
+        </svg>
+      )
+    case 'settings':
+      return (
+        <svg {...svgProps}>
+          <circle cx="12" cy="12" r="3.25" />
+          <path d="M19.1 13.5a7.4 7.4 0 0 0 0-3l2-1.55-2-3.45-2.45 1a8 8 0 0 0-2.6-1.5L13.7 2h-4l-.35 3a8 8 0 0 0-2.6 1.5l-2.45-1-2 3.45 2 1.55a7.4 7.4 0 0 0 0 3l-2 1.55 2 3.45 2.45-1a8 8 0 0 0 2.6 1.5l.35 3h4l.35-3a8 8 0 0 0 2.6-1.5l2.45 1 2-3.45-2-1.55Z" />
+        </svg>
+      )
+    case 'copy':
+      return (
+        <svg {...svgProps}>
+          <rect x="8" y="8" width="11" height="11" rx="2" />
+          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+        </svg>
+      )
+    case 'mapPin':
+      return (
+        <svg {...svgProps}>
+          <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
+          <circle cx="12" cy="10" r="2.4" />
+        </svg>
+      )
+    case 'video':
+      return (
+        <svg {...svgProps}>
+          <rect x="3" y="5" width="14" height="14" rx="3" />
+          <path d="m17 10 4-2v8l-4-2" />
+          <path d="m9 9 4 3-4 3Z" />
         </svg>
       )
   }

@@ -7,6 +7,7 @@ import {api as request} from './apiClient'
 import {ProfileAvatar} from './profileMedia'
 import {businessTypes} from './AuthWorkspace'
 import {RoleNavigation} from './RoleNavigation'
+import {formatAmount, formatDate, formatDateTime, formatTime} from './displayFormat'
 
 type Wallet = {
   availableCashback: number
@@ -85,7 +86,7 @@ async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> 
   })
 }
 
-const money = (v?: number, c = 'ETB') => `${(v ?? 0).toFixed(2)} ${c}`
+const money = (v?: number, _currency?: string) => formatAmount(v)
 
 export function ShopperOfferPage({code}: {code: string}) {
   const [offer, setOffer] = useState<Offer>()
@@ -505,7 +506,6 @@ function Confirmations({
       {pending.length ? (
         <div className="confirmations pending-confirmations">
           {pending.map((x) => {
-            const when = new Date(x.createdAtUtc ?? x.expiresAtUtc)
             const busy = processing === x.id
             return (
               <article key={x.id}>
@@ -515,7 +515,7 @@ function Confirmations({
                   <span>Amount</span>
                   <strong>{money(x.purchaseAmount)}</strong>
                   <span>Date / Time</span>
-                  <strong>{new Intl.DateTimeFormat('en-GB', {dateStyle: 'medium', timeStyle: 'short'}).format(when)}</strong>
+                  <strong>{formatDateTime(x.createdAtUtc ?? x.expiresAtUtc)}</strong>
                 </div>
                 <p>Is this your purchase?</p>
                 <div className="confirmation-actions">
@@ -544,14 +544,14 @@ function Confirmations({
             <span>Time</span>
           </div>
           {history.map((x) => {
-            const when = new Date(x.resolvedAtUtc ?? x.createdAtUtc ?? x.expiresAtUtc)
+            const when = x.resolvedAtUtc ?? x.createdAtUtc ?? x.expiresAtUtc
             return (
               <article className="confirmation-row" key={x.id}>
                 <strong data-label="Business">{x.merchantName ?? 'Business'}</strong>
                 <span data-label="Amount">{money(x.purchaseAmount)}</span>
                 <span data-label="Status">{x.status === 'Completed' ? 'Completed' : 'Rejected'}</span>
-                <span data-label="Date">{new Intl.DateTimeFormat('en-GB').format(when)}</span>
-                <span data-label="Time">{when.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>
+                <span data-label="Date">{formatDate(when)}</span>
+                <span data-label="Time">{formatTime(when)}</span>
               </article>
             )
           })}
@@ -564,7 +564,6 @@ function Confirmations({
 }
 
 function Summary({wallet}: {wallet?: Wallet}) {
-  const date = (value?: string) => (value ? new Intl.DateTimeFormat('en-GB').format(new Date(value)) : '—')
   return (
     <div className="summary-grid">
       <article className="summary-card">
@@ -573,7 +572,7 @@ function Summary({wallet}: {wallet?: Wallet}) {
       </article>
       <article className="summary-card">
         <span>Next Payout Date</span>
-        <strong>{date(wallet?.nextPayoutAtUtc)}</strong>
+        <strong>{formatDate(wallet?.nextPayoutAtUtc)}</strong>
       </article>
     </div>
   )

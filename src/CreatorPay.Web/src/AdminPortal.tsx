@@ -6,6 +6,7 @@ import { rankMatches, useTypeahead } from "./typeahead";
 import { api as authenticatedApi } from "./apiClient";
 import { AdminAccountCreate } from "./AdminAccountCreate";
 import { businessTypes } from "./AuthWorkspace";
+import { formatDateTime } from "./displayFormat";
 
 type Row = Record<string, unknown>;
 type Page<T = Row> = { items: T[]; page: number; total: number; totalPages: number };
@@ -498,7 +499,7 @@ function CreatorReview() {
               <span>Pending Approval</span>
               <strong>{String(x.displayName ?? "")}</strong>
               <p>{String(x.email ?? "")}</p>
-              <p>{new Date(String(x.registeredAtUtc)).toLocaleString()}</p>
+              <p>{formatDateTime(String(x.registeredAtUtc))}</p>
               <button onClick={() => void open(x.creatorId)}>Review</button>
             </article>
           ))}
@@ -639,7 +640,7 @@ function BusinessReview() {
               <p>
                 {String(x.email)}
                 <br />
-                {new Date(String(x.registeredAtUtc)).toLocaleString()}
+                {formatDateTime(String(x.registeredAtUtc))}
               </p>
               <button>Review</button>
             </article>
@@ -791,9 +792,7 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
                       <strong>{notice.title}</strong>
                       <small>{notice.body}</small>
                       <time dateTime={notice.createdAtUtc}>
-                        {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
-                          new Date(notice.createdAtUtc),
-                        )}
+                        {formatDateTime(notice.createdAtUtc)}
                       </time>
                     </span>
                     {!notice.readAtUtc && <i aria-label="Unread" />}
@@ -1481,16 +1480,7 @@ function SystemStatus() {
 }
 
 function adminDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })
-    .format(new Date(value))
-    .replace(",", "");
+  return formatDateTime(value);
 }
 
 function cell(k: string, v: unknown) {

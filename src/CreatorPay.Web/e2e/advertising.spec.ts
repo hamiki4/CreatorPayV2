@@ -227,7 +227,7 @@ test('Business submits separate payment proofs and Admin approves or rejects eac
   await page.getByRole('button',{name:'Wallet',exact:true}).click()
   await expect(page.getByText('Available balance',{exact:true})).toBeVisible()
   for(const amount of ['250','125']){
-    await page.getByLabel('Amount (ETB)').fill(amount)
+    await page.getByLabel('Amount').fill(amount)
     await page.getByLabel('Upload Proof of Payment').setInputFiles({name:`payment-${amount}.png`,mimeType:'image/png',buffer:Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0])})
     await page.getByRole('button',{name:'Submit Deposit'}).click()
     await expect(page.getByRole('status')).toContainText('Pending Review')

@@ -4,6 +4,7 @@ import { daysLeftText, relationshipState } from "./relationshipTime";
 import { currentPartnerships } from "./partnershipState";
 import { rankMatches, useTypeahead } from "./typeahead";
 import { ProfileAvatar } from "./profileMedia";
+import { formatDate } from "./displayFormat";
 type Creator = {
   id: string;
   publicCreatorId: string;
@@ -335,7 +336,7 @@ export function ActiveCreators({
                 )}
                 <small>
                   {x.activatedAtUtc
-                    ? `Activated ${new Date(x.activatedAtUtc).toLocaleDateString()}`
+                    ? `Activated ${formatDate(x.activatedAtUtc)}`
                     : "Advertising relationship"}
                 </small>
               </article>
@@ -427,7 +428,7 @@ export function AdvertisingRequests({
                     phoneNumber={x.creatorPhoneNumber}
                     city={x.creatorCity}
                   />
-                  <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                  <small>{formatDate(x.requestedAtUtc)}</small>
                 </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
@@ -466,7 +467,7 @@ export function AdvertisingRequests({
                       phoneNumber={x.creatorPhoneNumber}
                       city={x.creatorCity}
                     />
-                    <small>{new Date(x.promotionVideo?.submittedAtUtc ?? x.requestedAtUtc).toLocaleDateString()}</small>
+                    <small>{formatDate(x.promotionVideo?.submittedAtUtc ?? x.requestedAtUtc)}</small>
                   </div>
                   <span>{x.promotionVideo?.platform ?? "TikTok"} Video</span>
                   <a
@@ -500,7 +501,7 @@ export function AdvertisingRequests({
                     phoneNumber={x.creatorPhoneNumber}
                     city={x.creatorCity}
                   />
-                  <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                  <small>{formatDate(x.requestedAtUtc)}</small>
                 </div>
                   <span data-label="Social Media">
                     <SocialMediaLink

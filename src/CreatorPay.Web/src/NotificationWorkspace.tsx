@@ -1,5 +1,6 @@
 import {useEffect,useState} from 'react'
 import {getAccessToken} from './sessionStore'
+import {formatDateTime} from './displayFormat'
 
 const apiBase=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'')
 const token=getAccessToken
@@ -23,7 +24,7 @@ export function NotificationCenter(){
   const load=()=>{setError('');notificationApi<{items:Notice[]}>('/api/v1/notifications?page=1&pageSize=50').then(x=>setItems(x.items)).catch(e=>setError(e.message));notificationApi<{count:number}>('/api/v1/notifications/unread-count').then(x=>setCount(x.count)).catch(e=>setError(e.message))}
   useEffect(load,[])
   async function action(path:string){try{await notificationApi(path,{method:'POST'});load()}catch(e){setError((e as Error).message)}}
-  return <section className="creator-section notifications"><div className="title"><h2>Notifications <span className="badge">{count}{' '}unread</span></h2>{count>0&&<button className="quiet" onClick={()=>void action('/api/v1/notifications/read-all')}>Mark all read</button>}</div>{error&&<p className="friendly-error" role="alert">{error}</p>}{!items?<p>Loading…</p>:items.length===0?<p className="compact-empty">No notifications yet.</p>:<div className="cards">{items.map(x=><article key={x.notificationId} className={x.readAtUtc?'':'unread'}><strong>{x.title}</strong><p>{x.body}</p><small>{new Date(x.createdAtUtc).toLocaleString()}</small>{!x.readAtUtc&&<button onClick={()=>void action(`/api/v1/notifications/${x.notificationId}/read`)}>Mark read</button>}</article>)}</div>}</section>
+  return <section className="creator-section notifications"><div className="title"><h2>Notifications <span className="badge">{count}{' '}unread</span></h2>{count>0&&<button className="quiet" onClick={()=>void action('/api/v1/notifications/read-all')}>Mark all read</button>}</div>{error&&<p className="friendly-error" role="alert">{error}</p>}{!items?<p>Loading…</p>:items.length===0?<p className="compact-empty">No notifications yet.</p>:<div className="cards">{items.map(x=><article key={x.notificationId} className={x.readAtUtc?'':'unread'}><strong>{x.title}</strong><p>{x.body}</p><small>{formatDateTime(x.createdAtUtc)}</small>{!x.readAtUtc&&<button onClick={()=>void action(`/api/v1/notifications/${x.notificationId}/read`)}>Mark read</button>}</article>)}</div>}</section>
 }
 
 type Outbox={id:string;status:string;attemptCount:number;availableAtUtc:string;lastError?:string}

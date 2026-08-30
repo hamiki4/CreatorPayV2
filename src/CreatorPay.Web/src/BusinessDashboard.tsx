@@ -6,13 +6,14 @@ import {ConfirmedSalesWorkspace} from './ConfirmedSalesWorkspace'
 import {AccountChrome} from './AccountChrome'
 import {onActionableRefresh} from './actionableRefresh'
 import {RoleNavigation} from './RoleNavigation'
+import {formatAmount} from './displayFormat'
 import './low-balance.css'
 
 type Tab='home'|'find'|'active'|'requests'|'cashiers'|'confirmed-sales'|'checkout'|'wallet'|'profile'
 type Metrics={confirmedSales:number;period:string}
 type Profile={tradingName:string;merchantStatus:string;effectiveStatus:string;effectiveStatusReason:string}
 type WalletSummary={availableBalance:number;currencyCode:string;status:string;minimumRequiredBalance?:number;advertisingEligible?:boolean}
-const money=(value:number,currency='ETB')=>new Intl.NumberFormat('en-ET',{style:'currency',currency}).format(value)
+const money=(value:number,_currency?:string)=>formatAmount(value)
 
 export function BusinessDashboard({cashiers,checkout,wallet,profile,onSignOut}:{cashiers:ReactNode;checkout:ReactNode;wallet:ReactNode;profile:ReactNode;onSignOut:()=>void}){
  const[tab,setTab]=useState<Tab>('home'),[items,setItems]=useState<BusinessRelationship[]>([]),[business,setBusiness]=useState<Profile>(),[balance,setBalance]=useState<WalletSummary>(),[metrics,setMetrics]=useState<Metrics>(),[error,setError]=useState('')

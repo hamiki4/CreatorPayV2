@@ -3,6 +3,8 @@ import {api} from './apiClient'
 import {daysLeftText, relationshipState} from './relationshipTime'
 import {currentPartnerships} from './partnershipState'
 import {rankMatches, useTypeahead} from './typeahead'
+import {formatAmount, formatDate, formatDateTime} from './displayFormat'
+import {NavIcon} from './navIcons'
 
 type Business = {id: string; publicMerchantId: string; tradingName: string; legalBusinessName: string; city: string; businessType: string}
 type PromotionVideo = {id: string; videoUrl: string; platform: string; status: string; submittedAtUtc: string; reviewedAtUtc?: string; rejectionReason?: string}
@@ -113,7 +115,7 @@ export function FindBusinesses({onRequested}: {onRequested: () => void}) {
             ))}
           </select>
         </label>
-        <button disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
+        <button disabled={loading}><NavIcon name="find" size={18} />{loading ? 'Searching…' : 'Search'}</button>
       </form>
       {message && <p className={message.includes('sent') || message.includes('Active') ? 'success-note' : 'friendly-error'} role="status">{message}</p>}
       {!loading && items.length === 0 ? (
@@ -127,7 +129,7 @@ export function FindBusinesses({onRequested}: {onRequested: () => void}) {
                 <div className="business-card-top">
                   <strong>{x.tradingName}</strong>
                   <span>{x.businessType}</span>
-                  <small>📍 {x.city}</small>
+                  <small className="business-location"><NavIcon name="mapPin" size={16} /> {x.city}</small>
                 </div>
                 <div className="business-card-meta">
                   <span className="status-badge">{state.label}</span>
@@ -146,9 +148,9 @@ export function FindBusinesses({onRequested}: {onRequested: () => void}) {
 }
 
 type AdBusiness = {partnershipId: string; merchantId: string; businessName: string; status: 'Active' | 'Deactivated' | 'Expired'; expiresAtUtc?: string; confirmedSales: number; creatorEarned: number; currencyCode: string}
-type AdTransaction = {transactionId: string; partnershipId: string; merchantId: string; businessName: string; confirmedAtUtc: string; status: 'Confirmed'; creatorEarned: number; currencyCode: string}
+type AdTransaction = {transactionId: string; partnershipId: string; merchantId: string; businessName: string; confirmedAtUtc: string; status: 'Confirmed'; creatorEarned: number; currencyCode: string; earningStatus: string}
 type AdReport = {businesses: AdBusiness[]; transactions: AdTransaction[]}
-const adMoney = (value: number, currency = 'ETB') => new Intl.NumberFormat('en-ET', {style: 'currency', currency}).format(value)
+const payoutState = (status: string) => status === 'Paid' ? 'Paid' : status === 'ScheduledForPayout' ? 'Scheduled' : status === 'OnHold' ? 'On hold' : status === 'Reversed' ? 'Reversed' : 'Upcoming'
 
 export function CreatorRequests({items, refresh}: {items: AdvertisingRequest[]; refresh: () => void}) {
   const [message, setMessage] = useState('')
@@ -183,7 +185,7 @@ export function CreatorRequests({items, refresh}: {items: AdvertisingRequest[]; 
             <article key={x.id}>
               <div>
                 <strong>{x.merchantName}</strong>
-                <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                <small>{formatDate(x.requestedAtUtc)}</small>
               </div>
               <span className="status-badge">{x.status === 'Rejected' ? 'Declined' : x.status}</span>
               {x.status === 'Pending' && x.initiatedBy === 'Business' && (
@@ -219,7 +221,7 @@ export function CreatorConfirmedSales() {
       ) : (
         <div className="confirmed-sale-list creator-confirmed-sale-list">
           {rows.map((x) => {
-            const confirmed = new Date(x.confirmedAtUtc)
+            const payout = payoutState(x.earningStatus)
             return (
               <article className="confirmed-sale-card" key={x.transactionId}>
                 <div className="confirmed-sale-heading">
@@ -227,12 +229,13 @@ export function CreatorConfirmedSales() {
                   <span className="status-badge"><span aria-hidden="true">●</span> {x.status}</span>
                 </div>
                 <time dateTime={x.confirmedAtUtc}>
-                  {confirmed.toLocaleDateString()} · {confirmed.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}
+                  {formatDateTime(x.confirmedAtUtc)}
                 </time>
                 <div className="confirmed-sale-earned">
                   <span>You earned</span>
-                  <strong>+{adMoney(x.creatorEarned, x.currencyCode)}</strong>
+                  <strong>+{formatAmount(x.creatorEarned)}</strong>
                 </div>
+                <span className={`confirmed-sale-payout-state confirmed-sale-payout-state--${payout.toLowerCase().replace(' ', '-')}`}>{payout === 'Paid' ? 'Included in paid payout' : payout}</span>
               </article>
             )
           })}
@@ -317,7 +320,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
               const statusTone = live ? 'live' : promo?.status === 'Rejected' ? 'rejected' : promo?.status === 'Approved' ? 'approved' : 'pending'
               const action =
                 live ? (
-                  <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer">View TikTok Video</a>
+                  <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer"><NavIcon name="video" size={18} />View TikTok Video</a>
                 ) : promo?.status === 'Pending' ? (
                   <a href={promo.videoUrl} target="_blank" rel="noopener noreferrer">View Submitted Link</a>
                 ) : promo?.status === 'Approved' ? (
@@ -342,7 +345,7 @@ export function ActiveAds({items, loading, refresh}: {items: AdvertisingRequest[
                     <span className={`status-badge creator-ad-status creator-ad-status--${statusTone}`}>{statusText}</span>
                   </div>
                   <div className={`creator-ads-activated${live ? '' : ' is-empty'}`} role="cell" data-label="Date Activated">
-                    {live && x.activatedAtUtc ? new Date(x.activatedAtUtc).toLocaleDateString() : null}
+                    {live && x.activatedAtUtc ? formatDate(x.activatedAtUtc) : null}
                   </div>
                   <div className={`creator-ads-days${live ? '' : ' is-empty'}`} role="cell" data-label="Days Left">
                     {live ? days : null}

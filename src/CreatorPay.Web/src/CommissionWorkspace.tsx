@@ -307,7 +307,7 @@ export function CommissionWorkspace({ role }: { role: string }) {
               <thead>
                 <tr>
                   <th>Business Type</th>
-                  <th>Minimum Wallet Balance (ETB)</th>
+                  <th>Minimum Wallet Balance</th>
                 </tr>
               </thead>
               <tbody>
@@ -328,7 +328,6 @@ export function CommissionWorkspace({ role }: { role: string }) {
                           })
                         }
                       />
-                      <span>ETB</span>
                     </td>
                   </tr>
                 ))}

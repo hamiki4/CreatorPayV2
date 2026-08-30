@@ -859,3 +859,192 @@
     min-width: 2.3rem;
   }
 }
+
+/* Creator visibility refinement: heavier outlines, unchanged icon bounds. */
+.role-creator .workspace-nav-icon svg,
+.role-creator .icon-button svg,
+.role-creator .business-search svg,
+.role-creator .business-location svg,
+.role-creator .creator-ads-promo svg,
+.role-creator .copy-creator-id svg {
+  stroke-width: 2.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 1px rgb(70 43 133 / .08));
+}
+
+.role-creator .business-search > button,
+.role-creator .business-location,
+.role-creator .creator-ads-promo a,
+.role-creator .copy-creator-id {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.role-creator .account-identity-avatar {
+  width: 2.65rem;
+  height: 2.65rem;
+  min-width: 2.65rem;
+  border-color: #cfc2f5;
+  box-shadow: 0 3px 10px rgb(70 43 133 / .12);
+}
+
+.role-creator .settings-menu {
+  width: 15.5rem;
+  gap: .2rem;
+  padding: .6rem;
+  overflow: hidden;
+  border-color: #ddd2ff;
+  border-radius: 1.25rem 0 1.25rem 1.25rem;
+  box-shadow: -10px 16px 38px rgb(45 28 84 / .16);
+}
+
+.role-creator .settings-menu button {
+  display: flex;
+  min-width: 0;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  padding: .6rem .7rem;
+  border-radius: .9rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.role-creator .settings-row-label {
+  min-width: 0;
+}
+
+.role-creator .settings-row-control {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 1.45rem;
+  place-items: center;
+  border: 1px solid #d5c6ff;
+  border-radius: 999px;
+  background: #f4efff;
+  color: #6840d9;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.role-creator .settings-menu .signout-action {
+  justify-content: flex-start;
+  border-top: 1px solid #f2d8d5;
+  border-radius: .6rem .6rem .9rem .9rem;
+}
+
+.role-creator .creator-payout-overview {
+  margin-bottom: 1rem;
+}
+
+.role-creator .creator-payout-overview .summary-card {
+  border-color: #ddd2ff;
+  background: linear-gradient(145deg, #fff 42%, #f7f3ff);
+}
+
+.role-creator .creator-payout-overview strong {
+  color: var(--role-accent);
+}
+
+.role-creator .creator-payout-history {
+  display: grid;
+  gap: .6rem;
+}
+
+.role-creator .creator-payout-history h3 {
+  margin: .25rem 0 0;
+}
+
+.role-creator .creator-payout-history-list {
+  display: grid;
+  gap: .55rem;
+}
+
+.role-creator .creator-payout-history-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: .65rem;
+  padding: .8rem;
+  border: 1px solid #e2d9fa;
+  border-radius: .9rem;
+  background: #fff;
+  box-shadow: 0 2px 9px rgb(69 45 120 / .05);
+}
+
+.role-creator .creator-payout-history-list article > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: .15rem;
+}
+
+.role-creator .creator-payout-history-list small {
+  overflow: hidden;
+  color: var(--shell-muted);
+  font-size: .68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-creator .creator-payout-status,
+.role-creator .confirmed-sale-payout-state {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: .3rem .55rem;
+  border-radius: 999px;
+  background: var(--role-accent-soft);
+  color: #5f32d1;
+  font-size: .68rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.role-creator .creator-payout-status--paid,
+.role-creator .confirmed-sale-payout-state--paid {
+  background: #e2f5e8;
+  color: #176b46;
+}
+
+.role-creator .creator-payout-status--failed,
+.role-creator .creator-payout-status--cancelled,
+.role-creator .creator-payout-status--reversed,
+.role-creator .confirmed-sale-payout-state--reversed {
+  background: #fee9e7;
+  color: #a12f25;
+}
+
+@media (max-width:650px) {
+  .role-creator .account-header {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: .35rem;
+  }
+
+  .role-creator .account-identity-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: 2.5rem;
+  }
+
+  .role-creator .settings-menu {
+    top: 4.4rem;
+    right: max(.65rem, env(safe-area-inset-right));
+    left: auto;
+    width: min(18rem, calc(100vw - 1.3rem));
+    max-width: calc(100vw - 1.3rem);
+    border-radius: 1.35rem 0 1.35rem 1.35rem;
+  }
+
+  .role-creator .creator-payout-history-list article {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .role-creator .creator-payout-status {
+    grid-column: 1 / -1;
+  }
+}

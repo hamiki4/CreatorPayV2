@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "./apiClient";
 import { AccountStatusBadge } from "./AccountChrome";
+import { formatAmount, formatDate, formatTime } from "./displayFormat";
 
 type Mode = "cashier" | "merchant";
 type Staff = {
@@ -39,26 +40,9 @@ type Validation = {
 };
 type Tab = "purchase" | "recent" | "profile";
 
-const money = (value: number) =>
-  new Intl.NumberFormat("en-ET", { style: "currency", currency: "ETB" }).format(
-    value,
-  );
-const transactionDate = (value?: string) =>
-  value
-    ? new Intl.DateTimeFormat("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(new Date(value))
-    : "—";
-const transactionTime = (value?: string) =>
-  value
-    ? new Intl.DateTimeFormat("en-GB", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }).format(new Date(value))
-    : "—";
+const money = formatAmount;
+const transactionDate = formatDate;
+const transactionTime = formatTime;
 
 export function CashierCheckoutWorkspace({
   initialQrPayload,
@@ -251,7 +235,7 @@ export function CashierCheckoutWorkspace({
                 />
               </label>
               <label>
-                Purchase Amount (ETB)
+                Purchase Amount
                 <input
                   required
                   type="number"

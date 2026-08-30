@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, statusLabel } from "./apiClient";
-const money = (n: number, c = "ETB") =>
-  new Intl.NumberFormat("en-ET", { style: "currency", currency: c }).format(n);
+import { formatAmount, formatDate, formatDateTime } from "./displayFormat";
+const money = (n: number, _currency?: string) => formatAmount(n);
 const Badge = ({ value }: { value: string }) => (
   <span className={`badge status-${value.toLowerCase()}`}>
     {statusLabel(value)}
@@ -80,23 +80,8 @@ type Revenue = {
   history: RevenueHistoryRow[];
 };
 
-const displayDate = (value: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));
-const displayDateTime = (value: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })
-    .format(new Date(value))
-    .replace(",", "");
+const displayDate = formatDate;
+const displayDateTime = formatDateTime;
 export function AdminPayoutWorkspace() {
   const [tab, setTab] = useState<"creators" | "shoppers" | "revenue">(
       "creators",
