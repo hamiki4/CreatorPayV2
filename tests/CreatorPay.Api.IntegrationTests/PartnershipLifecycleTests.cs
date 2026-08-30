@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using CreatorPay.Api.Partnerships;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
@@ -11,8 +12,11 @@ using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using Testcontainers.PostgreSql;
 
@@ -419,6 +423,56 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Exact_tiktok_t_share_link_enters_business_approval_and_stays_hidden_until_creator_go_live()
+    {
+        const string shareUrl = "https://www.tiktok.com/t/ZTD3GnwFT/";
+        const string canonicalUrl = "https://www.tiktok.com/@bealti_shekuar/video/7679446711865036039?_r=1&_t=ZT-99JmDTkTzAM";
+        using var shortLinkFactory = factory!.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<ITikTokVideoUrlResolver>();
+            services.AddSingleton<ITikTokVideoUrlResolver>(new TikTokVideoUrlResolver(new HttpClient(new TikTokRedirectHandler(canonicalUrl))));
+        }));
+        var creator = await AddCreator("Short Share Promo Creator");
+        using var creatorClient = Client(creator.UserId, creator.CreatorId, app: shortLinkFactory);
+        using var merchant = Client(MerchantUserId, null, MerchantId, shortLinkFactory);
+        using var customer = CustomerClient(Guid.Parse("10000000-0000-0000-0000-000000000002"), Guid.Parse("10000000-0000-0000-0000-000000000001"), shortLinkFactory);
+
+        var requested = await Post(creatorClient, "/api/v1/creator/partnerships/requests", new { merchantId = MerchantId, introductoryMessage = "Exact short share link" });
+        var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+
+        var submitted = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl = shareUrl });
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        var pending = await submitted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("Pending", pending.GetProperty("status").GetString());
+        Assert.Equal(canonicalUrl, pending.GetProperty("videoUrl").GetString());
+
+        var businessRows = await (await Get(merchant, "/api/v1/merchant/promotion-videos")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var businessPending = Assert.Single(businessRows.EnumerateArray(), x => x.GetProperty("id").GetGuid() == partnershipId);
+        Assert.Equal("Pending", businessPending.GetProperty("promotionVideo").GetProperty("status").GetString());
+        Assert.Equal(canonicalUrl, businessPending.GetProperty("promotionVideo").GetProperty("videoUrl").GetString());
+        var hiddenBeforeApproval = await (await Get(customer, "/api/v1/customer/discovery/advertising?q=Short%20Share")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(hiddenBeforeApproval.EnumerateArray());
+
+        var videoId = pending.GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{videoId}/approve", new { reason = (string?)null })).StatusCode);
+        var hiddenAfterApproval = await (await Get(customer, "/api/v1/customer/discovery/advertising?q=Short%20Share")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(hiddenAfterApproval.EnumerateArray());
+
+        var beforeGoLive = DateTime.UtcNow;
+        var live = await Post(creatorClient, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { });
+        Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+        var liveBody = await live.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var activatedAt = liveBody.GetProperty("activatedAtUtc").GetDateTime();
+        Assert.InRange(activatedAt, beforeGoLive, DateTime.UtcNow);
+        Assert.Equal(activatedAt.AddDays(MerchantCreatorPartnership.ActivePeriodDays), liveBody.GetProperty("expiresAtUtc").GetDateTime());
+        var visible = await (await Get(customer, "/api/v1/customer/discovery/advertising?q=Short%20Share")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var promotion = Assert.Single(visible.EnumerateArray());
+        Assert.Equal(canonicalUrl, promotion.GetProperty("promotionVideoUrl").GetString());
+        Assert.Equal("Live", promotion.GetProperty("promotionVideoStatus").GetString());
+    }
+
+    [DockerFact]
     public async Task Rejected_promotion_video_uses_default_reason_and_never_becomes_customer_visible()
     {
         var creator = await AddCreator("Rejected Promo Creator");
@@ -581,23 +635,29 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
     }
 
     private ApplicationDbContext Db() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(database.GetConnectionString()).Options);
-    private HttpClient Client(Guid userId, Guid? creatorId, Guid? merchantId = null)
+    private HttpClient Client(Guid userId, Guid? creatorId, Guid? merchantId = null, WebApplicationFactory<Program>? app = null)
     {
-        var client = factory!.CreateClient(); var role = merchantId.HasValue ? UserRole.MerchantAdmin : UserRole.Creator;
+        var client = (app ?? factory!).CreateClient(); var role = merchantId.HasValue ? UserRole.MerchantAdmin : UserRole.Creator;
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()), new(ClaimTypes.Role, role.ToString()), new(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()), new("test_token", "true") };
         if (creatorId.HasValue) claims.Add(new("creator_id", creatorId.Value.ToString())); if (merchantId.HasValue) claims.Add(new("merchant_id", merchantId.Value.ToString()));
         var token = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken("CreatorPay", "CreatorPay.Web", claims, expires: DateTime.UtcNow.AddMinutes(10), signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)), SecurityAlgorithms.HmacSha256)));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token); return client;
     }
-    private HttpClient CustomerClient(Guid userId, Guid customerId)
+    private HttpClient CustomerClient(Guid userId, Guid customerId, WebApplicationFactory<Program>? app = null)
     {
-        var client = factory!.CreateClient();
+        var client = (app ?? factory!).CreateClient();
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()), new(ClaimTypes.Role, UserRole.Customer.ToString()), new(AuthenticationClaimTypes.AccountStatus, AccountStatus.Active.ToString()), new("test_token", "true"), new("customer_id", customerId.ToString()) };
         var token = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken("CreatorPay", "CreatorPay.Web", claims, expires: DateTime.UtcNow.AddMinutes(10), signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)), SecurityAlgorithms.HmacSha256)));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token); return client;
     }
     private static Task<HttpResponseMessage> Post(HttpClient client, string path, object body) => client.PostAsJsonAsync(path, body);
     private static Task<HttpResponseMessage> Get(HttpClient client, string path) => client.GetAsync(path);
+
+    private sealed class TikTokRedirectHandler(string canonicalUrl) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.MovedPermanently) { Headers = { Location = new Uri(canonicalUrl) } });
+    }
 
     private async Task SetBusinessTypeMinimumAsync(string businessType, decimal minimum)
     {
