@@ -1099,3 +1099,461 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Business refinement: all interaction and layout changes stay role-scoped. */
+.role-business .account-header .eyebrow,
+.role-business .business-home h3 {
+  color: var(--role-accent);
+}
+
+.role-business .account-header {
+  padding-block: .8rem .7rem;
+}
+
+.role-business .account-header-copy {
+  gap: .18rem;
+}
+
+.role-business .account-header h1 {
+  font-size: 1.55rem;
+}
+
+.role-business .account-identity {
+  gap: .28rem;
+  margin: 0;
+  font-size: .82rem;
+}
+
+.role-business .account-identity > span:first-child::after {
+  margin-left: .28rem;
+  color: #64748b;
+  content: '•';
+}
+
+.role-business .account-actions {
+  padding-top: .5rem;
+}
+
+.role-business .icon-button {
+  width: 2.35rem;
+  height: 2.35rem;
+  min-width: 2.35rem;
+  border-color: transparent;
+  background: transparent;
+}
+
+.role-business .icon-button svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  stroke-width: 2.2;
+}
+
+.role-business .business-home {
+  display: grid;
+  gap: .9rem;
+  width: min(100%, 48rem);
+  margin-inline: auto;
+}
+
+.role-business .business-home > h2 {
+  margin: .35rem 0 0;
+  font-size: 1.2rem;
+  letter-spacing: -.025em;
+}
+
+.business-dashboard-cards {
+  display: grid;
+  gap: .58rem;
+}
+
+.business-dashboard-cards > button {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0,1fr) auto .7rem;
+  align-items: center;
+  gap: .65rem;
+  min-height: 3.25rem;
+  padding: .6rem .8rem;
+  border: 1px solid #dfe6ef;
+  border-radius: .72rem;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(15 23 42 / .035);
+  color: #14213d;
+  text-align: left;
+}
+
+.business-dashboard-icon {
+  display: grid;
+  place-items: center;
+  color: var(--role-accent);
+}
+
+.business-dashboard-icon svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 2.35;
+}
+
+.business-dashboard-label {
+  color: #1f2a44;
+  font-size: .88rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.business-dashboard-cards strong {
+  color: #14213d;
+  font: 700 .88rem/1.2 "DM Sans", sans-serif;
+  white-space: nowrap;
+}
+
+.business-chevron {
+  color: #334155;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.business-quick-actions {
+  padding: .8rem;
+  border-radius: .8rem;
+  background: linear-gradient(135deg,#f3f7ff,#eaf1ff);
+}
+
+.business-quick-actions h3 {
+  margin: 0 0 .65rem;
+  font: 700 .88rem/1.2 "DM Sans",sans-serif;
+}
+
+.business-quick-actions > div {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: .5rem;
+}
+
+.business-quick-actions button {
+  display: grid;
+  min-width: 0;
+  min-height: 5rem;
+  padding: .55rem .3rem;
+  place-items: center;
+  align-content: center;
+  gap: .4rem;
+  border: 1px solid #e3e9f4;
+  border-radius: .65rem;
+  background: #fff;
+  color: var(--role-accent);
+  box-shadow: 0 2px 7px rgb(37 99 235 / .04);
+}
+
+.business-quick-actions button svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.35;
+}
+
+.business-quick-actions button span {
+  color: var(--role-accent);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: none;
+}
+
+.role-business .workspace-nav button,
+.role-business .business-dashboard-cards button,
+.role-business .business-quick-actions button,
+.role-business .settings-menu button,
+.role-business .business-dashboard button,
+.role-business .business-chevron {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.role-business .business-copyable-id,
+.role-business .business-short-reference[title] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.role-business .business-creator-city {
+  display: inline-flex;
+  align-items: center;
+  gap: .2rem;
+}
+
+.role-business .workspace-nav button:focus-visible,
+.role-business .account-actions .icon-button:focus-visible,
+.role-business .settings-menu button:focus-visible,
+.role-business .business-dashboard button:focus-visible,
+.role-business .business-dashboard a:focus-visible {
+  outline: 3px solid var(--role-accent);
+  outline-offset: 2px;
+}
+
+.role-business .business-dashboard button:not(.quiet):not(.danger):not(.business-short-reference),
+.role-business .business-dashboard .button-link:not(.quiet) {
+  background-color: var(--role-accent);
+}
+
+.role-business .business-dashboard-cards > button,
+.role-business .business-quick-actions button,
+.role-business .workspace-nav button {
+  background-color: #fff !important;
+}
+
+.role-business .business-dashboard .quiet,
+.role-business .business-short-reference {
+  background: var(--role-accent-soft);
+  color: #1d4ed8;
+}
+
+.role-business .business-dashboard .danger {
+  background: #b42318;
+}
+
+.role-business .settings-menu {
+  overflow: hidden;
+  border-color: #dbe4f2;
+}
+
+.role-business .settings-menu button {
+  background: transparent;
+  color: #17213a;
+}
+
+.role-business .settings-menu .signout-action {
+  color: #b42318;
+}
+
+.business-profile {
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+.business-profile .profile-details {
+  padding: .85rem 1rem;
+  border-color: #dfe6ef;
+  border-radius: .8rem;
+  box-shadow: 0 2px 10px rgb(15 23 42 / .04);
+}
+
+.business-profile .profile-details dl {
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 0 1rem;
+  margin: 0;
+}
+
+.business-profile .profile-details dl div {
+  grid-template-columns: minmax(6.5rem,.7fr) 1fr;
+  min-height: 2.55rem;
+  align-items: center;
+  padding: .45rem 0;
+}
+
+.business-sales-summary {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: .65rem;
+}
+
+.business-sales-summary article {
+  min-height: 0;
+  padding: .75rem .85rem;
+  border: 1px solid #dfe6ef;
+  border-radius: .7rem;
+  background: #fff;
+}
+
+.business-sales-summary span,
+.business-sales-summary strong {
+  display: block;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.business-sales-summary span {
+  color: #64748b;
+  font-size: .75rem;
+}
+
+.business-sales-summary strong {
+  margin-top: .2rem;
+  color: #17213a;
+  font-size: 1.15rem;
+}
+
+.business-sales-grid {
+  overflow: hidden;
+  border: 1px solid #dfe6ef;
+  border-radius: .75rem;
+  background: #fff;
+}
+
+.business-sales-row {
+  display: grid;
+  grid-template-columns: 6.5rem 6.5rem minmax(8rem,1.2fr) minmax(8rem,1fr) 7rem 6rem 6rem;
+  align-items: center;
+  gap: .6rem;
+  min-width: 0;
+  padding: .65rem .75rem;
+  border-bottom: 1px solid #e7ebf1;
+  font-size: .82rem;
+}
+
+.business-sales-row:last-child {border-bottom: 0}
+.business-sales-row.headings {background: #f7f9fc;color: #536179;font-weight: 700}
+.business-sales-row > * {min-width:0;overflow-wrap:anywhere}
+.business-sales-row [data-label="Creator"] {display:grid;gap:.08rem}
+.business-sales-row small {color:#64748b;font-size:.7rem}
+.business-short-reference {min-height:2rem;padding:.3rem .45rem;border-radius:.4rem;font-size:.76rem}
+
+.business-active-grid {
+  grid-template-columns: minmax(10rem,1.25fr) minmax(8rem,.8fr) minmax(8rem,1fr) 7rem 8rem 5.5rem;
+  align-items: center;
+  padding: .7rem .8rem;
+}
+
+.business-active-grid > span {letter-spacing:0;text-transform:none}
+.business-active-grid .status-badge {display:inline-flex;width:fit-content}
+.promo-rejection-reason {grid-column:1/-1;text-transform:none}
+
+@media (hover:hover) and (pointer:fine) {
+  .role-business .business-dashboard-cards > button:hover,
+  .role-business .business-quick-actions button:hover,
+  .role-business .workspace-nav button:hover,
+  .role-business .icon-button:hover,
+  .role-business .settings-menu button:hover {
+    border-color: #bfd2ff;
+    background: var(--role-accent-soft) !important;
+    color: var(--role-accent);
+  }
+
+  .role-business .business-dashboard button:not(.quiet):not(.danger):not(.business-short-reference):hover:not(:disabled) {
+    background: #1d4ed8;
+  }
+}
+
+@media (hover:none) {
+  .role-business .business-dashboard-cards > button:hover,
+  .role-business .business-quick-actions button:hover,
+  .role-business .workspace-nav button:hover,
+  .role-business .icon-button:hover,
+  .role-business .settings-menu button:hover {
+    background: revert-layer;
+  }
+
+  .role-business .business-dashboard-cards > button:hover,
+  .role-business .business-quick-actions button:hover,
+  .role-business .workspace-nav button:hover {background:#fff !important}
+  .role-business .icon-button:hover,.role-business .settings-menu button:hover {background:transparent}
+}
+
+@media (max-width:650px) {
+  .role-business .account-header {
+    margin-inline: -1rem;
+    padding: .7rem 1rem .6rem;
+  }
+
+  .role-business .account-header h1 {font-size:1.45rem}
+  .role-business .account-actions {padding-top:.35rem}
+  .role-business .creator-dashboard {padding-top:.45rem}
+  .role-business .workspace-nav {box-shadow:0 -4px 18px rgb(15 23 42 / .08)}
+  .role-business .workspace-nav button {min-width:0}
+  .role-business .workspace-nav-label {overflow:visible;white-space:normal;text-overflow:clip}
+
+  .role-business .settings-menu {
+    position: fixed;
+    top: 4.65rem;
+    right: max(.75rem,env(safe-area-inset-right));
+    left: auto;
+    width: min(17rem,calc(100vw - 1.5rem));
+    max-width: calc(100vw - 1.5rem);
+    border-radius: .8rem;
+    box-shadow: 0 .9rem 2.4rem rgb(15 23 42 / .18);
+  }
+
+  .role-business .settings-menu button {
+    min-width: 0;
+    min-height: 2.65rem;
+    padding: .55rem .7rem;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .business-profile .profile-details dl {grid-template-columns:1fr}
+  .business-profile .profile-details dl div {grid-template-columns:minmax(6.5rem,.7fr) 1fr}
+  .business-sales-summary {grid-template-columns:1fr 1fr}
+  .business-sales-summary article:first-child {grid-column:1/-1}
+  .business-confirmed-sales .filter-bar {display:grid;grid-template-columns:1fr 1fr}
+  .business-confirmed-sales .filter-bar input {grid-column:1/-1;min-width:0}
+
+  .business-sales-grid {border:0;background:transparent;display:grid;gap:.5rem;overflow:visible}
+  .business-sales-row.headings {display:none}
+  .business-sales-row {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:.4rem .6rem;
+    padding:.65rem .7rem;
+    border:1px solid #dfe6ef;
+    border-radius:.65rem;
+    background:#fff;
+  }
+  .business-sales-row > [data-label]::before {display:block;margin-bottom:.1rem;color:#64748b;content:attr(data-label);font-size:.65rem;font-weight:700}
+  .business-sales-row [data-label="Creator"],.business-sales-row [data-label="Cashier"] {grid-column:span 2}
+  .business-sales-row [data-label="Reference"] {width:100%}
+
+  .business-active-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:.5rem .7rem;
+  }
+  .business-active-grid > [data-label]::before {display:block;margin-bottom:.12rem;color:#64748b;content:attr(data-label);font-size:.66rem;font-weight:700}
+  .business-active-grid > div:first-child,.business-active-grid [data-label="Promo Video"] {grid-column:span 2}
+}
+
+@media (max-width:390px) {
+  .business-dashboard-cards > button {grid-template-columns:1.45rem minmax(0,1fr) auto .6rem;gap:.5rem;padding-inline:.65rem}
+  .business-quick-actions {padding:.7rem}
+  .business-quick-actions > div {gap:.38rem}
+  .business-quick-actions button {min-height:4.75rem;padding-inline:.2rem}
+  .business-sales-row {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+html:has(.role-business),
+body:has(.role-business) {
+  background: #f8fafc !important;
+  background-image: none !important;
+}
+
+.role-business .account-identity > span:first-child::after {
+  content: none;
+}
+
+.role-business .workspace-nav button.is-active {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+@media (max-width:650px) {
+  .role-business .account-header .eyebrow {
+    font-size: .61rem;
+  }
+
+  .role-business .business-home > h2 {
+    font-size: 1.05rem;
+  }
+
+  .role-business .business-dashboard-cards > button {
+    min-height: 2.9rem;
+    padding-block: .48rem;
+  }
+
+  .role-business .workspace-nav-label {
+    font-size: .61rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+}

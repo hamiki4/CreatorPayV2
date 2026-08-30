@@ -252,14 +252,14 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
             .ThenByDescending(x => x.SubmittedAtUtc)
             .FirstOrDefault();
         if (current is null) return null;
-        var live = current.Status == PromotionVideoStatus.Approved && (!relationshipEndUtc.HasValue || relationshipEndUtc > now);
+        var live = current.Status == PromotionVideoStatus.Approved && relationshipEndUtc.HasValue && relationshipEndUtc > now;
         var status = current.Status switch
         {
             PromotionVideoStatus.Pending => "Pending",
             PromotionVideoStatus.Rejected => "Rejected",
             PromotionVideoStatus.Expired => "Expired",
             PromotionVideoStatus.Approved when live => "Live",
-            PromotionVideoStatus.Approved => "Expired",
+            PromotionVideoStatus.Approved => "Approved",
             _ => "Pending"
         };
         return new(current.Id, current.VideoUrl, current.Platform, status, current.SubmittedAtUtc, current.ReviewedAtUtc, current.RejectionReason);

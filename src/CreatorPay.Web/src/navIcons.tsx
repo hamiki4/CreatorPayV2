@@ -14,6 +14,8 @@ export type NavIconName =
   | 'creators'
   | 'checkout'
   | 'wallet'
+  | 'userPlus'
+  | 'cashier'
   | 'settings'
   | 'copy'
   | 'mapPin'
@@ -128,6 +130,21 @@ export function NavIcon({name, size = 22, className}: NavIconProps) {
           <path d="M8 7.5V5.8A2.8 2.8 0 0 1 10.8 3h2.4A2.8 2.8 0 0 1 16 5.8v1.7" />
           <path d="M8.5 12h7" />
           <path d="M8.5 15h3.5" />
+        </svg>
+      )
+    case 'userPlus':
+      return (
+        <svg {...svgProps}>
+          <circle cx="9" cy="8" r="3.25" />
+          <path d="M3.75 19a5.25 5.25 0 0 1 10.5 0" />
+          <path d="M18 8v6M15 11h6" />
+        </svg>
+      )
+    case 'cashier':
+      return (
+        <svg {...svgProps}>
+          <rect x="4" y="5" width="16" height="14" rx="1.5" />
+          <path d="M8 5V3h8v2M7.5 9h4M7.5 12h4M15.5 10.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM13.5 15.5a2 2 0 0 1 4 0" />
         </svg>
       )
     case 'settings':

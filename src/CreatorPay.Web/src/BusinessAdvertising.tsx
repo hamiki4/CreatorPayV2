@@ -4,7 +4,7 @@ import { daysLeftText, relationshipState } from "./relationshipTime";
 import { currentPartnerships } from "./partnershipState";
 import { rankMatches, useTypeahead } from "./typeahead";
 import { ProfileAvatar } from "./profileMedia";
-import { formatDate } from "./displayFormat";
+import { NavIcon } from "./navIcons";
 type Creator = {
   id: string;
   publicCreatorId: string;
@@ -21,6 +21,7 @@ type Creator = {
 export type BusinessRelationship = {
   id: string;
   creatorId: string;
+  creatorPublicId?: string;
   creatorName: string;
   creatorSocialPlatform?: string;
   creatorSocialProfileUrl?: string;
@@ -47,6 +48,7 @@ export type BusinessRelationship = {
     rejectionReason?: string;
   };
 };
+const displayDate = (value?: string) => value ? new Intl.DateTimeFormat("en-GB", {day: "2-digit", month: "2-digit", year: "numeric"}).format(new Date(value)) : "—";
 const socialPlatforms = new Map([
   ["tiktok", "TikTok"],
   ["instagram", "Instagram"],
@@ -105,7 +107,7 @@ function CreatorIdentity({
       <div className="creator-identity-text">
         <strong>{name}</strong>
         {phoneNumber && <small style={{ display: 'block' }}>{phoneNumber}</small>}
-        {city && <small style={{ display: 'block' }}>📍 {city}</small>}
+        {city && <small className="business-creator-city"><NavIcon name="mapPin" size={14} />{city}</small>}
       </div>
     </div>
   );
@@ -281,30 +283,17 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
 
 export function ActiveCreators({
   items,
-  refresh,
+  refresh: _refresh,
 }: {
   items: BusinessRelationship[];
   refresh: () => void;
 }) {
-  const [message, setMessage] = useState(""),
-    [reconciledId, setReconciledId] = useState<string>(),
-    visible = items.filter((x) => relationshipState(x).label === "Active");
-  useEffect(() => {
-    const pending = items.find((x) => x.status === "Approved" && x.activationRequired && x.id !== reconciledId);
-    if (!pending) return;
-    setReconciledId(pending.id);
-    void api(`/api/v1/merchant/partnerships/${pending.id}/reconcile-readiness`, { method: "POST" })
-      .then(refresh)
-      .catch((error) => console.error("Partnership readiness reconciliation failed", error));
-  }, [items, reconciledId, refresh]);
+  const visible = items.filter((x) => relationshipState(x).label === "Active");
   return (
     <section className="creator-section">
       <h2>Active Ads</h2>
-      {message && <p role="status">{message}</p>}
       {visible.length === 0 ? (
-        <p className="compact-empty">
-          No Creator advertising relationships yet.
-        </p>
+        <p className="compact-empty">No live Creator promotions yet.</p>
       ) : (
         <div className="active-ads">
           {visible.map((x) => {
@@ -314,31 +303,12 @@ export function ActiveCreators({
                 className={`active-ad business-table-row business-active-grid relationship-${state.tone}`}
                 key={x.id}
               >
-                <div className="creator-card">
-                  <CreatorIdentity
-                    name={x.creatorName}
-                    photoUrl={x.creatorProfileImageUrl}
-                    phoneNumber={x.creatorPhoneNumber}
-                    city={x.creatorCity}
-                  />
-                </div>
-                <span className="creator-meta">
-                  <CreatorMeta
-                    platform={x.creatorSocialPlatform}
-                    profileUrl={x.creatorSocialProfileUrl}
-                  />
-                </span>
-                <span className="table-status">
-                  <span className="status-badge">{state.label}</span>
-                </span>
-                {state.daysLeft !== null && (
-                  <span className="days-left">{daysLeftText(state.daysLeft, state.tone)}</span>
-                )}
-                <small>
-                  {x.activatedAtUtc
-                    ? `Activated ${formatDate(x.activatedAtUtc)}`
-                    : "Advertising relationship"}
-                </small>
+                <div data-label="Creator"><CreatorIdentity name={x.creatorName} photoUrl={x.creatorProfileImageUrl} /></div>
+                <span data-label="Creator ID">{x.creatorPublicId ?? x.creatorId}</span>
+                <span data-label="Promo Video">{x.promotionVideo?.videoUrl?<a className="promo-video-link" href={x.promotionVideo.videoUrl} target="_blank" rel="noopener noreferrer">View Promo Video</a>:"—"}</span>
+                <span data-label="Activated Date">{displayDate(x.activatedAtUtc)}</span>
+                <span className="days-left" data-label="Days Left">{state.daysLeft===null?"—":daysLeftText(state.daysLeft,state.tone)}</span>
+                <span className="table-status" data-label="Status"><span className="status-badge">Active</span></span>
               </article>
             );
           })}
@@ -356,6 +326,7 @@ export function AdvertisingRequests({
   refresh: () => void;
 }) {
   const [message, setMessage] = useState("");
+  const [rejectionReasons, setRejectionReasons] = useState<Record<string,string>>({});
   const requests = currentPartnerships(items, (x) => x.creatorId).filter(
     (x) => !["Approved", "Suspended", "Revoked"].includes(x.status),
   );
@@ -373,7 +344,7 @@ export function AdvertisingRequests({
       );
       setMessage(
         accept
-          ? `${x.creatorName} approved and is active when Business readiness requirements are satisfied.`
+          ? `${x.creatorName} approved. Awaiting promo video submission.`
           : `Request from ${x.creatorName} declined.`,
       );
       refresh();
@@ -389,7 +360,7 @@ export function AdvertisingRequests({
         `/api/v1/merchant/promotion-videos/${x.promotionVideo.id}/${accept ? "approve" : "reject"}`,
         {
           method: "POST",
-          body: JSON.stringify({ reason: accept ? null : prompt("Rejection reason (optional):")?.trim() || null }),
+          body: JSON.stringify({ reason: accept ? null : rejectionReasons[x.promotionVideo.id]?.trim() || null }),
         },
       );
       setMessage(accept ? `Promotion video for ${x.creatorName} approved.` : `Promotion video for ${x.creatorName} rejected.`);
@@ -428,7 +399,7 @@ export function AdvertisingRequests({
                     phoneNumber={x.creatorPhoneNumber}
                     city={x.creatorCity}
                   />
-                  <small>{formatDate(x.requestedAtUtc)}</small>
+                  <small>{displayDate(x.requestedAtUtc)}</small>
                 </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
@@ -467,17 +438,21 @@ export function AdvertisingRequests({
                       phoneNumber={x.creatorPhoneNumber}
                       city={x.creatorCity}
                     />
-                    <small>{formatDate(x.promotionVideo?.submittedAtUtc ?? x.requestedAtUtc)}</small>
+                    <small>{displayDate(x.promotionVideo?.submittedAtUtc ?? x.requestedAtUtc)}</small>
                   </div>
-                  <span>{x.promotionVideo?.platform ?? "TikTok"} Video</span>
+                  <strong>Promo Video Approval</strong>
+                  <span>Creator: {x.creatorName}</span>
+                  <span>Creator ID: {x.creatorPublicId ?? x.creatorId}</span>
+                  <span className="status-badge status-pending">Pending Your Approval</span>
                   <a
                     href={x.promotionVideo?.videoUrl ?? "#"}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="quiet"
                   >
-                    View Video
+                    View Promo Video
                   </a>
+                  <label className="promo-rejection-reason">Rejection reason (optional)<input value={rejectionReasons[x.promotionVideo?.id ?? x.id]??""} maxLength={180} onChange={event=>setRejectionReasons(current=>({...current,[x.promotionVideo?.id ?? x.id]:event.target.value}))} placeholder="Short reason" /></label>
                   <div>
                     <button onClick={() => void reviewVideo(x, true)}>Approve</button>
                     <button className="danger" onClick={() => void reviewVideo(x, false)}>
@@ -501,7 +476,7 @@ export function AdvertisingRequests({
                     phoneNumber={x.creatorPhoneNumber}
                     city={x.creatorCity}
                   />
-                  <small>{formatDate(x.requestedAtUtc)}</small>
+                  <small>{displayDate(x.requestedAtUtc)}</small>
                 </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
