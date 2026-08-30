@@ -25,3 +25,5 @@ export const formatTime = (value?: string | Date | null) =>
 
 export const formatDateTime = (value?: string | Date | null) =>
   value ? `${formatDate(value)} · ${formatTime(value)}` : '—'
+
+export const formatUserFacingText = (value: string) => value.replace(/\s+ETB\b/g, '')

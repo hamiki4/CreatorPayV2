@@ -6,7 +6,7 @@ import { rankMatches, useTypeahead } from "./typeahead";
 import { api as authenticatedApi } from "./apiClient";
 import { AdminAccountCreate } from "./AdminAccountCreate";
 import { businessTypes } from "./AuthWorkspace";
-import { formatDateTime } from "./displayFormat";
+import { formatDateTime, formatUserFacingText } from "./displayFormat";
 
 type Row = Record<string, unknown>;
 type Page<T = Row> = { items: T[]; page: number; total: number; totalPages: number };
@@ -790,7 +790,7 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
                     </span>
                     <span>
                       <strong>{notice.title}</strong>
-                      <small>{notice.body}</small>
+                      <small>{formatUserFacingText(notice.body)}</small>
                       <time dateTime={notice.createdAtUtc}>
                         {formatDateTime(notice.createdAtUtc)}
                       </time>
