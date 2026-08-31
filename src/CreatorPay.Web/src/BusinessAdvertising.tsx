@@ -8,6 +8,7 @@ import { NavIcon } from "./navIcons";
 export type BusinessCreator = {
   id: string;
   publicCreatorId: string;
+  creatorCode?: string;
   displayName: string;
   city: string;
   phoneNumber?: string;
@@ -209,12 +210,12 @@ export function FindCreators({ refresh, initialQuery = "" }: { refresh: () => vo
       <p>Search approved Creators and invite them to advertise.</p>
       <form className="business-search" onSubmit={search}>
         <label>
-          Creator name or public ID
+          Creator Name
           <input
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name or public ID"
+            placeholder="Search Creator"
           />
         </label>
         <button disabled={loading}>{loading ? "Searching…" : "Search"}</button>
@@ -293,7 +294,7 @@ export function ActiveCreators({
                 key={x.id}
               >
                 <div data-label="Creator"><CreatorIdentity name={x.creatorName} photoUrl={x.creatorProfileImageUrl} /></div>
-                <span data-label="Creator ID">{x.creatorPublicId ?? x.creatorId}</span>
+                <span data-label="Creator ID">{/^[0-9]{4}$/.test(x.creatorPublicId ?? "") ? x.creatorPublicId : "—"}</span>
                 <span data-label="Promo Video">{x.promotionVideo?.videoUrl?<a className="promo-video-link" href={x.promotionVideo.videoUrl} target="_blank" rel="noopener noreferrer">View Promo Video</a>:"—"}</span>
                 <span data-label="Activated Date">{displayDate(x.activatedAtUtc)}</span>
                 <span className="days-left" data-label="Days Left">{state.daysLeft===null?"—":daysLeftText(state.daysLeft,state.tone)}</span>
@@ -452,7 +453,7 @@ export function AdvertisingRequests({
                   </div>
                   <strong>Promo Video Approval</strong>
                   <span>Creator: {x.creatorName}</span>
-                  <span>Creator ID: {x.creatorPublicId ?? x.creatorId}</span>
+                  {/^[0-9]{4}$/.test(x.creatorPublicId ?? "") && <span>Creator ID: {x.creatorPublicId}</span>}
                   {businessName && <span>Business: {businessName}</span>}
                   <span className={`status-badge status-${approvalStatus === "Rejected" ? "rejected" : approvalStatus === "Approved" ? "approved" : "pending"}`}>{approvalStatus}</span>
                   <a

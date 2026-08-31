@@ -95,7 +95,7 @@ public static class PartnershipEndpoints
         var p = new MerchantCreatorPartnership { Id = Guid.NewGuid(), CreatorId = creatorId, MerchantId = request.MerchantId, RequestedAtUtc = now, RequestedByUserId = user.UserAccountId, IntroductoryMessage = request.IntroductoryMessage?.Trim(), CreatedAtUtc = now, CreatedBy = user.UserAccountId.ToString() };
         if (request.RequestedStartDateUtc.HasValue) p.SetDates(request.RequestedStartDateUtc, null, now, user.UserAccountId!.Value);
         db.Add(p); Audit(db, p, user.UserAccountId!.Value, PartnershipStatus.Pending, PartnershipStatus.Pending, "PartnershipRequested", null, http, now);
-        await NotifyMerchant(notifications, db, p.MerchantId, NotificationType.PartnershipRequested, $"partnership:{p.Id}:requested", "New Creator request", $"{creator.DisplayName} requested permission to promote your Business.", "/?view=requests", http.TraceIdentifier, p.Id, ct); await db.SaveChangesAsync(ct);
+        await NotifyMerchant(notifications, db, p.MerchantId, NotificationType.PartnershipRequested, $"partnership:{p.Id}:requested", "New Creator request", $"{creator.DisplayName} requested permission to promote your Business.", "/?view=requests&section=creator", http.TraceIdentifier, p.Id, ct); await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/creator/partnerships/{p.Id}", Item(p, merchant, creator));
     }
 
@@ -121,6 +121,7 @@ public static class PartnershipEndpoints
         {
             x.Id,
             x.PublicCreatorId,
+            x.CreatorCode,
             x.DisplayName,
             x.City,
             x.PhoneNumber,
@@ -135,6 +136,7 @@ public static class PartnershipEndpoints
         {
             x.Id,
             x.PublicCreatorId,
+            x.CreatorCode,
             x.DisplayName,
             x.City,
             x.Biography,
@@ -162,7 +164,7 @@ public static class PartnershipEndpoints
         var now = DateTime.UtcNow; var p = new MerchantCreatorPartnership { Id = Guid.NewGuid(), MerchantId = u.MerchantId!.Value, CreatorId = request.CreatorId, RequestedAtUtc = now, RequestedByUserId = u.UserAccountId, IntroductoryMessage = request.IntroductoryMessage?.Trim(), CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() };
         var merchant = await db.Merchants.FindAsync([u.MerchantId.Value], ct) ?? new();
         db.Add(p); Audit(db, p, u.UserAccountId!.Value, PartnershipStatus.Pending, PartnershipStatus.Pending, "CreatorAdvertisingInvitationSent", null, h, now);
-        await NotifyCreator(notifications, db, p.CreatorId, NotificationType.PartnershipRequested, $"partnership:{p.Id}:invited", "New Business invitation", $"{merchant.TradingName} invited you to promote their Business.", "/?view=find", h.TraceIdentifier, p.Id, ct); await db.SaveChangesAsync(ct);
+        await NotifyCreator(notifications, db, p.CreatorId, NotificationType.PartnershipRequested, $"partnership:{p.Id}:invited", "New Business invitation", $"{merchant.TradingName} invited you to promote their Business.", "/?view=requests&section=invitations", h.TraceIdentifier, p.Id, ct); await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/merchant/partnerships/{p.Id}", Item(p, merchant, creator) with { InitiatedBy = "Business" });
     }
 
@@ -218,7 +220,7 @@ public static class PartnershipEndpoints
         if (target is PartnershipStatus.Approved or PartnershipStatus.Rejected)
         {
             var reactivated = reactivationOnly && old is PartnershipStatus.Suspended or PartnershipStatus.Revoked;
-            await NotifyCreator(notifications, db, p.CreatorId, target == PartnershipStatus.Approved ? NotificationType.PartnershipApproved : NotificationType.PartnershipRejected, reactivated ? $"partnership:{p.Id}:merchant:reactivated:{now.Ticks}" : $"partnership:{p.Id}:merchant:{target}", reactivated ? "Advertising relationship reactivated" : target == PartnershipStatus.Approved ? "Promotion request approved" : "Promotion request declined", reactivated ? $"{p.Merchant.TradingName} reactivated your advertising relationship." : $"{p.Merchant.TradingName} has {(target == PartnershipStatus.Approved ? "approved" : "declined")} your promotion request.", target == PartnershipStatus.Approved ? "/?view=ads" : "/?view=find", h.TraceIdentifier, p.Id, ct);
+            await NotifyCreator(notifications, db, p.CreatorId, target == PartnershipStatus.Approved ? NotificationType.PartnershipApproved : NotificationType.PartnershipRejected, reactivated ? $"partnership:{p.Id}:merchant:reactivated:{now.Ticks}" : $"partnership:{p.Id}:merchant:{target}", reactivated ? "Advertising relationship reactivated" : target == PartnershipStatus.Approved ? "Promotion request approved" : "Promotion request declined", reactivated ? $"{p.Merchant.TradingName} reactivated your advertising relationship." : $"{p.Merchant.TradingName} has {(target == PartnershipStatus.Approved ? "approved" : "declined")} your promotion request.", target == PartnershipStatus.Approved ? "/?view=ads" : "/?view=requests", h.TraceIdentifier, p.Id, ct);
         }
         await db.SaveChangesAsync(ct); return Results.Ok(Item(p) with { RelationshipState = target == PartnershipStatus.Approved ? "AwaitingVideo" : State(p.Status), ActivationRequired = target == PartnershipStatus.Approved });
     }
@@ -296,7 +298,7 @@ public static class PartnershipEndpoints
         };
         db.PromotionVideos.Add(video);
         await db.SaveChangesAsync(ct);
-        await NotifyMerchant(notifications, db, partnership.MerchantId, NotificationType.PromotionVideoSubmitted, $"promotion-video:{video.Id}:submitted", "New promotion video waiting for approval.", $"{partnership.Creator.DisplayName} submitted a TikTok promotion video for approval.", "/?view=requests", h.TraceIdentifier, partnership.Id, ct);
+        await NotifyMerchant(notifications, db, partnership.MerchantId, NotificationType.PromotionVideoSubmitted, $"promotion-video:{video.Id}:submitted", "New promotion video waiting for approval.", $"{partnership.Creator.DisplayName} submitted a TikTok promotion video for approval.", "/?view=requests&section=video", h.TraceIdentifier, partnership.Id, ct);
         return Results.Created($"/api/v1/creator/partnerships/{partnership.Id}/promotion-video", new { id = video.Id, videoUrl = video.VideoUrl, platform = video.Platform, status = video.Status.ToString(), submittedAtUtc = video.SubmittedAtUtc, reviewedAtUtc = video.ReviewedAtUtc, rejectionReason = video.RejectionReason });
     }
 

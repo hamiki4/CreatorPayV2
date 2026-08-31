@@ -173,7 +173,6 @@ function ProfilePanel({
         <div className="creator-id-profile">
           <span>Creator ID</span>
           <strong>{profile.creatorCode}</strong>
-          <small>{profile.publicCreatorId}</small>
           <button
             className="quiet copy-creator-id"
             onClick={async () => {

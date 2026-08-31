@@ -104,7 +104,7 @@ export function FindBusinesses({onRequested}: {onRequested: () => void}) {
       <form className="business-search" onSubmit={search}>
         <label>
           Business name
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name, city, or public ID" />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search business or city" />
         </label>
         <label>
           Category
@@ -173,6 +173,24 @@ export function CreatorRequests({items, refresh}: {items: AdvertisingRequest[]; 
     }
   }
   const active = currentPartnerships(items, (x) => x.merchantId).filter((x) => x.status === 'Pending' || x.status === 'Rejected' || x.status === 'Suspended' || x.status === 'Revoked')
+  const myRequests = active.filter((x) => x.initiatedBy !== 'Business')
+  const invitations = active.filter((x) => x.initiatedBy === 'Business')
+  const requestCard = (x: AdvertisingRequest, invitation: boolean) => (
+    <article key={x.id}>
+      <div>
+        <strong>{x.merchantName}</strong>
+        <small>{formatDate(x.requestedAtUtc)}</small>
+      </div>
+      <span className="status-badge">{x.status === 'Rejected' ? 'Declined' : x.status}</span>
+      {x.status === 'Pending' && invitation && (
+        <div>
+          <button onClick={() => void decide(x, true)}>Accept</button>
+          <button className="quiet" onClick={() => void decide(x, false)}>Decline</button>
+        </div>
+      )}
+      {x.status === 'Rejected' && !invitation && <button onClick={() => void requestAgain(x)}>Request Again</button>}
+    </article>
+  )
   return (
     <section className="creator-section">
       <h2>Requests</h2>
@@ -180,23 +198,9 @@ export function CreatorRequests({items, refresh}: {items: AdvertisingRequest[]; 
       {active.length === 0 ? (
         <p className="compact-empty">No requests or invitations.</p>
       ) : (
-        <div className="request-groups">
-          {active.map((x) => (
-            <article key={x.id}>
-              <div>
-                <strong>{x.merchantName}</strong>
-                <small>{formatDate(x.requestedAtUtc)}</small>
-              </div>
-              <span className="status-badge">{x.status === 'Rejected' ? 'Declined' : x.status}</span>
-              {x.status === 'Pending' && x.initiatedBy === 'Business' && (
-                <div>
-                  <button onClick={() => void decide(x, true)}>Accept</button>
-                  <button className="quiet" onClick={() => void decide(x, false)}>Decline</button>
-                </div>
-              )}
-              {x.status === 'Rejected' && <button onClick={() => void requestAgain(x)}>Request Again</button>}
-            </article>
-          ))}
+        <div className="request-groups creator-request-sections">
+          {myRequests.length > 0 && <section aria-labelledby="creator-my-requests"><h3 id="creator-my-requests">My Requests</h3>{myRequests.map((x) => requestCard(x, false))}</section>}
+          {invitations.length > 0 && <section aria-labelledby="creator-business-invitations"><h3 id="creator-business-invitations">Business Invitations</h3>{invitations.map((x) => requestCard(x, true))}</section>}
         </div>
       )}
     </section>

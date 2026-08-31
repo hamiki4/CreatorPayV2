@@ -190,6 +190,21 @@ function notificationTarget(notice: Notice) {
   return notice.data?.TargetPath ?? notice.data?.targetPath;
 }
 
+function authorizedNotificationTarget(notice: Notice, role: AdminRole) {
+  const target = notificationTarget(notice);
+  if (!target) return undefined;
+  try {
+    const url = new URL(target, location.origin);
+    if (url.origin !== location.origin || !url.pathname.startsWith("/admin/")) return undefined;
+    const page = url.pathname.split("/")[2] as PageId;
+    const route = platformNav.find((item) => item.id === page);
+    if (!route || !route.roles.includes(role)) return undefined;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function notificationIcon(type: string) {
   return type === "SupportRequestReceived" ? "!" : "•";
 }
@@ -720,7 +735,7 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
       );
       setUnread((current) => Math.max(0, current - 1));
     }
-    const target = notificationTarget(notice);
+    const target = authorizedNotificationTarget(notice, role as AdminRole);
     setOpen(false);
     if (target) location.assign(target);
   }

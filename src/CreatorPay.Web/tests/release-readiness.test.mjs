@@ -38,7 +38,7 @@ test('admin create fields and Customer payout filters are constrained responsive
 })
 
 test('Help reflects the current lifecycle without obsolete QR guidance or invented cancellation',()=>{
-  for(const expected of ['submit the exact promotion video link','Revise & Resubmit','press Go Live','30-day period','Creator public ID','Platform Admin-only']) assert.ok(help.includes(expected),expected)
+  for(const expected of ['submit the exact promotion video link','Revise & Resubmit','press Go Live','30-day period','four-digit Creator ID','Platform Admin-only']) assert.ok(help.includes(expected),expected)
   assert.doesNotMatch(help,/QR/i)
   assert.match(help,/current Business interface does not expose a self-service early-end action/)
   assert.match(help,/current Creator interface does not provide a self-service early-end action/)

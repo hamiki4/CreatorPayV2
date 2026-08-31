@@ -19,7 +19,7 @@ test('public account deletion route and navigation are present',()=>{
   assert.doesNotMatch(brand,/support@example\.com/)
 })
 test('help content matches the current live-promotion workflow and is role-safe',()=>{
-  for(const text of ['How to start promoting','Revise & Resubmit','press Go Live','30-day promotion period','exact TikTok','Creator public ID','Platform Admin-only'])assert.ok(page.includes(text),text)
+  for(const text of ['How to start promoting','Revise & Resubmit','press Go Live','30-day promotion period','exact TikTok','four-digit Creator ID','Platform Admin-only'])assert.ok(page.includes(text),text)
   assert.match(page,/Business approval by itself does not publish the promotion/)
   assert.match(page,/current Business interface does not expose a self-service early-end action/)
   assert.match(page,/current Creator interface does not provide a self-service early-end action/)

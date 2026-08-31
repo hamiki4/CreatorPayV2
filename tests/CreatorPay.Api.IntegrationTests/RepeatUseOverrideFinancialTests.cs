@@ -283,6 +283,11 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
         Assert.Equal(3, await db.Notifications.CountAsync(x => x.NotificationType == NotificationType.CheckoutApprovalRequired && ids.Select(id => id.ToString()).Contains(x.RelatedEntityId!)));
         Assert.Single(await db.PurchaseTransactions.ToListAsync());
         Assert.Single(await db.CreatorEarnings.ToListAsync());
+        var earningNotice = Assert.Single(await db.Notifications.Where(x => x.NotificationType == NotificationType.CreatorEarningConfirmed).ToListAsync());
+        var earningData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(earningNotice.DataJson)!;
+        Assert.Equal("/?view=payout", earningData["TargetPath"]);
+        Assert.DoesNotContain("2000", earningNotice.Body);
+        Assert.Single(await db.NotificationRecipients.Where(x => x.NotificationId == earningNotice.Id && x.UserAccountId == Guid.Parse("30000000-0000-0000-0000-000000000004")).ToListAsync());
         Assert.Single(await db.PlatformRevenueEntries.ToListAsync());
         Assert.Single(await db.FinancialJournals.Where(x => x.RelatedTransactionId != null).ToListAsync());
     }

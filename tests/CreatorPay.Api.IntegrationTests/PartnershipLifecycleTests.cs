@@ -256,7 +256,11 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         var rows = await db.MerchantCreatorPartnerships.Where(x => x.CreatorId == creator.CreatorId && x.MerchantId == MerchantId).OrderBy(x => x.RequestedAtUtc).ToListAsync();
         Assert.Equal(2, rows.Count); Assert.Equal(PartnershipStatus.Rejected, rows[0].Status); Assert.Equal(PartnershipStatus.Pending, rows[1].Status);
         var keys = new[] { $"partnership:{firstId}:requested", $"partnership:{secondId}:requested" };
-        Assert.Equal(2, await db.Notifications.CountAsync(x => keys.Contains(x.IdempotencyKey)));
+        var requestNotifications = await db.Notifications.Where(x => keys.Contains(x.IdempotencyKey)).ToListAsync();
+        Assert.Equal(2, requestNotifications.Count);
+        Assert.All(requestNotifications, notice => Assert.Equal("/?view=requests&section=creator", System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(notice.DataJson)!["TargetPath"]));
+        var rejectionNotice = await db.Notifications.SingleAsync(x => x.IdempotencyKey == $"partnership:{firstId}:merchant:Rejected");
+        Assert.Equal("/?view=requests", System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(rejectionNotice.DataJson)!["TargetPath"]);
         Assert.Equal(2, await db.NotificationOutboxMessages.CountAsync(x => keys.Contains(x.Notification.IdempotencyKey)));
     }
 
@@ -279,7 +283,9 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
             var rows = await verify.MerchantCreatorPartnerships.Where(x => x.CreatorId == creator.CreatorId && x.MerchantId == MerchantId).OrderBy(x => x.RequestedAtUtc).ToListAsync();
             Assert.Equal(new[] { PartnershipStatus.Rejected, PartnershipStatus.Pending }, rows.Select(x => x.Status));
             var keys = new[] { $"partnership:{firstId}:invited", $"partnership:{secondId}:invited" };
-            Assert.Equal(2, await verify.Notifications.CountAsync(x => keys.Contains(x.IdempotencyKey)));
+            var invitationNotifications = await verify.Notifications.Where(x => keys.Contains(x.IdempotencyKey)).ToListAsync();
+            Assert.Equal(2, invitationNotifications.Count);
+            Assert.All(invitationNotifications, notice => Assert.Equal("/?view=requests&section=invitations", System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(notice.DataJson)!["TargetPath"]));
             Assert.Equal(2, await verify.NotificationOutboxMessages.CountAsync(x => keys.Contains(x.Notification.IdempotencyKey)));
         }
 
@@ -346,7 +352,10 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
         Assert.Equal(pending.GetProperty("id").GetGuid(), duplicateBody.GetProperty("id").GetGuid());
         Assert.Equal("Pending", duplicateBody.GetProperty("status").GetString());
         await using (var submittedCheck = Db())
-            Assert.Single(await submittedCheck.Notifications.Where(x => x.IdempotencyKey == $"promotion-video:{pending.GetProperty("id").GetGuid()}:submitted").ToListAsync());
+        {
+            var notice = Assert.Single(await submittedCheck.Notifications.Where(x => x.IdempotencyKey == $"promotion-video:{pending.GetProperty("id").GetGuid()}:submitted").ToListAsync());
+            Assert.Equal("/?view=requests&section=video", System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(notice.DataJson)!["TargetPath"]);
+        }
 
         var hidden = await Get(customer, "/api/v1/customer/discovery/advertising?q=Promo");
         Assert.Equal(HttpStatusCode.OK, hidden.StatusCode);
@@ -355,7 +364,10 @@ public sealed class PartnershipLifecycleTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{pending.GetProperty("id").GetGuid()}/approve", new { reason = (string?)null })).StatusCode);
         await using (var approvedCheck = Db())
-            Assert.Single(await approvedCheck.Notifications.Where(x => x.IdempotencyKey == $"promotion-video:{pending.GetProperty("id").GetGuid()}:approved").ToListAsync());
+        {
+            var notice = Assert.Single(await approvedCheck.Notifications.Where(x => x.IdempotencyKey == $"promotion-video:{pending.GetProperty("id").GetGuid()}:approved").ToListAsync());
+            Assert.Equal("/?view=ads", System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(notice.DataJson)!["TargetPath"]);
+        }
         var approvedRelationships = await (await Get(creatorClient, "/api/v1/creator/partnerships")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         var approvedRelationship = approvedRelationships.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == partnershipId);
         Assert.Equal("Approved", approvedRelationship.GetProperty("relationshipState").GetString());

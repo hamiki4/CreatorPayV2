@@ -11,6 +11,10 @@ test.use({
 })
 
 const roles = ['PlatformAdmin', 'OperationsAdmin'] as const
+const authorizedPages = {
+  PlatformAdmin: ['dashboard','reports','creator-review','business-review','admin-accounts','password-reset-requests','business-accounts','creator-accounts','customer-accounts','cashier-accounts','commission','deposits','wallets','payouts','fraud','system'],
+  OperationsAdmin: ['creator-review','business-review','password-reset-requests','business-accounts','creator-accounts','customer-accounts','cashier-accounts','deposits','wallets','payouts','fraud'],
+} as const
 const viewports = [
   {width: 375, height: 812},
   {width: 390, height: 844},
@@ -66,7 +70,7 @@ async function installAdminSessionAndApi(page: Page, role: typeof roles[number])
     }
     if (url.pathname === '/api/v1/admin/dashboard/summary') return json({})
     if (url.pathname === '/api/v1/creators/pending' || url.pathname === '/api/v1/merchants/pending') return json([])
-    return json([])
+    return json({detail: 'Test data unavailable.'}, 503)
   })
 }
 
@@ -96,6 +100,19 @@ async function expectBoundedPanel(page: Page) {
 }
 
 for (const role of roles) {
+  test(`${role} bell and unread badge persist on every authorized page`, async ({page}) => {
+    test.setTimeout(120_000)
+    await page.setViewportSize({width: 390, height: 844})
+    await installAdminSessionAndApi(page, role)
+    for (const route of authorizedPages[role]) {
+      await page.goto(`/admin/${route}`, {waitUntil: 'domcontentloaded'})
+      const trigger = page.locator('.admin-notification-trigger')
+      await expect(trigger).toBeVisible()
+      await expect(trigger).toHaveAttribute('aria-label', 'Notifications, 3 unread')
+      await expect(trigger.locator('.notification-count')).toHaveText('3')
+    }
+  })
+
   for (const viewport of viewports) {
     test(`${role} bell is bounded, readable, and live at ${viewport.width}px`, async ({page, browserName}) => {
       test.setTimeout(90_000)
