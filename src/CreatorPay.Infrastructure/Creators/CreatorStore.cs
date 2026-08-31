@@ -10,7 +10,10 @@ namespace CreatorPay.Infrastructure.Creators;
 public sealed class CreatorStore(ApplicationDbContext db) : ICreatorStore
 {
     public Task<bool> EmailExistsAsync(string value, Guid? exclude, CancellationToken ct) => db.UserAccounts.AnyAsync(x => x.NormalizedEmail == value && (!exclude.HasValue || x.Id != exclude), ct);
-    public async Task<bool> PhoneExistsAsync(string value, Guid? exclude, CancellationToken ct) => await db.Creators.AnyAsync(x => x.NormalizedPhoneNumber == value && (!exclude.HasValue || x.Id != exclude), ct) || await db.Merchants.AnyAsync(x => x.NormalizedPhoneNumber == value, ct) || await db.Customers.AnyAsync(x => x.NormalizedPhoneNumber == value, ct);
+    public Task<bool> PhoneExistsAsync(string value, Guid? exclude, CancellationToken ct) =>
+        db.UserAccounts.AnyAsync(
+            x => x.NormalizedPhoneNumber == value && (!exclude.HasValue || x.CreatorId != exclude),
+            ct);
     public async Task<string> AllocateCreatorCodeAsync(CancellationToken ct)
     {
         // Registrations already run in a transaction. The PostgreSQL advisory lock serializes

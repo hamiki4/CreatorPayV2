@@ -42,6 +42,7 @@ test('registration validates passwords and Ethiopian phones',()=>{
   assert.match(auth,/Minimum required TikTok followers:/)
   assert.match(authCompact,/const\{confirmation,platform,profileUrl,followerCount,\.\.\.request\}=creator/)
   assert.match(authCompact,/const\{confirmation,\.\.\.request\}=business/)
+  assert.match(authCompact,/r\.status>=500\?failureMessage:authErrorMessage\(r\.status,v,failureMessage\)/)
 })
 
 test('Shopper registration submits synchronized password confirmation exactly once',()=>{

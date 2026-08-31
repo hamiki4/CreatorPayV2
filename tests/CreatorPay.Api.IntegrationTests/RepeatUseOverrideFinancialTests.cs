@@ -1051,6 +1051,90 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
     }
 
     [DockerFact]
+    public async Task Admin_notification_unread_counts_mark_read_and_user_isolation_are_enforced()
+    {
+        using var client = factory!.CreateClient();
+        var seeded = await client.PostAsJsonAsync("/api/v1/e2e/seed", new { password = "E2e-test-password-1!" });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+
+        var platformUserId = Guid.Parse("90000000-0000-0000-0000-000000000001");
+        var operationsUserId = Guid.NewGuid();
+        var platformNotificationId = "NTF-" + Guid.NewGuid().ToString("N");
+        var operationsNotificationId = "NTF-" + Guid.NewGuid().ToString("N");
+        await using (var db = Db())
+        {
+            db.UserAccounts.Add(new UserAccount
+            {
+                Id = operationsUserId,
+                DisplayName = "Notification Operations Admin",
+                Email = "notification-operations@e2e.invalid",
+                NormalizedEmail = "NOTIFICATION-OPERATIONS@E2E.INVALID",
+                PhoneNumber = "+251911008888",
+                NormalizedPhoneNumber = "+251911008888",
+                PasswordHash = "test-only",
+                Role = UserRole.OperationsAdmin,
+                Status = AccountStatus.Active,
+                IsEmailVerified = true,
+                IsPhoneVerified = true,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            static Notification Notice(string publicId, Guid userId, string key, string target) => new()
+            {
+                Id = Guid.NewGuid(),
+                PublicNotificationId = publicId,
+                IdempotencyKey = key,
+                NotificationType = NotificationType.SystemOperationalAlert,
+                Title = "Admin notification",
+                Body = "Review the current admin task.",
+                DataJson = JsonSerializer.Serialize(new { TargetPath = target }),
+                Status = NotificationStatus.Pending,
+                CreatedAtUtc = DateTime.UtcNow,
+                Recipients =
+                [
+                    new NotificationRecipient
+                    {
+                        Id = Guid.NewGuid(),
+                        UserAccountId = userId,
+                        RecipientType = NotificationRecipientType.User,
+                        Channel = NotificationChannel.InApp,
+                        Status = NotificationRecipientStatus.Pending,
+                        CreatedAtUtc = DateTime.UtcNow
+                    }
+                ]
+            };
+
+            db.Notifications.Add(Notice(platformNotificationId, platformUserId, "admin-notice-platform", "/admin/system"));
+            db.Notifications.Add(Notice(operationsNotificationId, operationsUserId, "admin-notice-operations", "/admin/business-review"));
+            await db.SaveChangesAsync();
+        }
+
+        var platform = Token(UserRole.PlatformAdmin, platformUserId.ToString());
+        var operations = Token(UserRole.OperationsAdmin, operationsUserId.ToString());
+
+        var platformUnread = await (await Get(client, "/api/v1/notifications/unread-count", platform)).Content.ReadFromJsonAsync<JsonElement>();
+        var operationsUnread = await (await Get(client, "/api/v1/notifications/unread-count", operations)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, platformUnread!.GetProperty("count").GetInt32());
+        Assert.Equal(1, operationsUnread!.GetProperty("count").GetInt32());
+
+        var platformInbox = await (await Get(client, "/api/v1/notifications?page=1&pageSize=10", platform)).Content.ReadFromJsonAsync<JsonElement>();
+        var operationsInbox = await (await Get(client, "/api/v1/notifications?page=1&pageSize=10", operations)).Content.ReadFromJsonAsync<JsonElement>();
+        var platformItem = Assert.Single(platformInbox!.GetProperty("items").EnumerateArray());
+        var operationsItem = Assert.Single(operationsInbox!.GetProperty("items").EnumerateArray());
+        Assert.Equal(platformNotificationId, platformItem.GetProperty("notificationId").GetString());
+        Assert.Equal(operationsNotificationId, operationsItem.GetProperty("notificationId").GetString());
+        Assert.Equal("/admin/business-review", operationsItem.GetProperty("data").GetProperty("TargetPath").GetString());
+
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(client, $"/api/v1/notifications/{platformNotificationId}/read", operations, new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, $"/api/v1/notifications/{operationsNotificationId}/read", operations, new { })).StatusCode);
+
+        operationsUnread = await (await Get(client, "/api/v1/notifications/unread-count", operations)).Content.ReadFromJsonAsync<JsonElement>();
+        platformUnread = await (await Get(client, "/api/v1/notifications/unread-count", platform)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, operationsUnread!.GetProperty("count").GetInt32());
+        Assert.Equal(1, platformUnread!.GetProperty("count").GetInt32());
+    }
+
+    [DockerFact]
     public async Task Password_reset_help_for_unknown_email_or_phone_returns_not_found_without_creating_requests()
     {
         using var client = factory!.CreateClient();

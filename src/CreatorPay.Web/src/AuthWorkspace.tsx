@@ -205,7 +205,7 @@ export function AuthWorkspace() {
         }),
         v = await r.json().catch(() => ({}));
       if (!r.ok) {
-        setMessage(r.status >= 500 ? failureMessage : (v.detail ?? failureMessage));
+        setMessage(r.status >= 500 ? failureMessage : authErrorMessage(r.status, v, failureMessage));
         return false;
       }
       return v as { message?: string; reference?:string; status?:string };

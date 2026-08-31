@@ -767,15 +767,15 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
       <div className="account-actions">
         <button
           type="button"
-          className="icon-button"
-          aria-label="Notifications"
+          className="icon-button admin-notification-trigger"
+          aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
           aria-expanded={open}
           onClick={() => {
             setOpen((current) => !current);
           }}
         >
           <NavIcon name="notifications" />
-          {unread > 0 && <span className="notification-count">{unread > 99 ? "99+" : unread}</span>}
+          {unread > 0 && <span className="notification-count" aria-hidden="true">{unread > 99 ? "99+" : unread}</span>}
         </button>
         <button className="quiet" onClick={logout}>
           Sign out
@@ -783,11 +783,11 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
       </div>
       {open && (
         <>
-          <button className="drawer-scrim" aria-label="Close notifications" onClick={() => setOpen(false)} />
+          <button className="drawer-scrim admin-notification-scrim" aria-label="Close notifications" onClick={() => setOpen(false)} />
           <aside className="notification-drawer" aria-label="Notifications">
             <div className="notification-drawer-header">
               <h2>Notifications</h2>
-              <button className="icon-button" aria-label="Close notifications" onClick={() => setOpen(false)}>
+              <button className="icon-button admin-notification-close" aria-label="Close notifications" onClick={() => setOpen(false)}>
                 <NavIcon name="close" />
               </button>
             </div>

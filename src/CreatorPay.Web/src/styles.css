@@ -2617,11 +2617,11 @@ body:has(.role-business) {
 }
 .admin-header form {width:min(34rem,100%);margin:0}
 .admin-header input {min-width:0;flex:1;border-color:#b8c7cc;border-radius:.55rem}
-.admin-header button {background:var(--admin-accent);color:#fff;border-radius:.55rem}
+.admin-header button:not(.admin-notification-scrim) {background:var(--admin-accent);color:#fff;border-radius:.55rem}
 .admin-header .quiet {background:var(--admin-accent-soft);color:var(--admin-accent-dark)}
 .admin-header .account-actions {display:flex;align-items:center;gap:.45rem;position:relative}
 .admin-header .icon-button {position:relative;display:grid;place-items:center;width:2.65rem;height:2.65rem;min-height:0;padding:0;background:transparent;color:#26383e}
-.admin-header .notification-count {position:absolute;top:.05rem;right:.05rem;display:grid;place-items:center;min-width:1.05rem;height:1.05rem;padding:0 .25rem;border:2px solid #fff;border-radius:999px;background:#b42318;color:#fff;font-size:.6rem;line-height:1}
+.admin-header .notification-count {position:absolute;z-index:1;top:.05rem;right:.05rem;display:grid;place-items:center;min-width:1.05rem;height:1.05rem;padding:0 .25rem;border:2px solid #fff;border-radius:999px;background:#b42318;color:#fff;font-size:.6rem;line-height:1;pointer-events:none}
 .admin-mobile-identity {display:none}
 .admin-role-label {color:var(--admin-muted);font-size:.82rem;font-weight:700;white-space:nowrap}
 
@@ -2682,16 +2682,34 @@ body:has(.role-business) {
 .admin-main .deposit-review-row {border-color:var(--admin-line);border-radius:.7rem}
 
 .admin-shell .notification-drawer {z-index:18;right:1rem;top:4.5rem;width:min(24rem,calc(100vw - 2rem));max-height:calc(100dvh - 5.5rem);border:1px solid var(--admin-line);border-radius:.8rem;box-shadow:0 18px 48px rgb(15 23 42 / .2)}
-.admin-shell .notification-drawer h2 {font-size:1.25rem}
-.admin-shell .notification-item {background:#fff;color:var(--admin-ink)}
+.admin-shell .notification-drawer h2 {color:var(--admin-ink);font-size:1.25rem}
+.admin-shell .notification-item {grid-template-columns:2.5rem minmax(0,1fr) .7rem;background:#fff;color:var(--admin-ink)}
+.admin-shell .notification-item > span:nth-child(2) {display:grid;min-width:0}
+.admin-shell .notification-item strong {color:var(--admin-ink)}
+.admin-shell .notification-item small,.admin-shell .notification-item time {color:var(--admin-muted)}
 .admin-shell .notification-item.unread {border-left-color:#b42318;background:#f8fbfb}
-.admin-shell .drawer-scrim {background:rgb(15 23 42 / .18)}
+.admin-shell .admin-notification-scrim,
+.admin-shell .admin-notification-scrim:hover,
+.admin-shell .admin-notification-scrim:active,
+.admin-shell .admin-notification-scrim:focus {
+  z-index:17;
+  background:rgb(15 23 42 / .18);
+  color:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  transform:none;
+  transition:none !important;
+  animation:none !important;
+  -webkit-appearance:none;
+  appearance:none;
+}
 .admin-shell :is(a,button,input,select,textarea):focus-visible {outline:3px solid #20a99b;outline-offset:2px}
 
 @media (hover:hover) and (pointer:fine) {
   .admin-sidebar nav a:hover {background:#19474b;color:#fff}
   .admin-metric-card:hover {border-color:#85c7c0;box-shadow:0 6px 18px rgb(15 118 110 / .11)}
-  .admin-header button:hover:not(:disabled),.admin-main button:hover:not(:disabled) {background:var(--admin-accent-dark)}
+  .admin-header button:not(.admin-notification-scrim):hover:not(:disabled),.admin-main button:not(.admin-notification-scrim):hover:not(:disabled) {background:var(--admin-accent-dark)}
   .admin-header .quiet:hover:not(:disabled),.admin-main .quiet:hover:not(:disabled) {background:#d4eeeb;color:var(--admin-accent-dark)}
   .admin-header .icon-button:hover:not(:disabled) {background:var(--admin-accent-soft);color:var(--admin-accent)}
   .admin-shell .notification-item:hover:not(:disabled) {background:#eef7f6;color:var(--admin-ink)}
@@ -2763,6 +2781,7 @@ body:has(.role-business) {
   .admin-main .pagination span {order:-1;width:100%;text-align:center;font-size:.75rem}
   .admin-main .pagination button {flex:1}
   .admin-shell .notification-drawer {position:fixed;top:4.25rem;right:.65rem;width:calc(100vw - 1.3rem);max-height:calc(100dvh - 4.9rem)}
+  .admin-header .notification-drawer .notification-type-icon {display:grid}
 }
 
 @media (max-width:380px) {
@@ -3149,8 +3168,8 @@ body:has(.role-business) {
 @media (hover:none), (pointer:coarse) {
   .admin-sidebar nav a:hover {background:transparent;color:#d8e7e8}
   .admin-sidebar nav a[aria-current="page"]:hover {background:#1a4b50;color:#fff}
-  .admin-header button:hover:not(:disabled),
-  .admin-main button:hover:not(:disabled) {background:var(--admin-accent);color:#fff}
+  .admin-header button:not(.admin-notification-scrim):hover:not(:disabled),
+  .admin-main button:not(.admin-notification-scrim):hover:not(:disabled) {background:var(--admin-accent);color:#fff}
   .admin-header .quiet:hover:not(:disabled),
   .admin-main .quiet:hover:not(:disabled) {background:var(--admin-accent-soft);color:var(--admin-accent-dark)}
   .admin-header .icon-button:hover:not(:disabled) {background:transparent;color:#26383e}
