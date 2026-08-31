@@ -6,6 +6,7 @@ const viewports=[
   {width:390,height:844},
   {width:393,height:852},
   {width:430,height:932},
+  {width:1280,height:900},
 ]
 
 function token(role:'MerchantAdmin'|'Creator'){
