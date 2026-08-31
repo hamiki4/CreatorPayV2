@@ -418,7 +418,7 @@ public static class AdminEndpoints
                             .Select(d => (DateTime?)d.VerifiedAtUtc)
                             .FirstOrDefault(),
                         status = w.Status.ToString()
-        };
+                    };
         if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => x.business.Contains(q));
         var total = await query.CountAsync(ct);
         page = Math.Max(page, 1);
