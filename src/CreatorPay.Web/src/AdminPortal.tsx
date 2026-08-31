@@ -5,6 +5,9 @@ import { getAccessToken } from "./sessionStore";
 import { rankMatches, useTypeahead } from "./typeahead";
 import { api as authenticatedApi } from "./apiClient";
 import { AdminAccountCreate } from "./AdminAccountCreate";
+import { businessTypes } from "./AuthWorkspace";
+import { formatDateTime, formatUserFacingText } from "./displayFormat";
+import { NavIcon, NavIconName } from "./navIcons";
 
 type Row = Record<string, unknown>;
 type Page<T = Row> = { items: T[]; page: number; total: number; totalPages: number };
@@ -18,6 +21,7 @@ type PageId =
   | "creator-review"
   | "business-review"
   | "admin-accounts"
+  | "password-reset-requests"
   | "business-accounts"
   | "creator-accounts"
   | "customer-accounts"
@@ -46,6 +50,7 @@ type NavItem = {
   label: string;
   roles: AdminRole[];
   countKey?: keyof AdminCounts;
+  icon: NavIconName;
 };
 
 type Notice = {
@@ -63,23 +68,28 @@ type AccountPageProps = {
   description: string;
   roles: AccountRole[];
   createRoles: CreateRole[];
+  columns: string[];
   fixedRole?: CreateRole;
   allowCreate?: boolean;
   allowRemove?: boolean;
-  showPasswordResets?: boolean;
+  allowBusinessTypeEdit?: boolean;
+  showBusinessFilter?: boolean;
+  showRoleFilter?: boolean;
+  searchPlaceholder?: string;
 };
 
 const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const token = getAccessToken;
 const adminRoles: AdminRole[] = ["PlatformAdmin", "OperationsAdmin"];
 const hiddenPages: PageId[] = ["notifications", "disputes", "reversals"];
-const operationsBlockedPages: PageId[] = ["dashboard", "reports", "admin-accounts"];
+const operationsBlockedPages: PageId[] = ["dashboard", "reports", "admin-accounts", "commission", "system"];
 const supportedPages = new Set<PageId>([
   "dashboard",
   "reports",
   "creator-review",
   "business-review",
   "admin-accounts",
+  "password-reset-requests",
   "business-accounts",
   "creator-accounts",
   "customer-accounts",
@@ -94,22 +104,35 @@ const supportedPages = new Set<PageId>([
 ]);
 
 const platformNav: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", roles: ["PlatformAdmin"] },
-  { id: "reports", label: "Reports", roles: ["PlatformAdmin"] },
-  { id: "creator-review", label: "Creator Review", roles: adminRoles, countKey: "pendingCreatorApprovals" },
-  { id: "business-review", label: "Business Review", roles: adminRoles, countKey: "pendingMerchantApprovals" },
-  { id: "admin-accounts", label: "Admin Accounts", roles: ["PlatformAdmin"], countKey: "openSupportRequests" },
-  { id: "business-accounts", label: "Business Accounts", roles: adminRoles },
-  { id: "creator-accounts", label: "Creator Accounts", roles: adminRoles },
-  { id: "customer-accounts", label: "Customer Accounts", roles: adminRoles },
-  { id: "cashier-accounts", label: "Cashier Accounts", roles: adminRoles },
-  { id: "commission", label: "Commission", roles: adminRoles },
-  { id: "deposits", label: "Deposits", roles: adminRoles, countKey: "pendingDeposits" },
-  { id: "wallets", label: "Wallets", roles: adminRoles },
-  { id: "payouts", label: "Payouts", roles: adminRoles, countKey: "pendingPayouts" },
-  { id: "fraud", label: "Fraud", roles: adminRoles, countKey: "openFraudAlerts" },
-  { id: "system", label: "System", roles: adminRoles },
+  { id: "dashboard", label: "Dashboard", roles: ["PlatformAdmin"], icon: "home" },
+  { id: "reports", label: "Reports", roles: ["PlatformAdmin"], icon: "sales" },
+  { id: "creator-review", label: "Creator Review", roles: adminRoles, countKey: "pendingCreatorApprovals", icon: "userPlus" },
+  { id: "business-review", label: "Business Review", roles: adminRoles, countKey: "pendingMerchantApprovals", icon: "ads" },
+  { id: "admin-accounts", label: "Admin Accounts", roles: ["PlatformAdmin"], icon: "shield" },
+  { id: "password-reset-requests", label: "Password Reset Requests", roles: adminRoles, countKey: "openSupportRequests", icon: "requests" },
+  { id: "business-accounts", label: "Business Accounts", roles: adminRoles, icon: "checkout" },
+  { id: "creator-accounts", label: "Creator Accounts", roles: adminRoles, icon: "creators" },
+  { id: "customer-accounts", label: "Customer Accounts", roles: adminRoles, icon: "profile" },
+  { id: "cashier-accounts", label: "Cashier Accounts", roles: adminRoles, icon: "cashier" },
+  { id: "commission", label: "Commission", roles: ["PlatformAdmin"], icon: "sales" },
+  { id: "deposits", label: "Deposits", roles: adminRoles, countKey: "pendingDeposits", icon: "wallet" },
+  { id: "wallets", label: "Wallets", roles: adminRoles, icon: "wallet" },
+  { id: "payouts", label: "Payouts", roles: adminRoles, countKey: "pendingPayouts", icon: "payout" },
+  { id: "fraud", label: "Fraud", roles: adminRoles, countKey: "openFraudAlerts", icon: "shield" },
+  { id: "system", label: "System", roles: ["PlatformAdmin"], icon: "settings" },
 ];
+
+const dashboardShortcuts: Record<string, { href: string; icon: NavIconName }> = {
+  pendingCreatorApprovals: { href: "/admin/creator-review", icon: "userPlus" },
+  pendingMerchantApprovals: { href: "/admin/business-review", icon: "ads" },
+  pendingDeposits: { href: "/admin/deposits", icon: "wallet" },
+  activeCreators: { href: "/admin/creator-accounts?status=Active", icon: "creators" },
+  activeBusinesses: { href: "/admin/business-accounts?status=Active", icon: "checkout" },
+  pendingPayouts: { href: "/admin/payouts", icon: "payout" },
+  openFraudAlerts: { href: "/admin/fraud", icon: "shield" },
+  failedCheckouts: { href: "/admin/fraud", icon: "checkout" },
+  systemHealth: { href: "/admin/system", icon: "settings" },
+};
 
 async function api<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
@@ -167,6 +190,21 @@ function notificationTarget(notice: Notice) {
   return notice.data?.TargetPath ?? notice.data?.targetPath;
 }
 
+function authorizedNotificationTarget(notice: Notice, role: AdminRole) {
+  const target = notificationTarget(notice);
+  if (!target) return undefined;
+  try {
+    const url = new URL(target, location.origin);
+    if (url.origin !== location.origin || !url.pathname.startsWith("/admin/")) return undefined;
+    const page = url.pathname.split("/")[2] as PageId;
+    const route = platformNav.find((item) => item.id === page);
+    if (!route || !route.roles.includes(role)) return undefined;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function notificationIcon(type: string) {
   return type === "SupportRequestReceived" ? "!" : "•";
 }
@@ -174,6 +212,7 @@ function notificationIcon(type: string) {
 export function AdminPortal({ operations }: { operations: Ops }) {
   const role = currentRole();
   const [summary, setSummary] = useState<AdminCounts>();
+  const [menuOpen, setMenuOpen] = useState(false);
   const part = location.pathname.split("/")[2] ?? "dashboard";
   const page = supportedPages.has(part as PageId)
     ? (part as PageId)
@@ -189,7 +228,7 @@ export function AdminPortal({ operations }: { operations: Ops }) {
   }, [blockedByRole]);
 
   useEffect(() => {
-    if (role !== "PlatformAdmin" && role !== "OperationsAdmin") return;
+    if (role !== "PlatformAdmin") return;
     let cancelled = false;
     const load = () =>
       api<AdminCounts>("/api/v1/admin/dashboard/summary")
@@ -240,35 +279,20 @@ export function AdminPortal({ operations }: { operations: Ops }) {
   const visibleNav = platformNav.filter((item) => role === "PlatformAdmin" || item.roles.includes(role));
 
   return (
-    <div className="admin-shell">
-      <style>{`
-        .admin-sidebar nav a {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: .6rem;
-        }
-        .admin-nav-badge {
-          display: inline-grid;
-          place-items: center;
-          min-width: 1.35rem;
-          height: 1.35rem;
-          padding: 0 .35rem;
-          border-radius: 999px;
-          background: #b42318;
-          color: #fff;
-          font-size: .72rem;
-          font-weight: 800;
-          line-height: 1;
-        }
-      `}</style>
+    <div className={`admin-shell admin-shell--${role === "PlatformAdmin" ? "platform" : "operations"}`}>
       <a className="skip" href="#admin-content">
         Skip to content
       </a>
-      <aside className="admin-sidebar">
-        <a className="admin-brand" href={role === "PlatformAdmin" ? "/admin/dashboard" : "/admin/creator-review"}>
-          Weymela <small>{navRoleLabel}</small>
-        </a>
+      {menuOpen && <button className="admin-menu-scrim" aria-label="Close admin menu" onClick={() => setMenuOpen(false)} />}
+      <aside className={`admin-sidebar${menuOpen ? " is-open" : ""}`} id="admin-navigation">
+        <div className="admin-sidebar-heading">
+          <a className="admin-brand" href={role === "PlatformAdmin" ? "/admin/dashboard" : "/admin/creator-review"}>
+            WEYMELA <small>{navRoleLabel} Admin</small>
+          </a>
+          <button type="button" className="admin-menu-close" aria-label="Close admin menu" onClick={() => setMenuOpen(false)}>
+            <NavIcon name="close" />
+          </button>
+        </div>
         <nav aria-label="Admin navigation">
           {visibleNav.map((item) => {
             const count = item.countKey ? Math.max(0, Number(summary?.[item.countKey] ?? 0)) : 0;
@@ -279,8 +303,9 @@ export function AdminPortal({ operations }: { operations: Ops }) {
                 href={`/admin/${item.id}`}
                 aria-current={item.id === page ? "page" : undefined}
                 aria-label={aria}
+                onClick={() => setMenuOpen(false)}
               >
-                {item.label}
+                <span className="admin-nav-label"><NavIcon name={item.icon} />{item.label}</span>
                 {count > 0 && (
                   <span className="admin-nav-badge" aria-hidden="true">
                     {count > 99 ? "99+" : count}
@@ -292,7 +317,7 @@ export function AdminPortal({ operations }: { operations: Ops }) {
         </nav>
       </aside>
       <div className="admin-main">
-        <AdminHeader role={role} showSearch={role === "PlatformAdmin"} />
+        <AdminHeader role={role} showSearch={role === "PlatformAdmin"} onMenu={() => setMenuOpen(true)} />
         <main id="admin-content" tabIndex={-1}>
           {blockedByRole ? null : denied ? (
             <Forbidden
@@ -308,6 +333,8 @@ export function AdminPortal({ operations }: { operations: Ops }) {
             <CreatorReview />
           ) : page === "business-review" ? (
             <BusinessReview />
+          ) : page === "password-reset-requests" ? (
+            <PasswordResetRequests />
           ) : page === "admin-accounts" ? (
             <AdminAccountsPage />
           ) : page === "business-accounts" ? (
@@ -316,9 +343,11 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Business owners and supervisors."
               roles={["MerchantAdmin", "Supervisor"]}
               createRoles={["MerchantAdmin"]}
+              columns={["name", "email", "phone", "businessName", "publicBusinessId", "merchantBusinessType", "isLocked", "lastLoginAtUtc"]}
               fixedRole="MerchantAdmin"
               allowCreate={role === "PlatformAdmin"}
-              allowRemove
+              allowRemove={role === "PlatformAdmin"}
+              allowBusinessTypeEdit={role === "PlatformAdmin"}
             />
           ) : page === "creator-accounts" ? (
             <AccountPage
@@ -326,9 +355,10 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Creator accounts and profile access."
               roles={["Creator"]}
               createRoles={["Creator"]}
+              columns={["name", "publicCreatorId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Creator"
               allowCreate={role === "PlatformAdmin"}
-              allowRemove
+              allowRemove={role === "PlatformAdmin"}
             />
           ) : page === "customer-accounts" ? (
             <AccountPage
@@ -336,9 +366,10 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Customer accounts and wallet access."
               roles={["Customer"]}
               createRoles={["Customer"]}
+              columns={["name", "publicCustomerId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Customer"
               allowCreate={role === "PlatformAdmin"}
-              allowRemove
+              allowRemove={role === "PlatformAdmin"}
             />
           ) : page === "cashier-accounts" ? (
             <AccountPage
@@ -346,9 +377,10 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Cashier accounts and assignments."
               roles={["Cashier"]}
               createRoles={["Cashier"]}
+              columns={["name", "email", "phone", "businessName", "publicBusinessId", "assignedLocation", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Cashier"
               allowCreate={role === "PlatformAdmin"}
-              allowRemove
+              allowRemove={role === "PlatformAdmin"}
             />
           ) : page === "commission" ? (
             operations.commission ?? <Empty />
@@ -486,7 +518,7 @@ function CreatorReview() {
               <span>Pending Approval</span>
               <strong>{String(x.displayName ?? "")}</strong>
               <p>{String(x.email ?? "")}</p>
-              <p>{new Date(String(x.registeredAtUtc)).toLocaleString()}</p>
+              <p>{formatDateTime(String(x.registeredAtUtc))}</p>
               <button onClick={() => void open(x.creatorId)}>Review</button>
             </article>
           ))}
@@ -627,7 +659,7 @@ function BusinessReview() {
               <p>
                 {String(x.email)}
                 <br />
-                {new Date(String(x.registeredAtUtc)).toLocaleString()}
+                {formatDateTime(String(x.registeredAtUtc))}
               </p>
               <button>Review</button>
             </article>
@@ -638,7 +670,7 @@ function BusinessReview() {
   );
 }
 
-function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: boolean }) {
+function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showSearch: boolean; onMenu: () => void }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notice[]>([]);
@@ -703,7 +735,7 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
       );
       setUnread((current) => Math.max(0, current - 1));
     }
-    const target = notificationTarget(notice);
+    const target = authorizedNotificationTarget(notice, role as AdminRole);
     setOpen(false);
     if (target) location.assign(target);
   }
@@ -721,6 +753,19 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
 
   return (
     <header className="admin-header">
+      <button
+        type="button"
+        className="admin-menu-toggle"
+        aria-label="Open admin menu"
+        aria-controls="admin-navigation"
+        onClick={onMenu}
+      >
+        <NavIcon name="menu" />
+      </button>
+      <div className="admin-mobile-identity" aria-label={`${role === "PlatformAdmin" ? "Platform" : "Operations"} Admin`}>
+        <strong>WEYMELA</strong>
+        <small>{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</small>
+      </div>
       {showSearch && (
         <form role="search" onSubmit={go}>
           <input
@@ -733,18 +778,19 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
           <button>Search</button>
         </form>
       )}
-      <span>{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</span>
+      <span className="admin-role-label">{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</span>
       <div className="account-actions">
         <button
           type="button"
-          className="icon-button"
-          aria-label="Notifications"
+          className="icon-button admin-notification-trigger"
+          aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
           aria-expanded={open}
           onClick={() => {
             setOpen((current) => !current);
           }}
         >
-          {unread > 0 && <span className="notification-count">{unread > 99 ? "99+" : unread}</span>}
+          <NavIcon name="notifications" />
+          {unread > 0 && <span className="notification-count" aria-hidden="true">{unread > 99 ? "99+" : unread}</span>}
         </button>
         <button className="quiet" onClick={logout}>
           Sign out
@@ -752,12 +798,12 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
       </div>
       {open && (
         <>
-          <button className="drawer-scrim" aria-label="Close notifications" onClick={() => setOpen(false)} />
+          <button className="drawer-scrim admin-notification-scrim" aria-label="Close notifications" onClick={() => setOpen(false)} />
           <aside className="notification-drawer" aria-label="Notifications">
             <div className="notification-drawer-header">
               <h2>Notifications</h2>
-              <button className="icon-button" aria-label="Close notifications" onClick={() => setOpen(false)}>
-                ×
+              <button className="icon-button admin-notification-close" aria-label="Close notifications" onClick={() => setOpen(false)}>
+                <NavIcon name="close" />
               </button>
             </div>
             {message && <p className="friendly-error" role="alert">{message}</p>}
@@ -777,11 +823,9 @@ function AdminHeader({ role, showSearch }: { role: AdminRole | ""; showSearch: b
                     </span>
                     <span>
                       <strong>{notice.title}</strong>
-                      <small>{notice.body}</small>
+                      <small>{formatUserFacingText(notice.body)}</small>
                       <time dateTime={notice.createdAtUtc}>
-                        {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
-                          new Date(notice.createdAtUtc),
-                        )}
+                        {formatDateTime(notice.createdAtUtc)}
                       </time>
                     </span>
                     {!notice.readAtUtc && <i aria-label="Unread" />}
@@ -805,7 +849,7 @@ function Title({ text, children }: { text: string; children?: ReactNode }) {
   return (
     <div className="admin-title">
       <div>
-        <p className="eyebrow">Platform operations</p>
+        <p className="eyebrow">{currentRole() === "OperationsAdmin" ? "Operations Admin" : "Platform Admin"}</p>
         <h1>{text}</h1>
       </div>
       {children}
@@ -860,12 +904,17 @@ function Dashboard({ summary }: { summary?: AdminCounts }) {
         <>
           <PilotTestActorPanel />
           <div className="summary-grid">
-            {visible.filter((k) => data[k] !== undefined).map((k) => (
-              <article className="summary-card" key={k}>
-                <span>{label(k)}</span>
-                <strong>{String(data[k])}</strong>
-              </article>
-            ))}
+            {visible.filter((k) => data[k] !== undefined).map((k) => {
+              const shortcut = dashboardShortcuts[k];
+              return (
+                <a className="summary-card admin-metric-card" key={k} href={shortcut.href} aria-label={`${label(k)}: ${String(data[k])}`}>
+                  <span className="admin-metric-icon"><NavIcon name={shortcut.icon} /></span>
+                  <span>{label(k)}</span>
+                  <strong>{String(data[k])}</strong>
+                  <span className="admin-metric-chevron" aria-hidden="true">›</span>
+                </a>
+              );
+            })}
           </div>
         </>
       )}
@@ -913,7 +962,7 @@ function PilotTestActorPanel() {
   }
 
   return (
-    <section className="panel" aria-labelledby="pilot-actors-title">
+    <section className="panel admin-pilot-actors" aria-labelledby="pilot-actors-title">
       <h2 id="pilot-actors-title">PILOT test actors</h2>
       <p>Create one disposable, labeled batch for authenticated PILOT testing. Credentials are returned only to the protected response.</p>
       <button onClick={() => void create()} disabled={busy}>
@@ -1023,25 +1072,34 @@ function AccountPage({
   description,
   roles,
   createRoles,
+  columns,
   fixedRole,
   allowCreate = false,
   allowRemove = true,
-  showPasswordResets = false,
+  allowBusinessTypeEdit = false,
+  showBusinessFilter = true,
+  showRoleFilter = false,
+  searchPlaceholder = "Name, email, phone, Business or public ID",
 }: AccountPageProps) {
+  const requestedStatus = new URLSearchParams(location.search).get("status") ?? "";
   const [data, setData] = useState<Page>();
   const [message, setMessage] = useState("");
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ q: "", status: "", business: "" });
+  const [filters, setFilters] = useState({ q: "", status: requestedStatus, business: "", role: "" });
+  const [editing, setEditing] = useState<{ merchantId: string; name: string; businessType: string } | null>(null);
+  const [editingBusinessType, setEditingBusinessType] = useState("Other");
+  const [savingBusinessType, setSavingBusinessType] = useState(false);
   const pageSize = 25;
 
   const load = async (nextPage = 1, nextFilters = filters) => {
     const params = new URLSearchParams({ page: "1", pageSize: "100" });
-    Object.entries(nextFilters).forEach(([k, v]) => {
-      if (v) params.set(k, v);
-    });
+    if (nextFilters.q) params.set("q", nextFilters.q);
+    if (nextFilters.status) params.set("status", nextFilters.status);
+    if (showBusinessFilter && nextFilters.business) params.set("business", nextFilters.business);
+    const rolesToLoad = showRoleFilter && nextFilters.role ? [nextFilters.role as AccountRole] : roles;
     try {
       const responses = await Promise.all(
-        roles.map((roleName) => api<Page>(`/api/v1/admin/accounts?${params.toString()}&role=${encodeURIComponent(roleName)}`)),
+        rolesToLoad.map((roleName) => api<Page>(`/api/v1/admin/accounts?${params.toString()}&role=${encodeURIComponent(roleName)}`)),
       );
       const items = responses
         .flatMap((x) => x.items)
@@ -1086,14 +1144,51 @@ function AccountPage({
     await load(page, filters);
   }
 
-  const visibleCols = ["cashierName", "email", "phone", "businessName", "publicBusinessId", "assignedLocation", "role", "status", "isLocked", "lastLoginAtUtc", "walletBalance", "fundingStatus"];
-  const header = (value: string) => (value === "cashierName" ? "Name" : label(value));
+  async function saveBusinessType() {
+    if (!editing || savingBusinessType) return;
+    if (!editingBusinessType.trim()) {
+      setMessage("Business type is required.");
+      return;
+    }
+    setSavingBusinessType(true);
+    try {
+      const response = await fetch(`${apiBase}/api/v1/admin/merchants/${editing.merchantId}/business-type`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ businessType: editingBusinessType }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage((body as { detail?: string }).detail ?? "Unable to update business type.");
+        return;
+      }
+      setMessage("Business Type updated.");
+      setEditing(null);
+      await load(page, filters);
+    } finally {
+      setSavingBusinessType(false);
+    }
+  }
+
+  const visibleCols = columns;
+  const header = (value: string) =>
+    value === "cashierName" || value === "name"
+      ? "Name"
+      : value === "merchantBusinessType"
+        ? "Business Type"
+        : value === "publicCreatorId"
+          ? "Public Creator ID"
+          : value === "publicCustomerId"
+            ? "Public Customer ID"
+            : label(value);
 
   return (
     <section>
       <Title text={title} />
       <p className="accounts-note">{description}</p>
-      {showPasswordResets && <PasswordResetRequests />}
       {allowCreate && (
         <AdminAccountCreate
           title="Create Account"
@@ -1102,6 +1197,47 @@ function AccountPage({
           fixedRole={fixedRole}
           onCreated={() => void load(1, filters)}
         />
+      )}
+      {editing && (
+        <div className="modal-backdrop">
+          <section
+            className="help-dialog admin-business-type-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="business-type-editor-title"
+          >
+            <h2 id="business-type-editor-title">Edit Business Type</h2>
+            <p>
+              <strong>{editing.name}</strong>
+            </p>
+            <p>Current Business Type: {editing.businessType}</p>
+            <label>
+              New Business Type
+              <select value={editingBusinessType} onChange={(e) => setEditingBusinessType(e.target.value)}>
+                {businessTypes.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.en}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="actions">
+              <button type="button" onClick={() => void saveBusinessType()} disabled={savingBusinessType}>
+                {savingBusinessType ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setEditing(null);
+                  setEditingBusinessType("Other");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
       )}
       <form
         className="panel form account-filters"
@@ -1112,7 +1248,7 @@ function AccountPage({
       >
         <label>
           General Search
-          <input value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} placeholder="Name, email, phone, Business or public ID" />
+          <input type="search" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} placeholder={searchPlaceholder} />
         </label>
         <label>
           Status
@@ -1125,17 +1261,29 @@ function AccountPage({
             ))}
           </select>
         </label>
-        <label>
-          Business
-          <input value={filters.business} onChange={(e) => setFilters({ ...filters, business: e.target.value })} placeholder="Business name or public ID" />
-        </label>
+        {showRoleFilter && (
+          <label>
+            Role
+            <select value={filters.role} onChange={(e) => setFilters({ ...filters, role: e.target.value })}>
+              <option value="">All Roles</option>
+              <option value="PlatformAdmin">Platform Admin</option>
+              <option value="OperationsAdmin">Operations Admin</option>
+            </select>
+          </label>
+        )}
+        {showBusinessFilter && (
+          <label>
+            Business
+            <input value={filters.business} onChange={(e) => setFilters({ ...filters, business: e.target.value })} placeholder="Business name or public ID" />
+          </label>
+        )}
         <div className="actions">
           <button>Search</button>
           <button
             type="button"
             className="quiet"
             onClick={() => {
-              const next = { q: "", status: "", business: "" };
+              const next = { q: "", status: "", business: "", role: "" };
               setFilters(next);
               void load(1, next);
             }}
@@ -1172,6 +1320,22 @@ function AccountPage({
                       {allowRemove && x.role !== "PlatformAdmin" && (
                         <button type="button" className="danger" onClick={() => void action(x.id, "delete")}>
                           Delete Account
+                        </button>
+                      )}
+                      {allowBusinessTypeEdit && Boolean(x.merchantId) && (
+                        <button
+                          type="button"
+                          className="quiet"
+                          onClick={() => {
+                            setEditing({
+                              merchantId: String(x.merchantId),
+                              name: String(x.name ?? x.businessName ?? x.publicBusinessId ?? "Business"),
+                              businessType: String(x.merchantBusinessType ?? "Other"),
+                            });
+                            setEditingBusinessType(String(x.merchantBusinessType ?? "Other"));
+                          }}
+                        >
+                          Edit Business Type
                         </button>
                       )}
                       {x.status === "Active" ? (
@@ -1223,12 +1387,15 @@ function AdminAccountsPage() {
   return (
     <AccountPage
       title="Admin Accounts"
-      description="PlatformAdmin and OperationsAdmin accounts and password-reset reviews."
+      description="Platform and Operations administrator accounts."
       roles={["PlatformAdmin", "OperationsAdmin"]}
       createRoles={["PlatformAdmin", "OperationsAdmin"]}
+      columns={["name", "email", "phone", "role", "status", "isLocked", "lastLoginAtUtc"]}
       allowCreate
       allowRemove={false}
-      showPasswordResets
+      showBusinessFilter={false}
+      showRoleFilter
+      searchPlaceholder="Name, email, phone or admin ID"
     />
   );
 }
@@ -1260,6 +1427,26 @@ function PasswordResetRequests() {
     void load();
   }
 
+  async function deleteRequest(id: unknown) {
+    const reason = prompt("Reason for deleting this password reset request")?.trim();
+    if (!reason) return;
+    const response = await fetch(`${apiBase}/api/v1/admin/password-reset-requests/${id}/delete`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ reason }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setMessage((body as { detail?: string }).detail ?? "Unable to delete this request.");
+      return;
+    }
+    setMessage("Password reset request deleted.");
+    void load();
+  }
+
   return (
     <section id="password-reset-requests" className="admin-reset-requests">
       <h2>Password Reset Requests</h2>
@@ -1277,12 +1464,12 @@ function PasswordResetRequests() {
             ) : (
               items.map((x) => (
                 <tr key={String(x.id)}>
-                  <td>{cell("name", x.name)}</td>
-                  <td>{cell("phone", x.phone)}</td>
-                  <td>{cell("role", x.role)}</td>
-                  <td>{cell("requestedAtUtc", x.requestedAtUtc)}</td>
-                  <td>{cell("status", x.status)}</td>
-                  <td>
+                  <td data-label="Name">{cell("name", x.name)}</td>
+                  <td data-label="Phone">{cell("phone", x.phone)}</td>
+                  <td data-label="Role">{cell("role", x.role)}</td>
+                  <td data-label="Requested At">{cell("requestedAtUtc", x.requestedAtUtc)}</td>
+                  <td data-label="Status">{cell("status", x.status)}</td>
+                  <td data-label="Action">
                     <div className="actions">
                       {x.canApprove === true && (
                         <>
@@ -1291,6 +1478,11 @@ function PasswordResetRequests() {
                             Reject
                           </button>
                         </>
+                      )}
+                      {x.canDelete === true && (
+                        <button className="quiet" onClick={() => void deleteRequest(x.id)}>
+                          Delete Request
+                        </button>
                       )}
                     </div>
                   </td>
@@ -1346,16 +1538,7 @@ function SystemStatus() {
 }
 
 function adminDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })
-    .format(new Date(value))
-    .replace(",", "");
+  return formatDateTime(value);
 }
 
 function cell(k: string, v: unknown) {
@@ -1374,17 +1557,18 @@ function Loading() {
 function Empty() {
   return (
     <div className="empty-state">
-      <h2>Nothing here yet</h2>
-      <p>No records match the current filters.</p>
+      <h2>No records found.</h2>
+      <p>Try changing the current filters.</p>
     </div>
   );
 }
 
 function ErrorBox({ text }: { text: string }) {
+  const friendly = /session|permission/i.test(text) ? text : "Unable to load data.";
   return (
     <div className="error-panel" role="alert">
       <h2>Unable to load</h2>
-      <p>{text}</p>
+      <p>{friendly}</p>
     </div>
   );
 }

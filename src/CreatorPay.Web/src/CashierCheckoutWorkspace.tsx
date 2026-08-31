@@ -1,5 +1,9 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "./apiClient";
+import { AccountStatusBadge } from "./AccountChrome";
+import { formatAmount, formatDate, formatTime } from "./displayFormat";
+import { NavIcon } from "./navIcons";
+import { createUuid } from "./uuid";
 
 type Mode = "cashier" | "merchant";
 type Staff = {
@@ -7,6 +11,8 @@ type Staff = {
   lastName: string;
   username: string;
   businessName: string;
+  effectiveStatus: string;
+  effectiveStatusReason: string;
   locations: { id: string; name: string; isPrimary: boolean }[];
 };
 type Purchase = {
@@ -16,6 +22,7 @@ type Purchase = {
   purchaseAmount: number;
   confirmedAtUtc?: string;
   creatorDisplayName: string;
+  creatorPublicId: string;
 };
 type Result = {
   status: string;
@@ -36,26 +43,13 @@ type Validation = {
 };
 type Tab = "purchase" | "recent" | "profile";
 
-const money = (value: number) =>
-  new Intl.NumberFormat("en-ET", { style: "currency", currency: "ETB" }).format(
-    value,
-  );
-const transactionDate = (value?: string) =>
-  value
-    ? new Intl.DateTimeFormat("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(new Date(value))
-    : "—";
-const transactionTime = (value?: string) =>
-  value
-    ? new Intl.DateTimeFormat("en-GB", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }).format(new Date(value))
-    : "—";
+const money = formatAmount;
+const transactionDate = formatDate;
+const transactionTime = formatTime;
+const shortReference = (value: string) => {
+  const readable = value.replace(/[^a-z0-9]/gi, "");
+  return `#${readable.slice(-4).toUpperCase()}`;
+};
 
 export function CashierCheckoutWorkspace({
   initialQrPayload,
@@ -73,7 +67,7 @@ export function CashierCheckoutWorkspace({
   const [result, setResult] = useState<Result>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const submissionKey = useRef(crypto.randomUUID());
+  const submissionKey = useRef(createUuid());
   const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -95,7 +89,7 @@ export function CashierCheckoutWorkspace({
     setValidation(undefined);
     setResult(undefined);
     setMessage("");
-    submissionKey.current = crypto.randomUUID();
+    submissionKey.current = createUuid();
   };
   const showResultThenReset = (nextMessage: string) => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -188,14 +182,20 @@ export function CashierCheckoutWorkspace({
 
   return (
     <div className="creator-dashboard cashier-dashboard">
-      <nav className="creator-tabs" aria-label="Cashier Dashboard sections">
+      <nav className="cashier-tabs" aria-label="Cashier Dashboard sections">
         {tabs.map(([id, label]) => (
           <button
             key={id}
             className={tab === id ? "active" : ""}
             onClick={() => setTab(id)}
           >
-            {label}
+            {!merchantMode && (
+              <NavIcon
+                name={id === "purchase" ? "checkout" : id === "recent" ? "sales" : "profile"}
+                size={24}
+              />
+            )}
+            <span>{label}</span>
           </button>
         ))}
       </nav>
@@ -231,7 +231,7 @@ export function CashierCheckoutWorkspace({
                       e.target.value.replace(/\D/g, "").slice(0, 4),
                     );
                     setValidation(undefined);
-                    submissionKey.current = crypto.randomUUID();
+                    submissionKey.current = createUuid();
                   }}
                   placeholder="Creator ID"
                 />
@@ -248,7 +248,7 @@ export function CashierCheckoutWorkspace({
                 />
               </label>
               <label>
-                Purchase Amount (ETB)
+                Purchase Amount
                 <input
                   required
                   type="number"
@@ -302,8 +302,11 @@ export function CashierCheckoutWorkspace({
               <div className="cashier-transaction-row headings">
                 <span>Amount</span>
                 <span>Status</span>
+                <span>Creator</span>
+                <span>Creator ID</span>
                 <span>Date</span>
                 <span>Time</span>
+                <span>Reference</span>
               </div>
               {[...recent]
                 .sort(
@@ -322,11 +325,20 @@ export function CashierCheckoutWorkspace({
                     <span data-label="Status">
                       <span className="status-badge">{x.status}</span>
                     </span>
+                    <span data-label="Creator" className="cashier-transaction-creator">
+                      {x.creatorDisplayName}
+                    </span>
+                    <strong data-label="Creator ID" className="cashier-transaction-creator-id">
+                      {x.creatorPublicId}
+                    </strong>
                     <span data-label="Date">
                       {transactionDate(x.confirmedAtUtc)}
                     </span>
                     <span data-label="Time">
                       {transactionTime(x.confirmedAtUtc)}
+                    </span>
+                    <span data-label="Reference" className="cashier-short-reference" title="Short transaction reference">
+                      {shortReference(x.publicTransactionId)}
                     </span>
                   </article>
                 ))}
@@ -344,6 +356,7 @@ export function CashierCheckoutWorkspace({
               <strong>
                 {staff ? `${staff.firstName} ${staff.lastName}` : "Cashier"}
               </strong>
+              {staff && <AccountStatusBadge status={staff.effectiveStatus} />}
               <p>{staff?.businessName}</p>
               <p>{staff?.locations.map((x) => x.name).join(", ")}</p>
               <small>Username: {staff?.username}</small>

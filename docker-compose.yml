@@ -22,6 +22,7 @@ services:
       CustomerVerification__HmacSecret: ${CustomerVerification__HmacSecret:?Set HMAC secret}
       CustomerVerification__EncryptionKey: ${CustomerVerification__EncryptionKey:?Set encryption key}
       DepositProofStorage__RootPath: /app/data/deposit-proofs
+      DataProtection__KeyRingPath: /app/data/data-protection-keys
       Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:8081}
       StaffInvitations__WebBaseUrl: ${WEB_ORIGIN:-http://localhost:8081}
       PublicAppBaseUrl: ${PUBLIC_APP_BASE_URL:-http://localhost:8081}
@@ -46,10 +47,11 @@ services:
       DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ConnectionStrings__CreatorPayDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:-CreatorPayV2Db};Username=${POSTGRES_USER:-creatorpay};Password=${POSTGRES_PASSWORD}
       BackgroundWorkers__HealthFilePath: /tmp/creatorpay-worker-ready
+      DataProtection__KeyRingPath: /app/data/data-protection-keys
       FirebaseMessaging__Enabled: ${FirebaseMessaging__Enabled:-false}
       FirebaseMessaging__ProjectId: ${FirebaseMessaging__ProjectId:-}
       FirebaseMessaging__ServiceAccountPath: ${FirebaseMessaging__ServiceAccountPath:-}
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { postgres: { condition: service_healthy }, api: { condition: service_healthy } }
     volumes: [creatorpay-data-protection-keys:/app/data/data-protection-keys]
     networks: [backend]
   web:

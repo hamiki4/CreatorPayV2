@@ -127,6 +127,7 @@ try {
   }
   if (process.env.E2E_SKIP_TOOL_RESTORE !== "1")
     run("dotnet", ["tool", "restore"]);
+  run("dotnet", ["restore", "src/CreatorPay.Api/CreatorPay.Api.csproj"]);
   run("dotnet", [
     "tool",
     "run",
@@ -210,8 +211,9 @@ try {
     cwd: path.join(root, "src/CreatorPay.Web"),
     env: {
       ...process.env,
-      E2E_BASE_URL: web,
+      E2E_BASE_URL: process.env.E2E_EXTERNAL_WEB_URL ?? web,
       E2E_API_URL: api,
+      E2E_API_PROXY_ORIGIN: process.env.E2E_EXTERNAL_WEB_URL ? api : '',
       E2E_TEST_OTP: otp,
       E2E_SHOPPER_EMAIL: seed.shopperEmail,
       E2E_SHOPPER_PHONE: seed.shopperPhone,

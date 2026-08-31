@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "./apiClient";
+import { businessTypes } from "./AuthWorkspace";
 
 type AdminRole =
   | "PlatformAdmin"
@@ -21,8 +22,8 @@ type Page<T = Record<string, unknown>> = {
 };
 
 const roleLabels: Record<AdminRole, string> = {
-  PlatformAdmin: "PlatformAdmin",
-  OperationsAdmin: "OperationsAdmin",
+  PlatformAdmin: "Platform Admin",
+  OperationsAdmin: "Operations Admin",
   MerchantAdmin: "MerchantAdmin / Business",
   Cashier: "Cashier",
   Creator: "Creator",
@@ -39,14 +40,14 @@ const defaultForm = {
   displayName: "",
   legalBusinessName: "",
   tradingName: "",
-  businessType: "Other",
+  businessType: "",
   primaryContactName: "",
   businessAddress: "",
-  city: "Addis Ababa",
-  region: "Addis Ababa",
-  country: "Ethiopia",
-  timeZone: "Africa/Addis_Ababa",
-  preferredLanguage: "en",
+  city: "",
+  region: "",
+  country: "",
+  timeZone: "",
+  preferredLanguage: "",
   biography: "",
   contentCategories: "",
   zone: "",
@@ -175,7 +176,10 @@ export function AdminAccountCreate({
         <label>
           Email
           <input
+            type="email"
             required={showAdminFields}
+            placeholder="name@example.com"
+            autoComplete="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
@@ -184,11 +188,27 @@ export function AdminAccountCreate({
         <label>
           Phone
           <input
+            type="tel"
+            placeholder="+251 9…"
+            autoComplete="tel"
             value={form.phoneNumber}
             onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
             required={!showAdminFields}
           />
         </label>
+
+        {showAdminFields && (
+          <label>
+            Full Name
+            <input
+              required
+              autoComplete="name"
+              placeholder="Full name"
+              value={form.displayName}
+              onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+            />
+          </label>
+        )}
 
         {showCashierFields && (
           <>
@@ -239,11 +259,12 @@ export function AdminAccountCreate({
             </label>
             <label>
               City
-              <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              <input placeholder="Addis Ababa" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             </label>
             <label>
               Preferred language
               <input
+                placeholder="en"
                 value={form.preferredLanguage}
                 onChange={(e) => setForm({ ...form, preferredLanguage: e.target.value })}
               />
@@ -296,11 +317,18 @@ export function AdminAccountCreate({
             </label>
             <label>
               Business type
-              <input
+              <select
                 required
                 value={form.businessType}
                 onChange={(e) => setForm({ ...form, businessType: e.target.value })}
-              />
+              >
+                <option value="" disabled>Select a Business Type</option>
+                {businessTypes.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.en}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Primary contact name
@@ -320,19 +348,19 @@ export function AdminAccountCreate({
             </label>
             <label>
               City
-              <input required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              <input required placeholder="Addis Ababa" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             </label>
             <label>
               Region
-              <input required value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
+              <input required placeholder="Addis Ababa" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
             </label>
             <label>
               Country
-              <input required value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
+              <input required placeholder="Ethiopia" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
             </label>
             <label>
               Time zone
-              <input required value={form.timeZone} onChange={(e) => setForm({ ...form, timeZone: e.target.value })} />
+              <input required placeholder="Africa/Addis_Ababa" value={form.timeZone} onChange={(e) => setForm({ ...form, timeZone: e.target.value })} />
             </label>
           </>
         )}
@@ -342,6 +370,7 @@ export function AdminAccountCreate({
           <input
             required
             type="password"
+            autoComplete="new-password"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
@@ -351,6 +380,7 @@ export function AdminAccountCreate({
           <input
             required
             type="password"
+            autoComplete="new-password"
             value={form.confirmation}
             onChange={(e) => setForm({ ...form, confirmation: e.target.value })}
           />

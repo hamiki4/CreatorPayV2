@@ -10,6 +10,8 @@ test('Admin navigation reuses actionable dashboard counts with zero and 99+ rule
   assert.match(source,/99\+/)
   assert.match(source,/admin-nav-badge/)
   assert.match(source,/Admin Accounts/)
+  assert.doesNotMatch(source,/admin-accounts", label: "Admin Accounts", roles: \["PlatformAdmin"\], countKey: "openSupportRequests"/)
+  assert.match(source,/password-reset-requests", label: "Password Reset Requests", roles: adminRoles, countKey: "openSupportRequests"/)
 })
 
 test('Admin badges refresh without logout and keep notification counts separate from support badges',()=>{

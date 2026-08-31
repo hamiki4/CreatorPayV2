@@ -2,8 +2,10 @@ using System.Text.Json;
 using CreatorPay.Api.Authentication;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Commission;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
+using CreatorPay.Infrastructure.Eligibility;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,13 +19,14 @@ public sealed record PlatformAssignmentRequest(Guid CommissionRuleId, string Cur
 public sealed record MerchantAssignmentRequest(Guid MerchantId, Guid CommissionRuleId, DateTime EffectiveFromUtc, DateTime? EffectiveToUtc);
 public sealed record PartnershipAssignmentRequest(Guid PartnershipId, Guid CommissionRuleId, DateTime EffectiveFromUtc, DateTime? EffectiveToUtc);
 public sealed record PreviewRequest(decimal PurchaseAmount, Guid PartnershipId, Guid? CampaignId, string CurrencyCode, DateTime CalculationAtUtc);
-public sealed record FinancialSettingsRequest(decimal MerchantCommissionRatePercent, decimal CreatorSharePercent, decimal ShopperSharePercent, decimal PlatformSharePercent, decimal MinimumBusinessWalletBalance, long MinimumTikTokFollowers = 0, DayOfWeek CreatorCutoffDay = DayOfWeek.Friday, TimeSpan? CreatorCutoffTime = null, DayOfWeek CreatorPayoutDay = DayOfWeek.Saturday, int ShopperCutoffDay = 0, TimeSpan? ShopperCutoffTime = null, int ShopperPayoutDay = 1, DateTime? PayoutScheduleEffectiveFromUtc = null);
+public sealed record BusinessTypeMinimumWalletBalanceRequest(string BusinessType, decimal MinimumBusinessWalletBalance);
+public sealed record FinancialSettingsRequest(decimal MerchantCommissionRatePercent, decimal CreatorSharePercent, decimal ShopperSharePercent, decimal PlatformSharePercent, IReadOnlyList<BusinessTypeMinimumWalletBalanceRequest> BusinessTypeMinimumWalletBalances, long MinimumTikTokFollowers = 0, bool ApplyNow = true, DateTime? EffectiveFromUtc = null, DayOfWeek CreatorCutoffDay = DayOfWeek.Friday, TimeSpan? CreatorCutoffTime = null, DayOfWeek CreatorPayoutDay = DayOfWeek.Saturday, int ShopperCutoffDay = 0, TimeSpan? ShopperCutoffTime = null, int ShopperPayoutDay = 1);
 
 public static class CommissionEndpoints
 {
     public static IEndpointRouteBuilder MapCommissionEndpoints(this IEndpointRouteBuilder e)
     {
-        var a = e.MapGroup("/api/v1/admin").WithTags("Commission").RequireAuthorization("AdminOperationsOnly");
+        var a = e.MapGroup("/api/v1/admin").WithTags("Commission").RequireAuthorization("PlatformAdminOnly");
         a.MapGet("/commission-plans", async (ApplicationDbContext db, CancellationToken ct) => Results.Ok(await db.CommissionPlans.AsNoTracking().OrderBy(x => x.Name).ToListAsync(ct))); a.MapPost("/commission-plans", CreatePlan); a.MapGet("/commission-plans/{id:guid}", async (Guid id, ApplicationDbContext db, CancellationToken ct) => await db.CommissionPlans.AsNoTracking().Where(x => x.Id == id).Select(x => new { x.Id, x.Name, x.Description, x.IsActive, x.CreatedAtUtc, x.UpdatedAtUtc }).FirstOrDefaultAsync(ct) is { } x ? Results.Ok(x) : Missing()); a.MapPut("/commission-plans/{id:guid}", UpdatePlan);
         a.MapGet("/financial-settings", GetFinancialSettings); a.MapPut("/financial-settings", SaveFinancialSettings);
         a.MapGet("/commission-rules", async (ApplicationDbContext db, CancellationToken ct) => Results.Ok(await db.CommissionRules.AsNoTracking().Select(x => new { x.Id, x.CommissionPlanId, x.Name, x.ScopeType, x.CurrencyCode, x.IsActive }).ToListAsync(ct))); a.MapPost("/commission-rules", CreateRule); a.MapGet("/commission-rules/{id:guid}", async (Guid id, ApplicationDbContext db, CancellationToken ct) => await db.CommissionRules.AsNoTracking().Where(x => x.Id == id).Select(x => new { x.Id, x.CommissionPlanId, x.Name, x.ScopeType, x.CurrencyCode, x.IsActive }).FirstOrDefaultAsync(ct) is { } x ? Results.Ok(x) : Missing()); a.MapPost("/commission-rules/{id:guid}/versions", CreateVersion); a.MapGet("/commission-rules/{id:guid}/versions", async (Guid id, ApplicationDbContext db, CancellationToken ct) => Results.Ok(await db.CommissionRuleVersions.AsNoTracking().Where(x => x.CommissionRuleId == id).OrderByDescending(x => x.VersionNumber).ToListAsync(ct))); a.MapGet("/commission-rules/{id:guid}/versions/{versionId:guid}", async (Guid id, Guid versionId, ApplicationDbContext db, CancellationToken ct) => await db.CommissionRuleVersions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == versionId && x.CommissionRuleId == id, ct) is { } x ? Results.Ok(x) : Missing()); a.MapPatch("/commission-rules/{id:guid}/status", SetStatus);
@@ -34,30 +37,173 @@ public static class CommissionEndpoints
     static async Task<IResult> CreatePlan(PlanRequest r, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct) { if (string.IsNullOrWhiteSpace(r.Name)) return Bad("Name is required."); var now = DateTime.UtcNow; var x = new CommissionPlan { Id = Guid.NewGuid(), Name = r.Name.Trim(), Description = r.Description?.Trim(), IsActive = r.IsActive, CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() }; db.Add(x); Audit(db, u, h, "CommissionPlanCreated", null, x); await db.SaveChangesAsync(ct); return Results.Created($"/api/v1/admin/commission-plans/{x.Id}", x); }
     static async Task<IResult> GetFinancialSettings(ApplicationDbContext db, CancellationToken ct)
     {
-        var now = DateTime.UtcNow; var assignment = await db.PlatformCommissionAssignments.AsNoTracking().Include(x => x.Rule).ThenInclude(x => x.Versions).Where(x => x.CurrencyCode == "ETB" && x.IsActive && x.EffectiveFromUtc <= now && (!x.EffectiveToUtc.HasValue || x.EffectiveToUtc > now)).OrderByDescending(x => x.EffectiveFromUtc).FirstOrDefaultAsync(ct);
-        var setting = await db.PlatformFinancialSettings.AsNoTracking().SingleOrDefaultAsync(x => x.CurrencyCode == "ETB", ct); var minimum = setting?.MinimumBusinessWalletBalance ?? 0m; var schedule = await db.PayoutScheduleVersions.AsNoTracking().Where(x => x.CurrencyCode == "ETB").OrderByDescending(x => x.EffectiveFromUtc).ThenByDescending(x => x.VersionNumber).FirstOrDefaultAsync(ct);
+        var now = DateTime.UtcNow;
+        var assignment = await db.PlatformCommissionAssignments.AsNoTracking().Include(x => x.Rule).ThenInclude(x => x.Versions).Where(x => x.CurrencyCode == "ETB" && x.IsActive && x.EffectiveFromUtc <= now && (!x.EffectiveToUtc.HasValue || x.EffectiveToUtc > now)).OrderByDescending(x => x.EffectiveFromUtc).FirstOrDefaultAsync(ct);
+        var setting = await db.PlatformFinancialSettings.AsNoTracking().SingleOrDefaultAsync(x => x.CurrencyCode == "ETB", ct);
+        var schedule = await db.PayoutScheduleVersions.AsNoTracking().Where(x => x.CurrencyCode == "ETB").OrderByDescending(x => x.EffectiveFromUtc).ThenByDescending(x => x.VersionNumber).FirstOrDefaultAsync(ct);
         var version = assignment?.Rule.Versions.SingleOrDefault(x => x.IsActive && x.EffectiveFromUtc <= now && (!x.EffectiveToUtc.HasValue || x.EffectiveToUtc > now));
+        var minimumVersions = await db.BusinessTypeWalletMinimumVersions.AsNoTracking()
+            .Where(x => x.CurrencyCode == "ETB" && x.EffectiveFromUtc <= now)
+            .OrderByDescending(x => x.EffectiveFromUtc)
+            .ThenByDescending(x => x.VersionNumber)
+            .ToListAsync(ct);
+        var minimums = BusinessTypes.Values.ToDictionary(
+            businessType => businessType,
+            businessType =>
+            {
+                var row = minimumVersions.FirstOrDefault(x => x.BusinessType == businessType);
+                return row?.MinimumBusinessWalletBalance ?? 0m;
+            },
+            StringComparer.Ordinal);
+        var minimumRows = BusinessTypes.Values.Select(businessType =>
+        {
+            var row = minimumVersions.FirstOrDefault(x => x.BusinessType == businessType);
+            return new
+            {
+                businessType,
+                minimumBusinessWalletBalance = minimums[businessType],
+                versionNumber = row?.VersionNumber ?? 0,
+                effectiveFromUtc = row?.EffectiveFromUtc ?? DateTime.UnixEpoch
+            };
+        }).ToArray();
+        var activeEffectiveFromUtc = minimumVersions.FirstOrDefault()?.EffectiveFromUtc ?? DateTime.UnixEpoch;
         return version is null
-            ? Results.Ok(new { merchantCommissionRatePercent = 10m, creatorSharePercent = 40m, shopperSharePercent = 30m, platformSharePercent = 30m, minimumBusinessWalletBalance = minimum, minimumTikTokFollowers = setting?.MinimumTikTokFollowers ?? 0L, currencyCode = "ETB", versionId = (Guid?)null, effectiveFromUtc = (DateTime?)null, creatorCutoffDay = schedule?.CreatorCutoffDay ?? setting?.CreatorCutoffDay ?? DayOfWeek.Friday, creatorCutoffTime = schedule?.CreatorCutoffTime ?? setting?.CreatorCutoffTime ?? TimeSpan.Zero, creatorPayoutDay = schedule?.CreatorPayoutDay ?? setting?.CreatorPayoutDay ?? DayOfWeek.Saturday, shopperCutoffDay = schedule?.ShopperCutoffDay ?? setting?.ShopperCutoffDay ?? 0, shopperCutoffTime = schedule?.ShopperCutoffTime ?? setting?.ShopperCutoffTime ?? TimeSpan.Zero, shopperPayoutDay = schedule?.ShopperPayoutDay ?? setting?.ShopperPayoutDay ?? 1, payoutScheduleEffectiveFromUtc = schedule?.EffectiveFromUtc ?? setting?.PayoutScheduleEffectiveFromUtc ?? DateTime.UnixEpoch, payoutScheduleVersion = schedule?.VersionNumber ?? 0 })
-            : Results.Ok(new { version.MerchantCommissionRatePercent, version.CreatorSharePercent, shopperSharePercent = version.CustomerCashbackSharePercent, version.PlatformSharePercent, minimumBusinessWalletBalance = minimum, minimumTikTokFollowers = setting?.MinimumTikTokFollowers ?? 0L, currencyCode = "ETB", versionId = (Guid?)version.Id, effectiveFromUtc = (DateTime?)version.EffectiveFromUtc, creatorCutoffDay = schedule?.CreatorCutoffDay ?? setting?.CreatorCutoffDay ?? DayOfWeek.Friday, creatorCutoffTime = schedule?.CreatorCutoffTime ?? setting?.CreatorCutoffTime ?? TimeSpan.Zero, creatorPayoutDay = schedule?.CreatorPayoutDay ?? setting?.CreatorPayoutDay ?? DayOfWeek.Saturday, shopperCutoffDay = schedule?.ShopperCutoffDay ?? setting?.ShopperCutoffDay ?? 0, shopperCutoffTime = schedule?.ShopperCutoffTime ?? setting?.ShopperCutoffTime ?? TimeSpan.Zero, shopperPayoutDay = schedule?.ShopperPayoutDay ?? setting?.ShopperPayoutDay ?? 1, payoutScheduleEffectiveFromUtc = schedule?.EffectiveFromUtc ?? setting?.PayoutScheduleEffectiveFromUtc ?? DateTime.UnixEpoch, payoutScheduleVersion = schedule?.VersionNumber ?? 0 });
+            ? Results.Ok(new
+            {
+                merchantCommissionRatePercent = 10m,
+                creatorSharePercent = 40m,
+                shopperSharePercent = 30m,
+                platformSharePercent = 30m,
+                minimumTikTokFollowers = setting?.MinimumTikTokFollowers ?? 0L,
+                currencyCode = "ETB",
+                versionId = (Guid?)null,
+                effectiveFromUtc = (DateTime?)null,
+                creatorCutoffDay = schedule?.CreatorCutoffDay ?? setting?.CreatorCutoffDay ?? DayOfWeek.Friday,
+                creatorCutoffTime = schedule?.CreatorCutoffTime ?? setting?.CreatorCutoffTime ?? TimeSpan.Zero,
+                creatorPayoutDay = schedule?.CreatorPayoutDay ?? setting?.CreatorPayoutDay ?? DayOfWeek.Saturday,
+                shopperCutoffDay = schedule?.ShopperCutoffDay ?? setting?.ShopperCutoffDay ?? 0,
+                shopperCutoffTime = schedule?.ShopperCutoffTime ?? setting?.ShopperCutoffTime ?? TimeSpan.Zero,
+                shopperPayoutDay = schedule?.ShopperPayoutDay ?? setting?.ShopperPayoutDay ?? 1,
+                payoutScheduleEffectiveFromUtc = schedule?.EffectiveFromUtc ?? setting?.PayoutScheduleEffectiveFromUtc ?? activeEffectiveFromUtc,
+                payoutScheduleVersion = schedule?.VersionNumber ?? 0,
+                businessTypeMinimumWalletBalances = minimumRows
+            })
+            : Results.Ok(new
+            {
+                version.MerchantCommissionRatePercent,
+                version.CreatorSharePercent,
+                shopperSharePercent = version.CustomerCashbackSharePercent,
+                version.PlatformSharePercent,
+                minimumTikTokFollowers = setting?.MinimumTikTokFollowers ?? 0L,
+                currencyCode = "ETB",
+                versionId = (Guid?)version.Id,
+                effectiveFromUtc = (DateTime?)version.EffectiveFromUtc,
+                creatorCutoffDay = schedule?.CreatorCutoffDay ?? setting?.CreatorCutoffDay ?? DayOfWeek.Friday,
+                creatorCutoffTime = schedule?.CreatorCutoffTime ?? setting?.CreatorCutoffTime ?? TimeSpan.Zero,
+                creatorPayoutDay = schedule?.CreatorPayoutDay ?? setting?.CreatorPayoutDay ?? DayOfWeek.Saturday,
+                shopperCutoffDay = schedule?.ShopperCutoffDay ?? setting?.ShopperCutoffDay ?? 0,
+                shopperCutoffTime = schedule?.ShopperCutoffTime ?? setting?.ShopperCutoffTime ?? TimeSpan.Zero,
+                shopperPayoutDay = schedule?.ShopperPayoutDay ?? setting?.ShopperPayoutDay ?? 1,
+                payoutScheduleEffectiveFromUtc = schedule?.EffectiveFromUtc ?? setting?.PayoutScheduleEffectiveFromUtc ?? activeEffectiveFromUtc,
+                payoutScheduleVersion = schedule?.VersionNumber ?? 0,
+                businessTypeMinimumWalletBalances = minimumRows
+            });
     }
     static async Task<IResult> SaveFinancialSettings(FinancialSettingsRequest r, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct)
     {
-        if (r.MinimumBusinessWalletBalance < 0) return Bad("Minimum Business Wallet Balance must be zero or greater."); if (r.MinimumTikTokFollowers < 0) return Bad("Minimum TikTok Followers must be zero or greater."); if (r.ShopperCutoffDay is < 0 or > 31 || r.ShopperPayoutDay is < 1 or > 31) return Bad("Shopper payout days must be valid monthly day values."); var now = DateTime.UtcNow; var effective = r.PayoutScheduleEffectiveFromUtc ?? now; if (effective.Kind != DateTimeKind.Utc) return Bad("Payout schedule effective time must be UTC.");
+        if (r.BusinessTypeMinimumWalletBalances.Count == 0) return Bad("Business type minimums are required.");
+        if (r.MinimumTikTokFollowers < 0) return Bad("Minimum TikTok Followers must be zero or greater.");
+        if (r.ShopperCutoffDay is < 0 or > 31 || r.ShopperPayoutDay is < 1 or > 31) return Bad("Shopper payout days must be valid monthly day values.");
+        var now = DateTime.UtcNow;
+        var effective = r.ApplyNow ? now : r.EffectiveFromUtc ?? now;
+        if (effective.Kind != DateTimeKind.Utc) return Bad("Financial settings effective time must be UTC.");
+        if (!r.ApplyNow && effective <= now) return Bad("Schedule Effective From (UTC) must be a future UTC date and time.");
+
+        var businessTypeRows = r.BusinessTypeMinimumWalletBalances
+            .Select(x => new { BusinessType = x.BusinessType?.Trim(), x.MinimumBusinessWalletBalance })
+            .ToList();
+        if (businessTypeRows.Any(x => string.IsNullOrWhiteSpace(x.BusinessType)) || businessTypeRows.Any(x => !BusinessTypes.IsSupported(x.BusinessType!)))
+        {
+            return Bad("Business type minimums must use the canonical business types.");
+        }
+        if (businessTypeRows.Select(x => x.BusinessType!).Distinct(StringComparer.Ordinal).Count() != BusinessTypes.Values.Length)
+        {
+            return Bad("Business type minimums must include every supported business type exactly once.");
+        }
+        var minimums = businessTypeRows.ToDictionary(x => x.BusinessType!, x => x.MinimumBusinessWalletBalance, StringComparer.Ordinal);
+        if (minimums.Any(x => x.Value < 0))
+        {
+            return Bad("Business type minimums must be zero or greater.");
+        }
+
         var assignment = await db.PlatformCommissionAssignments.Include(x => x.Rule).ThenInclude(x => x.Versions).Where(x => x.CurrencyCode == "ETB" && x.IsActive && x.EffectiveFromUtc <= now && (!x.EffectiveToUtc.HasValue || x.EffectiveToUtc > now)).OrderByDescending(x => x.EffectiveFromUtc).FirstOrDefaultAsync(ct);
         var old = assignment?.Rule.Versions.SingleOrDefault(x => x.IsActive && x.EffectiveFromUtc <= now && (!x.EffectiveToUtc.HasValue || x.EffectiveToUtc > now));
         var ruleId = assignment?.Rule.Id ?? Guid.NewGuid();
-        var next = new CommissionRuleVersion { Id = Guid.NewGuid(), CommissionRuleId = ruleId, VersionNumber = old is null ? 1 : assignment!.Rule.Versions.Max(x => x.VersionNumber) + 1, MerchantCommissionRatePercent = r.MerchantCommissionRatePercent, CreatorSharePercent = r.CreatorSharePercent, CustomerCashbackSharePercent = r.ShopperSharePercent, PlatformSharePercent = r.PlatformSharePercent, MinimumPurchaseAmount = old?.MinimumPurchaseAmount ?? 0m, MaximumPurchaseAmount = old?.MaximumPurchaseAmount, EffectiveFromUtc = now, EffectiveToUtc = null, RoundingMode = old?.RoundingMode ?? CommissionRoundingMode.AwayFromZero, IsActive = true, CreatedByUserId = u.UserAccountId!.Value, CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() }; try { next.Validate(); } catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException) { return Bad(ex.Message); }
+        var next = new CommissionRuleVersion
+        {
+            Id = Guid.NewGuid(),
+            CommissionRuleId = ruleId,
+            VersionNumber = old is null ? 1 : assignment!.Rule.Versions.Max(x => x.VersionNumber) + 1,
+            MerchantCommissionRatePercent = r.MerchantCommissionRatePercent,
+            CreatorSharePercent = r.CreatorSharePercent,
+            CustomerCashbackSharePercent = r.ShopperSharePercent,
+            PlatformSharePercent = r.PlatformSharePercent,
+            MinimumPurchaseAmount = old?.MinimumPurchaseAmount ?? 0m,
+            MaximumPurchaseAmount = old?.MaximumPurchaseAmount,
+            EffectiveFromUtc = effective,
+            EffectiveToUtc = null,
+            RoundingMode = old?.RoundingMode ?? CommissionRoundingMode.AwayFromZero,
+            IsActive = true,
+            CreatedByUserId = u.UserAccountId!.Value,
+            CreatedAtUtc = now,
+            CreatedBy = u.UserAccountId.ToString()
+        };
+        try { next.Validate(); } catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException) { return Bad(ex.Message); }
         var prior = old is null ? new { MerchantCommissionRatePercent = 10m, CreatorSharePercent = 40m, ShopperSharePercent = 30m, PlatformSharePercent = 30m } : new { old.MerchantCommissionRatePercent, old.CreatorSharePercent, ShopperSharePercent = old.CustomerCashbackSharePercent, old.PlatformSharePercent };
-        if (old is not null) old.EffectiveToUtc = now;
+        if (old is not null) old.EffectiveToUtc = effective;
         else
         {
             var plan = new CommissionPlan { Id = Guid.NewGuid(), Name = "Weymela Pilot Financial Settings", Description = "Platform financial configuration managed by Platform Admin.", IsActive = true, CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() };
             var rule = new CommissionRule { Id = ruleId, CommissionPlanId = plan.Id, Name = "ETB Platform Default", ScopeType = CommissionScopeType.PlatformDefault, CurrencyCode = "ETB", IsActive = true, CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() };
-            assignment = new PlatformCommissionAssignment { Id = Guid.NewGuid(), CommissionRuleId = rule.Id, CurrencyCode = "ETB", EffectiveFromUtc = now, IsActive = true, CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() };
+            assignment = new PlatformCommissionAssignment { Id = Guid.NewGuid(), CommissionRuleId = rule.Id, CurrencyCode = "ETB", EffectiveFromUtc = effective, IsActive = true, CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() };
             db.AddRange(plan, rule, assignment);
         }
-        var setting = await db.PlatformFinancialSettings.SingleOrDefaultAsync(x => x.CurrencyCode == "ETB", ct); var previousMinimum = setting?.MinimumBusinessWalletBalance ?? 0m; var previousTikTokMinimum = setting?.MinimumTikTokFollowers ?? 0L; setting ??= new PlatformFinancialSetting { Id = Guid.NewGuid(), CurrencyCode = "ETB", CreatedAtUtc = now }; setting.MinimumBusinessWalletBalance = decimal.Round(r.MinimumBusinessWalletBalance, 2); setting.MinimumTikTokFollowers = r.MinimumTikTokFollowers; setting.ChangedByUserId = u.UserAccountId.Value; setting.ChangedAtUtc = now; setting.UpdatedAtUtc = now; setting.UpdatedBy = u.UserAccountId.ToString(); if (db.Entry(setting).State == EntityState.Detached) db.Add(setting); var scheduleVersion = new PayoutScheduleVersion { Id = Guid.NewGuid(), CurrencyCode = "ETB", VersionNumber = (await db.PayoutScheduleVersions.Where(x => x.CurrencyCode == "ETB").MaxAsync(x => (int?)x.VersionNumber, ct) ?? 0) + 1, CreatorCutoffDay = r.CreatorCutoffDay, CreatorCutoffTime = r.CreatorCutoffTime ?? TimeSpan.Zero, CreatorPayoutDay = r.CreatorPayoutDay, ShopperCutoffDay = r.ShopperCutoffDay, ShopperCutoffTime = r.ShopperCutoffTime ?? TimeSpan.Zero, ShopperPayoutDay = r.ShopperPayoutDay, EffectiveFromUtc = effective, ChangedByUserId = u.UserAccountId.Value, CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() }; db.AddRange(next, scheduleVersion); Audit(db, u, h, "FinancialSettingsChanged", new { Commission = prior, MinimumBusinessWalletBalance = previousMinimum, MinimumTikTokFollowers = previousTikTokMinimum }, new { Commission = r, setting.MinimumBusinessWalletBalance, setting.MinimumTikTokFollowers, PayoutScheduleVersion = scheduleVersion.VersionNumber }); await db.SaveChangesAsync(ct); return Results.Ok(new { saved = true, effectiveAtUtc = effective, payoutScheduleVersion = scheduleVersion.VersionNumber });
+
+        var setting = await db.PlatformFinancialSettings.SingleOrDefaultAsync(x => x.CurrencyCode == "ETB", ct);
+        var previousTikTokMinimum = setting?.MinimumTikTokFollowers ?? 0L;
+        setting ??= new PlatformFinancialSetting { Id = Guid.NewGuid(), CurrencyCode = "ETB", CreatedAtUtc = now };
+        setting.MinimumBusinessWalletBalance = minimums["Other"];
+        setting.MinimumTikTokFollowers = r.MinimumTikTokFollowers;
+        setting.ChangedByUserId = u.UserAccountId.Value;
+        setting.ChangedAtUtc = now;
+        setting.UpdatedAtUtc = now;
+        setting.UpdatedBy = u.UserAccountId.ToString();
+        if (db.Entry(setting).State == EntityState.Detached) db.Add(setting);
+
+        var nextVersions = new List<BusinessTypeWalletMinimumVersion>();
+        foreach (var businessType in BusinessTypes.Values)
+        {
+            var currentVersion = await db.BusinessTypeWalletMinimumVersions.Where(x => x.CurrencyCode == "ETB" && x.BusinessType == businessType).MaxAsync(x => (int?)x.VersionNumber, ct) ?? 0;
+            nextVersions.Add(new BusinessTypeWalletMinimumVersion
+            {
+                Id = Guid.NewGuid(),
+                CurrencyCode = "ETB",
+                BusinessType = businessType,
+                VersionNumber = currentVersion + 1,
+                MinimumBusinessWalletBalance = decimal.Round(minimums[businessType], 2),
+                EffectiveFromUtc = effective,
+                ChangedByUserId = u.UserAccountId.Value,
+                CreatedAtUtc = now,
+                CreatedBy = u.UserAccountId.ToString()
+            });
+        }
+
+        var scheduleVersion = new PayoutScheduleVersion { Id = Guid.NewGuid(), CurrencyCode = "ETB", VersionNumber = (await db.PayoutScheduleVersions.Where(x => x.CurrencyCode == "ETB").MaxAsync(x => (int?)x.VersionNumber, ct) ?? 0) + 1, CreatorCutoffDay = r.CreatorCutoffDay, CreatorCutoffTime = r.CreatorCutoffTime ?? TimeSpan.Zero, CreatorPayoutDay = r.CreatorPayoutDay, ShopperCutoffDay = r.ShopperCutoffDay, ShopperCutoffTime = r.ShopperCutoffTime ?? TimeSpan.Zero, ShopperPayoutDay = r.ShopperPayoutDay, EffectiveFromUtc = effective, ChangedByUserId = u.UserAccountId.Value, CreatedAtUtc = now, CreatedBy = u.UserAccountId.ToString() };
+        db.AddRange(next, scheduleVersion);
+        db.AddRange(nextVersions);
+        Audit(db, u, h, "FinancialSettingsChanged", new { Commission = prior, BusinessTypeMinimums = minimums, MinimumTikTokFollowers = previousTikTokMinimum }, new { Commission = r, BusinessTypeMinimums = minimums, setting.MinimumTikTokFollowers, PayoutScheduleVersion = scheduleVersion.VersionNumber, EffectiveFromUtc = effective });
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { saved = true, effectiveAtUtc = effective, payoutScheduleVersion = scheduleVersion.VersionNumber });
     }
     static async Task<IResult> UpdatePlan(Guid id, PlanRequest r, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct) { var x = await db.CommissionPlans.FindAsync([id], ct); if (x is null) return Missing(); var before = new { x.Name, x.Description, x.IsActive }; x.Name = r.Name.Trim(); x.Description = r.Description?.Trim(); x.IsActive = r.IsActive; x.UpdatedAtUtc = DateTime.UtcNow; Audit(db, u, h, "CommissionPlanChanged", before, new { x.Name, x.Description, x.IsActive }); await db.SaveChangesAsync(ct); return Results.Ok(x); }
     static async Task<IResult> CreateRule(RuleRequest r, ICurrentUserService u, ApplicationDbContext db, HttpContext h, CancellationToken ct) { if (!await db.CommissionPlans.AnyAsync(x => x.Id == r.CommissionPlanId, ct) || string.IsNullOrWhiteSpace(r.Name) || r.CurrencyCode.Trim().Length != 3) return Bad("A valid plan, name, and ISO currency code are required."); var x = new CommissionRule { Id = Guid.NewGuid(), CommissionPlanId = r.CommissionPlanId, Name = r.Name.Trim(), ScopeType = r.ScopeType, CurrencyCode = r.CurrencyCode.Trim().ToUpperInvariant(), IsActive = r.IsActive, CreatedAtUtc = DateTime.UtcNow, CreatedBy = u.UserAccountId.ToString() }; db.Add(x); Audit(db, u, h, "CommissionRuleCreated", null, x); await db.SaveChangesAsync(ct); return Results.Created($"/api/v1/admin/commission-rules/{x.Id}", x); }

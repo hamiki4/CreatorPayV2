@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, statusLabel } from './apiClient'
+import { api } from './apiClient'
 import { ActiveAds, AdvertisingRequest, CreatorConfirmedSales, CreatorRequests, FindBusinesses } from './CreatorAdvertising'
-import { AccountChrome } from './AccountChrome'
+import { AccountChrome, AccountStatusBadge } from './AccountChrome'
 import { onActionableRefresh } from './actionableRefresh'
 import { creatorPhotoUrl, ProfileAvatar } from './profileMedia'
 import { prepareProfilePhoto, profilePhotoAccept, profilePhotoProcessingMessage, profilePhotoUnsupportedMessage } from './photoUpload'
+import { RoleNavigation } from './RoleNavigation'
+import { currentPartnerships } from './partnershipState'
+import { daysLeftText, relationshipState } from './relationshipTime'
+import { formatAmount, formatDate } from './displayFormat'
+import { NavIcon } from './navIcons'
 
 type Tab = 'home' | 'find' | 'ads' | 'requests' | 'sales' | 'payout' | 'profile'
 type Profile = {
@@ -13,6 +18,8 @@ type Profile = {
   creatorCode: string
   creatorStatus: string
   accountStatus: string
+  effectiveStatus: string
+  effectiveStatusReason: string
   email: string
   phoneNumber: string
   city: string
@@ -28,12 +35,19 @@ type Earnings = {
   scheduledBalance: number
   currentPayoutAmount: number
   currentPeriodConfirmedSales: number
+  confirmedSalesCount: number
+  upcomingPayoutAmount: number
   nextEstimatedPayoutAtUtc?: string
   lastPayoutAtUtc?: string
 }
-
-const money = (value: number, currency = 'ETB') =>
-  new Intl.NumberFormat('en-ET', { style: 'currency', currency }).format(value)
+type CreatorPayout = {
+  id: string
+  publicPayoutId: string
+  amount: number
+  status: string
+  scheduledAtUtc: string
+  paidAtUtc?: string
+}
 
 function ProfilePanel({
   profile,
@@ -135,7 +149,7 @@ function ProfilePanel({
                 <br />
                 {profile.city}
               </p>
-              <span className="status-badge">{statusLabel(profile.creatorStatus)}</span>
+              <AccountStatusBadge status={profile.effectiveStatus} />
             </div>
           </div>
           <div className="actions creator-photo-actions">
@@ -159,7 +173,6 @@ function ProfilePanel({
         <div className="creator-id-profile">
           <span>Creator ID</span>
           <strong>{profile.creatorCode}</strong>
-          <small>{profile.publicCreatorId}</small>
           <button
             className="quiet copy-creator-id"
             onClick={async () => {
@@ -167,6 +180,7 @@ function ProfilePanel({
               setCopy('Copied')
             }}
           >
+            <NavIcon name="copy" size={18} />
             Copy Creator ID
           </button>
           {copy && <small role="status">{copy}</small>}
@@ -181,9 +195,11 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [profile, setProfile] = useState<Profile>()
   const [profileError, setProfileError] = useState('')
   const [earnings, setEarnings] = useState<Earnings>()
+  const [payouts, setPayouts] = useState<CreatorPayout[]>([])
   const [requests, setRequests] = useState<AdvertisingRequest[]>([])
+  const [earningsError, setEarningsError] = useState('')
+  const [relationshipsError, setRelationshipsError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
 
   const loadProfile = async () =>
     api<Profile>('/api/v1/creators/me')
@@ -201,12 +217,27 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
   const loadSupporting = () =>
     Promise.allSettled([
       api<Earnings>('/api/v1/creator/earnings/summary'),
+      api<CreatorPayout[]>('/api/v1/creator/payouts'),
       api<AdvertisingRequest[]>('/api/v1/creator/partnerships'),
     ]).then((results) => {
-      const [e, a] = results
-      if (e.status === 'fulfilled') setEarnings(e.value)
-      if (a.status === 'fulfilled') setRequests(a.value)
-      setError(results.some((x) => x.status === 'rejected') ? "We couldn't load some information." : '')
+      const [e, p, a] = results
+      if (e.status === 'fulfilled') {
+        setEarnings(e.value)
+        setEarningsError('')
+      } else {
+        setEarningsError("We couldn't load payout information right now.")
+      }
+      if (p.status === 'fulfilled') {
+        setPayouts(p.value)
+      } else {
+        setEarningsError("We couldn't load payout information right now.")
+      }
+      if (a.status === 'fulfilled') {
+        setRequests(a.value)
+        setRelationshipsError('')
+      } else {
+        setRelationshipsError("We couldn't load advertising relationships right now.")
+      }
     })
 
   const load = () => Promise.all([loadProfile(), loadSupporting()]).finally(() => setLoading(false))
@@ -227,17 +258,12 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
     }
   }, [])
 
-  const pending = requests.filter((x) => x.status === 'Pending').length
-  const date = (value?: string) => (value ? new Intl.DateTimeFormat('en-GB').format(new Date(value)) : '—')
+  const currentRequests = currentPartnerships(requests, (request) => request.merchantId)
+  const pending = currentRequests.filter((request) => request.status === 'Pending').length
+  const activeAds = currentRequests
+    .filter((request) => request.status === 'Approved' && relationshipState(request).label === 'Active')
+    .slice(0, 3)
   const photo = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
-  const tabs: [Tab, string][] = [
-    ['find', 'Find Businesses'],
-    ['ads', 'Active Ads'],
-    ['requests', 'Requests'],
-    ['sales', 'Confirmed Sales'],
-    ['payout', 'Payout'],
-  ]
-  const headerPhoto = creatorPhotoUrl(profile?.publicCreatorId, profile?.profileImage?.fileName)
   const navigate = (target: string) =>
     setTab(
       target.includes('payout')
@@ -254,68 +280,139 @@ export function CreatorDashboard({ onSignOut }: { onSignOut: () => void }) {
                   ? 'find'
                   : 'home',
     )
+  const selectedTab: Tab = tab === 'sales' ? 'home' : tab
 
   return (
     <AccountChrome
       role="Creator"
       name={profile?.displayName}
-      status={profile ? statusLabel(profile.creatorStatus) : 'Active'}
+      status={profile?.effectiveStatus}
       photoUrl={photo}
-      identityMedia={profile ? <ProfileAvatar name={profile.displayName} photoUrl={headerPhoto} style={{ width: '2.5rem', height: '2.5rem', fontSize: '1rem' }} /> : undefined}
       onProfile={() => setTab('profile')}
-      onHelp={() => location.assign('/help')}
+      onHelp={() => location.assign('/help?category=Content%20Creators')}
       onSignOut={onSignOut}
       onNavigate={navigate}
     >
       <div className="creator-dashboard">
-        <nav className="creator-tabs" aria-label="Creator sections">
-          {tabs.map(([value, label]) => (
-            <button key={value} className={tab === value ? 'active' : ''} aria-current={tab === value ? 'page' : undefined} onClick={() => setTab(value)}>
-              {label}
-            </button>
-          ))}
-        </nav>
+        <RoleNavigation
+          role="Creator"
+          label="Creator sections"
+          items={[
+            {id: 'home', label: 'Home', icon: 'home', active: selectedTab === 'home', onSelect: () => setTab('home')},
+            {id: 'find', label: 'Find Businesses', icon: 'find', active: selectedTab === 'find', onSelect: () => setTab('find')},
+            {id: 'ads', label: 'Active Ads', icon: 'ads', active: selectedTab === 'ads', onSelect: () => setTab('ads')},
+            {id: 'requests', label: 'Requests', icon: 'requests', active: selectedTab === 'requests', onSelect: () => setTab('requests')},
+            {id: 'payout', label: 'Payout', icon: 'payout', active: selectedTab === 'payout', onSelect: () => setTab('payout')},
+            {id: 'profile', label: 'Profile', icon: 'profile', active: selectedTab === 'profile', onSelect: () => setTab('profile')},
+          ]}
+        />
         {tab === 'home' && (
-          <>
-            <div className="creator-summary compact-role-summary">
-              <article>
+          <section className="creator-home" aria-labelledby="creator-home-title">
+            <h2 id="creator-home-title" className="creator-home-title">Dashboard</h2>
+            <div className="creator-home-summary">
+              <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('requests')}>
                 <span>Pending Requests</span>
                 <strong>{pending}</strong>
-              </article>
-              <article>
-                <span>Payout Amount</span>
-                <strong>{money(earnings?.currentPayoutAmount ?? 0, earnings?.currencyCode)}</strong>
-              </article>
-              <article>
+              </button>
+              <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('sales')}>
+                <span>Confirmed Sales</span>
+                <strong>{earnings?.confirmedSalesCount ?? 0}</strong>
+              </button>
+              <button type="button" className="creator-home-stat creator-home-stat--accent" onClick={() => setTab('payout')}>
+                <span>Upcoming Payout</span>
+                <strong>{formatAmount(earnings?.upcomingPayoutAmount)}</strong>
+              </button>
+            </div>
+            <button type="button" className="creator-next-payout" onClick={() => setTab('payout')}>
+              <span>
                 <span>Next Payout Date</span>
-                <strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong>
-              </article>
+                <strong>{formatDate(earnings?.nextEstimatedPayoutAtUtc)}</strong>
+              </span>
+              <span aria-hidden="true">›</span>
+            </button>
+            {relationshipsError && <p className="friendly-error">{relationshipsError}</p>}
+            {earningsError && <p className="friendly-error">{earningsError}</p>}
+            <button type="button" className="creator-start-card" onClick={() => setTab('find')}>
+              <span className="creator-start-copy">
+                <strong>Start advertising</strong>
+                <span>Find businesses, request permission to promote, and start earning money!</span>
+              </span>
+              <span className="creator-start-action">
+                <span>Find Businesses</span>
+                <span aria-hidden="true">›</span>
+              </span>
+            </button>
+            <div className="creator-recent-ads">
+              <button type="button" className="creator-recent-heading" onClick={() => setTab('ads')}>
+                <strong>Recent Active Ads</strong>
+                <span>{activeAds.length} <span aria-hidden="true">›</span></span>
+              </button>
+              {activeAds.length === 0 ? (
+                <p className="compact-empty">No active ads yet.</p>
+              ) : (
+                <div className="creator-recent-list">
+                  {activeAds.map((ad) => {
+                    const state = relationshipState(ad)
+                    const days = state.daysLeft === null ? '—' : daysLeftText(state.daysLeft, state.tone)
+                    const promoState = ad.promotionVideo
+                      ? ad.promotionVideo.status === 'Approved' ? 'Promo video approved' : `Promo video ${ad.promotionVideo.status.toLowerCase()}`
+                      : 'Add Promo Video'
+                    return (
+                      <button type="button" className="creator-recent-ad" key={ad.id} onClick={() => setTab('ads')}>
+                        <span className="creator-recent-ad-main">
+                          <strong>{ad.merchantName}</strong>
+                          <span>Activated {formatDate(ad.activatedAtUtc)}</span>
+                          <span>{promoState}</span>
+                        </span>
+                        <span className="creator-recent-ad-state">
+                          <span className="status-badge">Active</span>
+                          <span>{days}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-            {error && <p className="friendly-error">{error}</p>}
-            <div className="creator-start">
-              <h2>Start advertising</h2>
-              <p>Find a Business, request permission to promote, and start earning money!</p>
-              <button onClick={() => setTab('find')}>Find Businesses</button>
-            </div>
-          </>
+          </section>
         )}
-        {tab === 'find' && <FindBusinesses onRequested={() => void load()} />}
-        {tab === 'ads' && <ActiveAds items={requests} loading={loading} />}
-        {tab === 'requests' && <CreatorRequests items={requests} refresh={() => void load()} />}
-        {tab === 'sales' && <CreatorConfirmedSales />}
+        {tab === 'find' && <><FindBusinesses onRequested={() => void load()} />{relationshipsError && <p className="friendly-error">{relationshipsError}</p>}</>}
+        {tab === 'ads' && <><ActiveAds items={requests} loading={loading} refresh={() => void load()} />{relationshipsError && <p className="friendly-error">{relationshipsError}</p>}</>}
+        {tab === 'requests' && <><CreatorRequests items={requests} refresh={() => void load()} />{relationshipsError && <p className="friendly-error">{relationshipsError}</p>}</>}
+        {tab === 'sales' && <><CreatorConfirmedSales />{earningsError && <p className="friendly-error">{earningsError}</p>}</>}
         {tab === 'payout' && (
           <section className="creator-section">
-            <h2>Payout</h2>
-            <div className="summary-grid">
+            <h2>Payout Overview</h2>
+            <div className="summary-grid creator-payout-overview">
               <article className="summary-card">
-                <span>Payout Amount</span>
-                <strong>{money(earnings?.currentPayoutAmount ?? 0, earnings?.currencyCode)}</strong>
+                <span>Upcoming Payout</span>
+                <strong>{formatAmount(earnings?.upcomingPayoutAmount)}</strong>
               </article>
               <article className="summary-card">
                 <span>Next Payout Date</span>
-                <strong>{date(earnings?.nextEstimatedPayoutAtUtc)}</strong>
+                <strong>{formatDate(earnings?.nextEstimatedPayoutAtUtc)}</strong>
               </article>
             </div>
+            <div className="creator-payout-history">
+              <h3>Payout History</h3>
+              {payouts.length === 0 ? (
+                <p className="compact-empty">No payout history yet.</p>
+              ) : (
+                <div className="creator-payout-history-list">
+                  {payouts.map((payout) => (
+                    <article className="creator-payout-history-item" key={payout.id}>
+                      <span>
+                        <time dateTime={payout.paidAtUtc ?? payout.scheduledAtUtc}>{formatDate(payout.paidAtUtc ?? payout.scheduledAtUtc)}</time>
+                        <small>{payout.publicPayoutId}</small>
+                      </span>
+                      <strong>{formatAmount(payout.amount)}</strong>
+                      <span className={`creator-payout-status creator-payout-status--${payout.status.toLowerCase()}`}>{payout.status}</span>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+            {earningsError && <p className="friendly-error">{earningsError}</p>}
           </section>
         )}
         {tab === 'profile' && (

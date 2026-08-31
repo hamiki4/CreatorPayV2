@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
@@ -127,12 +128,52 @@ public sealed class CreatorTikTokFollowerTests : IAsyncLifetime
         Assert.Contains(body!.EnumerateArray(), x => x.GetProperty("displayName").GetString() == "Instagram Creator");
     }
 
-    private static object CreatorRequest(string platform, long followers, string password, string email, string displayName) => new
+    [DockerFact]
+    public async Task Creator_signup_rejects_a_phone_owned_by_another_account_role_before_persistence()
+    {
+        await ResetFinancialSettingsAsync();
+        await SetMinimumTikTokFollowersAsync(50_000L);
+
+        await using (var db = Db())
+        {
+            db.UserAccounts.Add(new UserAccount
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = "Existing Operations Admin",
+                Email = "existing-operations@example.com",
+                NormalizedEmail = "EXISTING-OPERATIONS@EXAMPLE.COM",
+                PhoneNumber = "+251911000888",
+                NormalizedPhoneNumber = "+251911000888",
+                PasswordHash = "test-only",
+                Role = UserRole.OperationsAdmin,
+                Status = AccountStatus.Active,
+                IsEmailVerified = true,
+                IsPhoneVerified = true,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var client = factory!.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/creators/register",
+            CreatorRequest("TikTok", 60_000, "Welcome1!", "phone-collision@example.com", "Phone Collision", "0911000888"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("Phone number is already registered.", await response.Content.ReadAsStringAsync());
+
+        await using var verification = Db();
+        Assert.False(await verification.UserAccounts.AnyAsync(x => x.NormalizedEmail == "PHONE-COLLISION@EXAMPLE.COM"));
+        Assert.False(await verification.Creators.AnyAsync(x => x.DisplayName == "Phone Collision"));
+        Assert.False(await verification.CreatorSocialProfiles.AnyAsync(x => x.Handle == "phonecollision"));
+    }
+
+    private static object CreatorRequest(string platform, long followers, string password, string email, string displayName, string phoneNumber = "0911000777") => new
     {
         firstName = "Test",
         lastName = "Creator",
         displayName,
-        phoneNumber = "0911000777",
+        phoneNumber,
         email,
         password,
         confirmation = password,
@@ -193,6 +234,22 @@ public sealed class CreatorTikTokFollowerTests : IAsyncLifetime
         setting.UpdatedAtUtc = DateTime.UtcNow;
         setting.UpdatedBy = "90000000-0000-0000-0000-000000000001";
         if (db.Entry(setting).State == EntityState.Detached) db.Add(setting);
+        var otherVersion = await db.BusinessTypeWalletMinimumVersions.SingleOrDefaultAsync(x => x.CurrencyCode == "ETB" && x.BusinessType == "Other");
+        otherVersion ??= new BusinessTypeWalletMinimumVersion
+        {
+            Id = Guid.NewGuid(),
+            CurrencyCode = "ETB",
+            BusinessType = "Other",
+            VersionNumber = 1,
+            MinimumBusinessWalletBalance = 0m,
+            EffectiveFromUtc = DateTime.UtcNow,
+            ChangedByUserId = Guid.Parse("90000000-0000-0000-0000-000000000001"),
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedBy = "90000000-0000-0000-0000-000000000001"
+        };
+        otherVersion.MinimumBusinessWalletBalance = 0m;
+        otherVersion.EffectiveFromUtc = DateTime.UtcNow;
+        if (db.Entry(otherVersion).State == EntityState.Detached) db.BusinessTypeWalletMinimumVersions.Add(otherVersion);
         await db.SaveChangesAsync();
     }
 

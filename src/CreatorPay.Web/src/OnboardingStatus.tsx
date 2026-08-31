@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { statusLabel } from './apiClient'
+import { AccountStatusBadge } from './AccountChrome'
 import { getAccessToken } from './sessionStore'
 
 type Status = {
   accountStatus: string
+  effectiveStatus?: string
+  effectiveStatusReason?: string
   creatorStatus?: string
   merchantStatus?: string
   nextStep: string
@@ -60,6 +62,7 @@ export function OnboardingStatus({
   }
 
   const status =
+    data.effectiveStatus ??
     data.creatorStatus ??
     data.merchantStatus ??
     data.accountStatus
@@ -82,7 +85,7 @@ export function OnboardingStatus({
 
       <h2 id="onboarding-status">{displayName}</h2>
 
-      <span className="status">{statusLabel(status)}</span>
+      <AccountStatusBadge status={status} />
 
       <p>{message}</p>
     </section>

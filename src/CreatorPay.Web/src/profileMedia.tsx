@@ -11,9 +11,10 @@ export const initials=(value?:string)=>{
 
 export function ProfileAvatar({name,photoUrl,className='',style}:{name?:string;photoUrl?:string;className?:string;style?:CSSProperties}){
   const[failed,setFailed]=useState(false)
-  useEffect(()=>{setFailed(false)},[photoUrl])
+  const[loaded,setLoaded]=useState(false)
+  useEffect(()=>{setFailed(false);setLoaded(false)},[photoUrl])
   const label=initials(name)
   const resolvedPhotoUrl=normalizeProfilePhotoUrl(photoUrl)
-  if(resolvedPhotoUrl&&!failed)return <span className={`avatar creator-avatar ${className}`.trim()} style={style}><img src={resolvedPhotoUrl} alt="" onError={()=>setFailed(true)} /></span>
+  if(resolvedPhotoUrl&&!failed)return <span className={`avatar creator-avatar ${className}`.trim()} style={style} aria-hidden="true">{!loaded&&label}<img src={resolvedPhotoUrl} alt="" hidden={!loaded} onLoad={()=>setLoaded(true)} onError={()=>setFailed(true)} /></span>
   return <span className={`avatar creator-avatar ${className}`.trim()} style={style} aria-hidden="true">{label}</span>
 }

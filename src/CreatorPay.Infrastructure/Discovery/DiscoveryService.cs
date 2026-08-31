@@ -17,35 +17,60 @@ namespace CreatorPay.Infrastructure.Discovery;
 public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutOptions> checkoutOptions, IQrTokenService qrTokens, CreatorQrUrlBuilder qrUrls, ICreatorProfilePhotoStore profilePhotos) : IDiscoveryService
 {
     private readonly string currencyCode = checkoutOptions.Value.CurrencyCode;
-    public async Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, CancellationToken ct)
+
+    public async Task<IReadOnlyList<ShopperBusinessDto>> SearchShopperBusinessesAsync(string? query, string? category, double? latitude, double? longitude, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         var promotedMerchantIds = EligibleCampaigns(now).Select(x => x.MerchantId).Distinct();
-        var merchants = db.Merchants.AsNoTracking().Where(x => x.Status == MerchantStatus.Active
+        var merchants = db.Merchants.AsNoTracking().Where(x => (x.Status == MerchantStatus.Active ||
+                x.Status == MerchantStatus.LowBalance ||
+                x.Status == MerchantStatus.ApprovedUnfunded ||
+                x.Status == MerchantStatus.LowBalanceRestricted ||
+                x.Status == MerchantStatus.FundingRestricted)
             && promotedMerchantIds.Contains(x.Id)
-            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active));
+            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)));
         var term = query?.Trim();
         if (!string.IsNullOrWhiteSpace(term)) merchants = merchants.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.LegalBusinessName, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%"));
         var selectedCategory = category?.Trim();
         if (!string.IsNullOrWhiteSpace(selectedCategory)) merchants = merchants.Where(x => x.Category != null && EF.Functions.ILike(x.Category, selectedCategory));
-        var rows = await merchants.OrderBy(x => x.TradingName).Take(50).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City }).ToListAsync(ct);
+        var rows = await merchants.OrderBy(x => x.TradingName).Take(50).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, x.BusinessAddress, x.Region }).ToListAsync(ct);
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.Id), currencyCode, ct);
-        return rows.Where(x => eligibleMerchantIds.Contains(x.Id)).Select(x => new ShopperBusinessDto(x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, true)).ToArray();
+        var merchantIds = rows.Select(x => x.Id).ToArray();
+        var locationLookup = (await db.MerchantLocations.AsNoTracking()
+            .Where(x => merchantIds.Contains(x.MerchantId) && x.IsActive && x.Latitude.HasValue && x.Longitude.HasValue)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.MerchantId, x.Latitude, x.Longitude })
+            .ToListAsync(ct))
+            .GroupBy(x => x.MerchantId)
+            .ToDictionary(x => x.Key, x => x.First());
+        var ordered = rows.Where(x => eligibleMerchantIds.Contains(x.Id))
+            .Select(x => new ShopperBusinessDto(x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City, true))
+            .ToArray();
+        return latitude.HasValue && longitude.HasValue
+            ? ordered.OrderBy(x => locationLookup.TryGetValue(x.BusinessId, out var location)
+                ? DistanceForCoordinates(location.Latitude, location.Longitude, latitude, longitude) ?? double.MaxValue
+                : double.MaxValue).ThenBy(x => x.BusinessName).ToArray()
+            : ordered;
     }
 
     public async Task<ShopperBusinessDetailDto> GetShopperBusinessAsync(Guid merchantId, CancellationToken ct)
     {
-        var merchant = await db.Merchants.AsNoTracking().Where(x => x.Id == merchantId && x.Status == MerchantStatus.Active
-            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active))
+        var now = DateTime.UtcNow;
+        var merchant = await db.Merchants.AsNoTracking().Where(x => x.Id == merchantId && (x.Status == MerchantStatus.Active ||
+                x.Status == MerchantStatus.LowBalance ||
+                x.Status == MerchantStatus.ApprovedUnfunded ||
+                x.Status == MerchantStatus.LowBalanceRestricted ||
+                x.Status == MerchantStatus.FundingRestricted)
+            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)))
             .Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, x.Category, x.City }).SingleOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Business is unavailable.");
-        var now = DateTime.UtcNow;
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [merchantId], currencyCode, ct);
         if (!eligibleMerchantIds.Contains(merchantId)) throw new KeyNotFoundException("Business is unavailable.");
         var rows = await (from campaign in EligibleCampaigns(now)
                           where campaign.MerchantId == merchantId
                           join partnership in db.MerchantCreatorPartnerships.AsNoTracking() on campaign.MerchantCreatorPartnershipId equals partnership.Id
                           join creator in db.Creators.AsNoTracking() on campaign.CreatorId equals creator.Id
+                          where creator.Status == CreatorStatus.Active
                           select new { campaign.Id, campaign.CreatorId, creator.PublicCreatorId, creator.DisplayName, creator.ProfileImageFileName, partnership.EndDateUtc, campaign.ExpiresAtUtc }).ToListAsync(ct);
         var creatorIds = rows.Select(x => x.CreatorId).Distinct().ToArray();
         var socials = await db.CreatorSocialProfiles.AsNoTracking().Where(x => creatorIds.Contains(x.CreatorId))
@@ -65,20 +90,88 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         return await RewardEligibilityQueries.FundedMerchantIdsAsync(db, ids, currencyCode, ct);
     }
 
-    public async Task<IReadOnlyList<ShopperAdvertisingRowDto>> SearchShopperAdvertisingAsync(string? query, CancellationToken ct)
+    public async Task<IReadOnlyList<ShopperAdvertisingRowDto>> SearchShopperAdvertisingAsync(string? query, string? businessType, double? latitude, double? longitude, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         var relationships = from campaign in EligibleCampaigns(now)
                             join relationship in db.MerchantCreatorPartnerships.AsNoTracking() on campaign.MerchantCreatorPartnershipId equals relationship.Id
                             join merchant in db.Merchants.AsNoTracking() on relationship.MerchantId equals merchant.Id
                             join creator in db.Creators.AsNoTracking() on relationship.CreatorId equals creator.Id
-                            select new { RelationshipId = relationship.Id, MerchantId = merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.City, CreatorId = creator.Id, creator.PublicCreatorId, creator.CreatorCode, creator.DisplayName, creator.ProfileImageFileName, relationship.EndDateUtc, campaign.ExpiresAtUtc };
+                            select new { RelationshipId = relationship.Id, MerchantId = merchant.Id, merchant.PublicMerchantId, merchant.TradingName, merchant.BusinessAddress, merchant.City, merchant.Region, merchant.BusinessType, CreatorId = creator.Id, creator.PublicCreatorId, creator.CreatorCode, creator.DisplayName, creator.ProfileImageFileName, relationship.EndDateUtc, campaign.StartsAtUtc, campaign.ExpiresAtUtc };
         var term = query?.Trim();
-        if (!string.IsNullOrWhiteSpace(term)) relationships = relationships.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.DisplayName, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{term}%"));
+        if (!string.IsNullOrWhiteSpace(term)) relationships = relationships.Where(x => EF.Functions.ILike(x.TradingName, $"%{term}%") || EF.Functions.ILike(x.BusinessAddress, $"%{term}%") || EF.Functions.ILike(x.City, $"%{term}%") || EF.Functions.ILike(x.DisplayName, $"%{term}%") || EF.Functions.ILike(x.PublicMerchantId, $"%{term}%") || EF.Functions.ILike(x.PublicCreatorId, $"%{term}%"));
+        var selectedType = businessType?.Trim();
+        if (!string.IsNullOrWhiteSpace(selectedType)) relationships = relationships.Where(x => x.BusinessType == selectedType);
         var campaignRows = await relationships.OrderBy(x => x.TradingName).ThenBy(x => x.DisplayName).Take(200).ToListAsync(ct);
         var rows = campaignRows.GroupBy(x => x.RelationshipId).Select(x => x.OrderByDescending(y => y.ExpiresAtUtc).First()).Take(100).ToList();
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, rows.Select(x => x.MerchantId).Distinct(), currencyCode, ct);
-        return rows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x => new ShopperAdvertisingRowDto(x.RelationshipId, x.MerchantId, x.PublicMerchantId, x.TradingName, x.City, x.CreatorId, x.PublicCreatorId, x.CreatorCode, x.DisplayName, "Active", Math.Max(1, (int)Math.Ceiling((new[] { x.EndDateUtc, x.ExpiresAtUtc }.Where(v => v.HasValue).Min()!.Value - now).TotalDays)), true, PhotoUrl(x.PublicCreatorId, x.ProfileImageFileName))).ToArray();
+        var relationshipIds = rows.Select(x => x.RelationshipId).Distinct().ToArray();
+        var merchantIds = rows.Select(x => x.MerchantId).Distinct().ToArray();
+        var creatorIds = rows.Select(x => x.CreatorId).Distinct().ToArray();
+        var locationLookup = (await db.MerchantLocations.AsNoTracking()
+            .Where(x => merchantIds.Contains(x.MerchantId) && x.IsActive)
+            .OrderByDescending(x => x.Latitude.HasValue && x.Longitude.HasValue)
+            .ThenBy(x => x.Name)
+            .Select(x => new { x.MerchantId, x.AddressLine1, x.AddressLine2, x.City, x.Region, x.Latitude, x.Longitude })
+            .ToListAsync(ct))
+            .GroupBy(x => x.MerchantId)
+            .ToDictionary(x => x.Key, x => x.First());
+        var followerCounts = await db.CreatorSocialProfiles.AsNoTracking()
+            .Where(x => creatorIds.Contains(x.CreatorId))
+            .GroupBy(x => x.CreatorId)
+            .Select(x => new { CreatorId = x.Key, Followers = x.Max(y => y.FollowerCount) })
+            .ToDictionaryAsync(x => x.CreatorId, x => x.Followers, ct);
+        var promoVideos = await db.PromotionVideos.AsNoTracking()
+            .Where(x => relationshipIds.Contains(x.MerchantCreatorPartnershipId))
+            .OrderByDescending(x => x.SubmittedAtUtc)
+            .ToListAsync(ct);
+        return rows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x =>
+        {
+            var relationshipEnd = x.EndDateUtc ?? x.ExpiresAtUtc;
+            var video = CurrentVideo(promoVideos, x.RelationshipId, relationshipEnd, now);
+            if (video is null || video.Status != "Live") return null;
+            locationLookup.TryGetValue(x.MerchantId, out var location);
+            var distance = DistanceForCoordinates(location?.Latitude, location?.Longitude, latitude, longitude);
+            var row = new ShopperAdvertisingRowDto(
+                x.RelationshipId,
+                x.MerchantId,
+                x.PublicMerchantId,
+                x.TradingName,
+                location?.City ?? x.City,
+                x.CreatorId,
+                x.PublicCreatorId,
+                x.CreatorCode,
+                x.DisplayName,
+                "Active",
+                Math.Max(1, (int)Math.Ceiling((new[] { x.EndDateUtc, x.ExpiresAtUtc }.Where(v => v.HasValue).Min()!.Value - now).TotalDays)),
+                true,
+                PhotoUrl(x.PublicCreatorId, x.ProfileImageFileName),
+                x.BusinessType,
+                location?.AddressLine1 ?? x.BusinessAddress,
+                location?.AddressLine2,
+                location?.Region ?? x.Region,
+                video is { Status: "Live" } ? video.VideoUrl : null,
+                video?.Platform,
+                video?.Status,
+                video?.RejectionReason,
+                video?.SubmittedAtUtc,
+                video?.ReviewedAtUtc,
+                distance,
+                location?.Latitude,
+                location?.Longitude);
+            return new
+            {
+                Row = row,
+                Followers = followerCounts.GetValueOrDefault(x.CreatorId),
+                x.StartsAtUtc
+            };
+        }).Where(x => x is not null).Select(x => x!)
+            .OrderByDescending(x => x.Followers)
+            .ThenByDescending(x => x.StartsAtUtc)
+            .ThenBy(x => x.Row.BusinessName)
+            .ThenBy(x => x.Row.CreatorName)
+            .Select(x => x.Row)
+            .ToArray();
     }
 
     public async Task<ShopperCreatorQrDto> GetShopperCreatorQrAsync(Guid relationshipId, CancellationToken ct)
@@ -103,7 +196,7 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         var campaignRows = await EligibleCampaigns(now).Select(x => new { x.CreatorId, x.MerchantId }).ToListAsync(ct);
         var eligibleMerchantIds = await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, campaignRows.Select(x => x.MerchantId), currencyCode, ct);
         var eligibleCreatorIds = campaignRows.Where(x => eligibleMerchantIds.Contains(x.MerchantId)).Select(x => x.CreatorId).Distinct().ToArray();
-        var creators = db.Creators.AsNoTracking().Where(x => x.Status == CreatorStatus.Active && eligibleCreatorIds.Contains(x.Id));
+        var creators = db.Creators.AsNoTracking().Where(x => x.Status == CreatorStatus.Active && db.UserAccounts.Any(a => a.CreatorId == x.Id && a.Role == UserRole.Creator && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)) && eligibleCreatorIds.Contains(x.Id));
         var term = query?.Trim();
         if (!string.IsNullOrWhiteSpace(term)) creators = creators.Where(x => EF.Functions.ILike(x.DisplayName, $"%{term}%"));
         var total = await creators.CountAsync(ct);
@@ -118,7 +211,8 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
     public async Task<PublicCreatorProfileDto> GetCreatorAsync(string publicCreatorId, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active, ct)
+        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active
+            && db.UserAccounts.Any(a => a.CreatorId == x.Id && a.Role == UserRole.Creator && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)), ct)
             ?? throw new KeyNotFoundException("Creator is unavailable.");
         var offerData = await (from campaign in EligibleCampaigns(now)
                                where campaign.CreatorId == creator.Id
@@ -137,7 +231,8 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
 
     public async Task<CreatorPhotoFile> GetCreatorPhotoAsync(string publicCreatorId, CancellationToken ct)
     {
-        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active && x.ProfileImageFileName != null, ct)
+        var creator = await db.Creators.AsNoTracking().SingleOrDefaultAsync(x => x.PublicCreatorId == publicCreatorId && x.Status == CreatorStatus.Active && x.ProfileImageFileName != null
+            && db.UserAccounts.Any(a => a.CreatorId == x.Id && a.Role == UserRole.Creator && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= DateTime.UtcNow)), ct)
             ?? throw new KeyNotFoundException("Creator photo is unavailable.");
         return new(await profilePhotos.OpenAsync(creator.ProfileImageFileName!, ct), creator.ProfileImageContentType ?? "application/octet-stream");
     }
@@ -173,7 +268,45 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
         join partnership in RewardEligibilityQueries.EligibleRelationships(db, now) on campaign.MerchantCreatorPartnershipId equals partnership.Id
         where campaign.CreatorId == partnership.CreatorId && campaign.MerchantId == partnership.MerchantId
             && campaign.Status == CampaignStatus.Active && campaign.StartsAtUtc <= now && campaign.ExpiresAtUtc > now
+            && db.PromotionVideos.Any(video => video.MerchantCreatorPartnershipId == partnership.Id && video.Status == PromotionVideoStatus.Approved)
         select campaign;
+
+    private static PromotionVideoSummaryDto? CurrentVideo(IEnumerable<PromotionVideo> videos, Guid relationshipId, DateTime? relationshipEndUtc, DateTime now)
+    {
+        var current = videos.Where(x => x.MerchantCreatorPartnershipId == relationshipId)
+            .OrderByDescending(x => x.Status == PromotionVideoStatus.Pending)
+            .ThenByDescending(x => x.Status == PromotionVideoStatus.Approved)
+            .ThenByDescending(x => x.SubmittedAtUtc)
+            .FirstOrDefault();
+        if (current is null) return null;
+        var live = current.Status == PromotionVideoStatus.Approved && relationshipEndUtc.HasValue && relationshipEndUtc > now;
+        var status = current.Status switch
+        {
+            PromotionVideoStatus.Pending => "Pending",
+            PromotionVideoStatus.Rejected => "Rejected",
+            PromotionVideoStatus.Expired => "Expired",
+            PromotionVideoStatus.Approved when live => "Live",
+            PromotionVideoStatus.Approved => "Approved",
+            _ => "Pending"
+        };
+        return new(current.Id, current.VideoUrl, current.Platform, status, current.SubmittedAtUtc, current.ReviewedAtUtc, current.RejectionReason);
+    }
+
+    private static double? DistanceForCoordinates(double? businessLatitude, double? businessLongitude, double? customerLatitude, double? customerLongitude)
+    {
+        if (!businessLatitude.HasValue || !businessLongitude.HasValue || !customerLatitude.HasValue || !customerLongitude.HasValue) return null;
+        return Haversine(customerLatitude.Value, customerLongitude.Value, businessLatitude.Value, businessLongitude.Value);
+    }
+
+    private static double Haversine(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double R = 6371d;
+        static double ToRad(double value) => value * Math.PI / 180d;
+        var dLat = ToRad(lat2 - lat1);
+        var dLon = ToRad(lon2 - lon1);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) + Math.Cos(ToRad(lat1)) * Math.Cos(ToRad(lat2)) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        return 2 * R * Math.Asin(Math.Min(1, Math.Sqrt(a)));
+    }
 
     private static PublicOfferDto MapOffer(OfferRow x) => new(x.CampaignCode,
         string.IsNullOrWhiteSpace(x.Conditions) ? $"{x.MerchantName} Offer" : x.Conditions.Split('\n', 2)[0],
@@ -213,7 +346,13 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
 
     public async Task<IReadOnlyList<MerchantDiscoveryDto>> SearchAsync(string? q, string? zone, CancellationToken ct)
     {
-        var merchants = db.Merchants.Where(x => x.Status == MerchantStatus.Active);
+        var now = DateTime.UtcNow;
+        var merchants = db.Merchants.Where(x => (x.Status == MerchantStatus.Active ||
+                x.Status == MerchantStatus.LowBalance ||
+                x.Status == MerchantStatus.ApprovedUnfunded ||
+                x.Status == MerchantStatus.LowBalanceRestricted ||
+                x.Status == MerchantStatus.FundingRestricted)
+            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)));
         if (!string.IsNullOrWhiteSpace(q)) merchants = merchants.Where(x => x.TradingName.ToLower().Contains(q.Trim().ToLower()));
         var ids = await merchants.Select(x => x.Id).ToListAsync(ct);
         if (!string.IsNullOrWhiteSpace(zone)) ids = ids.Intersect(await db.MerchantPromotionProfiles.Where(x => x.ZoneCode == zone).Select(x => x.MerchantId).ToListAsync(ct)).ToList();
@@ -226,7 +365,12 @@ public sealed class DiscoveryService(ApplicationDbContext db, IOptions<CheckoutO
     public async Task<MerchantDiscoveryDto> GetMerchantAsync(Guid id, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        var merchant = await db.Merchants.SingleOrDefaultAsync(x => x.Id == id && x.Status == MerchantStatus.Active, ct) ?? throw new KeyNotFoundException();
+        var merchant = await db.Merchants.SingleOrDefaultAsync(x => x.Id == id && (x.Status == MerchantStatus.Active ||
+                x.Status == MerchantStatus.LowBalance ||
+                x.Status == MerchantStatus.ApprovedUnfunded ||
+                x.Status == MerchantStatus.LowBalanceRestricted ||
+                x.Status == MerchantStatus.FundingRestricted)
+            && db.UserAccounts.Any(a => a.MerchantId == x.Id && a.Role == UserRole.MerchantAdmin && a.Status == AccountStatus.Active && (a.LockoutEndUtc == null || a.LockoutEndUtc <= now)), ct) ?? throw new KeyNotFoundException();
         if (!(await BusinessAdvertisingEligibility.EligibleMerchantIdsAsync(db, [id], currencyCode, ct)).Contains(id)) throw new KeyNotFoundException();
         var profile = await db.MerchantPromotionProfiles.SingleOrDefaultAsync(x => x.MerchantId == id, ct);
         var trialEligible = !await db.MerchantTrialCredits.AnyAsync(x => x.MerchantId == id && x.Status != TrialCreditStatus.Active, ct);

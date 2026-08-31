@@ -1,8 +1,10 @@
 using CreatorPay.Api.Authentication;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.CustomerVerification;
+using CreatorPay.Application.Notifications;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
+using CreatorPay.Infrastructure.Eligibility;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -18,7 +20,7 @@ public static class AdminEndpoints
     public static IEndpointRouteBuilder MapAdminEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var admin = endpoints.MapGroup("/api/v1/admin").WithTags("Platform administration").RequireAuthorization("AdminOperationsOnly");
-        admin.MapGet("/dashboard/summary", Dashboard).RequireAuthorization("AdminOperationsOnly").RequireRateLimiting("admin-report");
+        admin.MapGet("/dashboard/summary", Dashboard).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
         admin.MapGet("/dashboard/trends", Trends).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
         admin.MapGet("/dashboard/pilot-metrics", PilotMetrics).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
         admin.MapGet("/dashboard/pilot-operations", PilotOperations).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
@@ -28,9 +30,10 @@ public static class AdminEndpoints
         admin.MapGet("/cashiers", Cashiers);
         admin.MapGet("/accounts", Accounts);
         admin.MapPost("/accounts/create", CreateAccount).RequireAuthorization("PlatformAdminOnly");
-        admin.MapGet("/password-reset-requests", PasswordResetRequests).RequireAuthorization("PlatformAdminOnly");
+        admin.MapGet("/password-reset-requests", PasswordResetRequests).RequireAuthorization("AdminOperationsOnly");
         admin.MapPost("/password-reset-requests/{id:guid}/approve", ApprovePasswordReset);
         admin.MapPost("/password-reset-requests/{id:guid}/reject", RejectPasswordReset);
+        admin.MapPost("/password-reset-requests/{id:guid}/delete", DeletePasswordReset);
         admin.MapGet("/reports/financial-summary", FinancialSummary).RequireAuthorization("PlatformAdminOnly").RequireRateLimiting("admin-report");
         admin.MapGet("/purchases", Purchases);
         admin.MapGet("/wallets", Wallets);
@@ -40,7 +43,7 @@ public static class AdminEndpoints
         admin.MapGet("/search", Search).RequireRateLimiting("admin-report");
         admin.MapGet("/support", Support).RequireRateLimiting("admin-report");
         admin.MapGet("/pilot-feedback", PilotFeedback).RequireRateLimiting("admin-report");
-        admin.MapGet("/system", SystemStatus);
+        admin.MapGet("/system", SystemStatus).RequireAuthorization("PlatformAdminOnly");
         admin.MapGet("/operational-alerts", Alerts);
         admin.MapPost("/accounts/{id:guid}/{action}", ChangeAccountStatus);
         admin.MapPost("/accounts/{id:guid}/revoke-sessions", RevokeSessions);
@@ -52,14 +55,14 @@ public static class AdminEndpoints
     private static async Task<IResult> PasswordResetRequests(ApplicationDbContext db, CancellationToken ct)
     {
         var items = await db.SupportRequests.AsNoTracking()
-            .Where(x => x.Subject == "Password Reset" && (x.Status == "Pending" || x.Status == "Approved"))
+            .Where(x => x.Subject == "Password Reset" && x.Status == "Pending")
             .OrderByDescending(x => x.CreatedAtUtc)
-            .Select(x => new { id = x.Id, name = x.Name, phone = x.Contact, role = x.UserType, requestedAtUtc = x.CreatedAtUtc, status = x.Status, canApprove = x.Status == "Pending" })
+            .Select(x => new { id = x.Id, name = x.Name, phone = x.Contact, role = x.UserType, requestedAtUtc = x.CreatedAtUtc, status = x.Status, canApprove = true, canDelete = true })
             .ToListAsync(ct);
         return Results.Ok(items);
     }
 
-    private static async Task<IResult> ApprovePasswordReset(Guid id, HttpContext h, ICurrentUserService current, ApplicationDbContext db, ITokenService tokens, IOptions<PasswordResetOptions> options, CancellationToken ct)
+    private static async Task<IResult> ApprovePasswordReset(Guid id, HttpContext h, ICurrentUserService current, ApplicationDbContext db, ITokenService tokens, IOptions<PasswordResetOptions> options, INotificationService notifications, CancellationToken ct)
     {
         var request = await db.SupportRequests.SingleOrDefaultAsync(x => x.Id == id && x.Subject == "Password Reset", ct);
         if (request is null) return Results.NotFound();
@@ -72,7 +75,21 @@ public static class AdminEndpoints
         request.Status = "Approved"; request.UpdatedAtUtc = now;
         AddPasswordResetAudit(db, current.UserAccountId!.Value, request.Id, "PasswordResetAuthorized", request.PublicReference, request.Contact, request.Status, h.TraceIdentifier, now);
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new { status = "Pending", authorized = true });
+        await notifications.CreateAsync(new(
+            NotificationType.SecurityAlert,
+            $"password-reset-approved:{request.PublicReference}",
+            new Dictionary<string, string>
+            {
+                ["Title"] = "Password reset approved",
+                ["Body"] = "Your password reset request was approved. Return to Password Recovery to create a new password.",
+                ["TargetPath"] = "/",
+            },
+            [new NotificationRecipientRequest(user.Id, NotificationRecipientType.User, NotificationChannel.InApp, null, null)],
+            NotificationPriority.High,
+            h.TraceIdentifier,
+            nameof(SupportRequest),
+            request.Id.ToString()), ct);
+        return Results.Ok(new { status = "Approved", authorized = true });
     }
 
     private static async Task<IResult> RejectPasswordReset(Guid id, HttpContext h, ICurrentUserService current, ApplicationDbContext db, CancellationToken ct)
@@ -85,6 +102,20 @@ public static class AdminEndpoints
         AddPasswordResetAudit(db, current.UserAccountId!.Value, request.Id, "PasswordResetRejected", request.PublicReference, request.Contact, request.Status, h.TraceIdentifier, now);
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { status = "Rejected" });
+    }
+
+    private static async Task<IResult> DeletePasswordReset(Guid id, AdminReason request, HttpContext h, ICurrentUserService current, ApplicationDbContext db, CancellationToken ct)
+    {
+        var item = await db.SupportRequests.SingleOrDefaultAsync(x => x.Id == id && x.Subject == "Password Reset", ct);
+        if (item is null) return Results.NotFound();
+        if (string.IsNullOrWhiteSpace(request.Reason)) return Results.BadRequest(new { detail = "A reason is required." });
+        if (item.Status == "Approved") return Results.Conflict(new { detail = "Approved password reset requests cannot be deleted before completion." });
+        if (item.Status is not ("Pending" or "Rejected")) return Results.Conflict(new { detail = "This password reset request cannot be deleted." });
+        var now = DateTime.UtcNow;
+        AddPasswordResetAudit(db, current.UserAccountId!.Value, item.Id, "PasswordResetDeleted", item.PublicReference, item.Contact, item.Status, h.TraceIdentifier, now);
+        db.SupportRequests.Remove(item);
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> Dashboard(DateTime? from, DateTime? to, Guid? merchantId, ApplicationDbContext db, IWebHostEnvironment env, CancellationToken ct)
@@ -107,7 +138,7 @@ public static class AdminEndpoints
             failedCheckouts = await db.CheckoutSessions.CountAsync(x => x.Status == CheckoutSessionStatus.Rejected || x.Status == CheckoutSessionStatus.Expired || x.Status == CheckoutSessionStatus.Cancelled, ct),
             failedNotifications = await db.NotificationOutboxMessages.CountAsync(x => x.Status == NotificationOutboxStatus.Failed || x.Status == NotificationOutboxStatus.DeadLettered, ct),
             suspiciousActivity = await db.FraudAlerts.CountAsync(x => x.Status == FraudAlertStatus.Open, ct),
-            openSupportRequests = await db.SupportRequests.CountAsync(x => x.Status == "Open" || x.Subject == "Password Reset" && x.Status == "Pending", ct),
+            openSupportRequests = await db.SupportRequests.CountAsync(x => x.Subject == "Password Reset" && x.Status == "Pending", ct),
             notificationDeadLetters = await db.NotificationDeadLetters.CountAsync(x => x.Status != NotificationDeadLetterStatus.Resolved, ct),
             walletsBelowThreshold = await db.MerchantWallets.CountAsync(x => x.Status == MerchantWalletStatus.LowBalance && (!merchantId.HasValue || x.MerchantId == merchantId), ct),
             rejectedOfflineSyncItems = await db.OfflineSyncItemResults.CountAsync(x => x.ResultStatus == "Rejected", ct),
@@ -207,19 +238,145 @@ public static class AdminEndpoints
     private static async Task<IResult> Creators(string? q, CreatorStatus? status, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
     { var query = db.Creators.AsNoTracking(); if (status.HasValue) query = query.Where(x => x.Status == status); if (!string.IsNullOrWhiteSpace(q)) { q = q.Trim(); query = query.Where(x => x.PublicCreatorId.Contains(q) || x.DisplayName.Contains(q) || x.Email.Contains(q)); } return Results.Ok(await Page(query.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.PublicCreatorId, x.DisplayName, email = x.Email, phone = x.PhoneNumber, status = x.Status.ToString(), x.CreatedAtUtc }), page, pageSize, ct)); }
     private static async Task<IResult> Merchants(string? q, MerchantStatus? status, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
-    { var minimum = await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m; var query = db.Merchants.AsNoTracking(); if (status.HasValue) query = query.Where(x => x.Status == status); if (!string.IsNullOrWhiteSpace(q)) { q = q.Trim(); query = query.Where(x => x.PublicMerchantId.Contains(q) || x.TradingName.Contains(q) || (x.Email != null && x.Email.Contains(q))); } return Results.Ok(await Page(query.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.PublicMerchantId, x.TradingName, email = x.Email, phone = x.PhoneNumber, status = x.Status.ToString(), walletBalance = db.MerchantWallets.Where(w => w.MerchantId == x.Id && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() ?? 0m, requiredMinimum = minimum, fundingStatus = x.Status == MerchantStatus.Suspended ? "Suspended" : x.Status == MerchantStatus.Closed ? "Deactivated" : x.Status != MerchantStatus.Active ? "Pending Approval" : (db.MerchantWallets.Where(w => w.MerchantId == x.Id && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() ?? 0m) < minimum ? "Insufficient Funds" : "Active", x.CreatedAtUtc }), page, pageSize, ct)); }
+    {
+        var minimums = await BusinessWalletMinimumQueries.CurrentMinimumsAsync(db, "ETB", ct);
+        var query = db.Merchants.AsNoTracking();
+        if (status.HasValue) query = query.Where(x => x.Status == status);
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            q = q.Trim();
+            query = query.Where(x => x.PublicMerchantId.Contains(q) || x.TradingName.Contains(q) || (x.Email != null && x.Email.Contains(q)));
+        }
+
+        var total = await query.CountAsync(ct);
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize == 0 ? 25 : pageSize, 1, MaxPageSize);
+        var rows = await query.OrderByDescending(x => x.CreatedAtUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new
+            {
+                x.Id,
+                x.PublicMerchantId,
+                x.TradingName,
+                email = x.Email,
+                phone = x.PhoneNumber,
+                businessType = x.BusinessType,
+                status = x.Status.ToString(),
+                walletBalance = db.MerchantWallets.Where(w => w.MerchantId == x.Id && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() ?? 0m,
+                x.CreatedAtUtc
+            })
+            .ToListAsync(ct);
+
+        var items = rows.Select(x =>
+        {
+            var requiredMinimum = MinimumForBusinessType(minimums, x.businessType);
+            var fundingStatus = x.status == nameof(MerchantStatus.Suspended)
+                ? "Suspended"
+                : x.status == nameof(MerchantStatus.Closed)
+                    ? "Deactivated"
+                    : x.status != nameof(MerchantStatus.Active)
+                        ? "Pending Approval"
+                        : x.walletBalance < requiredMinimum
+                            ? "Insufficient Funds"
+                            : "Active";
+            return new
+            {
+                x.Id,
+                x.PublicMerchantId,
+                x.TradingName,
+                x.email,
+                x.phone,
+                status = x.status,
+                x.walletBalance,
+                requiredMinimum,
+                fundingStatus,
+                x.CreatedAtUtc
+            };
+        }).ToList();
+
+        return Results.Ok(new { items, page, pageSize, total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+    }
     private static async Task<IResult> Accounts(ICurrentUserService current, string? q, string? status, UserRole? role, string? business, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        var minimum = await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m;
+        var minimums = await BusinessWalletMinimumQueries.CurrentMinimumsAsync(db, "ETB", ct);
         if (current.Role == nameof(UserRole.OperationsAdmin) && role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
         var query = db.UserAccounts.AsNoTracking();
         if (current.Role == nameof(UserRole.OperationsAdmin)) query = query.Where(x => x.Role != UserRole.PlatformAdmin && x.Role != UserRole.OperationsAdmin);
         if (!string.IsNullOrWhiteSpace(status)) { if (status.Equals("Locked", StringComparison.OrdinalIgnoreCase)) query = query.Where(x => x.LockoutEndUtc > now); else { var normalized = status.Equals("Pending", StringComparison.OrdinalIgnoreCase) ? AccountStatus.PendingVerification : status.Equals("Deactivated", StringComparison.OrdinalIgnoreCase) ? AccountStatus.Closed : Enum.TryParse<AccountStatus>(status, true, out var parsed) ? parsed : (AccountStatus?)null; if (!normalized.HasValue) return Results.BadRequest(new { detail = "Unknown account status filter." }); query = query.Where(x => x.Status == normalized.Value); } }
         if (role.HasValue) query = query.Where(x => x.Role == role);
-        if (!string.IsNullOrWhiteSpace(q)) { var n = q.Trim().ToUpperInvariant(); var raw = q.Trim(); var digits = new string(raw.Where(char.IsDigit).ToArray()); var phoneSuffix = digits.StartsWith("0") ? digits[1..] : digits.StartsWith("251") ? digits[3..] : digits; var phoneFragment = digits.StartsWith("0") ? "251" + digits[1..] : digits; var hasPhone = phoneSuffix.Length > 0; query = query.Where(x => x.NormalizedEmail.Contains(n) || (hasPhone && x.NormalizedPhoneNumber != null && (x.NormalizedPhoneNumber.Contains(phoneFragment) || x.NormalizedPhoneNumber.EndsWith(phoneSuffix))) || (x.CreatorId.HasValue && db.Creators.Any(c => c.Id == x.CreatorId && (c.DisplayName.ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix)))))) || (x.CustomerId.HasValue && db.Customers.Any(c => c.Id == x.CustomerId && (c.DisplayName.ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix)))))) || (x.CashierId.HasValue && db.Cashiers.Any(c => c.Id == x.CashierId && ((c.FirstName + " " + c.LastName).ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix))) || c.Merchant.TradingName.ToUpper().Contains(n) || c.Merchant.PublicMerchantId.ToUpper().Contains(n)))) || (x.MerchantId.HasValue && db.Merchants.Any(m => m.Id == x.MerchantId && (m.TradingName.ToUpper().Contains(n) || m.PublicMerchantId.ToUpper().Contains(n))))); }
+        if (!string.IsNullOrWhiteSpace(q)) { var n = q.Trim().ToUpperInvariant(); var raw = q.Trim(); var digits = new string(raw.Where(char.IsDigit).ToArray()); var phoneSuffix = digits.StartsWith("0") ? digits[1..] : digits.StartsWith("251") ? digits[3..] : digits; var phoneFragment = digits.StartsWith("0") ? "251" + digits[1..] : digits; var hasPhone = phoneSuffix.Length > 0; query = query.Where(x => x.NormalizedEmail.Contains(n) || (x.DisplayName != null && x.DisplayName.ToUpper().Contains(n)) || (hasPhone && x.NormalizedPhoneNumber != null && (x.NormalizedPhoneNumber.Contains(phoneFragment) || x.NormalizedPhoneNumber.EndsWith(phoneSuffix))) || (x.CreatorId.HasValue && db.Creators.Any(c => c.Id == x.CreatorId && (c.DisplayName.ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix)))))) || (x.CustomerId.HasValue && db.Customers.Any(c => c.Id == x.CustomerId && (c.DisplayName.ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix)))))) || (x.CashierId.HasValue && db.Cashiers.Any(c => c.Id == x.CashierId && ((c.FirstName + " " + c.LastName).ToUpper().Contains(n) || (hasPhone && (c.PhoneNumber.Contains(phoneFragment) || c.PhoneNumber.EndsWith(phoneSuffix))) || c.Merchant.TradingName.ToUpper().Contains(n) || c.Merchant.PublicMerchantId.ToUpper().Contains(n)))) || (x.MerchantId.HasValue && db.Merchants.Any(m => m.Id == x.MerchantId && (m.TradingName.ToUpper().Contains(n) || m.PublicMerchantId.ToUpper().Contains(n))))); }
         if (!string.IsNullOrWhiteSpace(business)) { var n = business.Trim().ToUpperInvariant(); query = query.Where(x => x.MerchantId.HasValue && db.Merchants.Any(m => m.Id == x.MerchantId && (m.TradingName.ToUpper().Contains(n) || m.PublicMerchantId.ToUpper().Contains(n)))); }
-        return Results.Ok(await Page(query.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, cashierName = x.CashierId.HasValue ? db.Cashiers.Where(c => c.Id == x.CashierId).Select(c => c.FirstName + " " + c.LastName).FirstOrDefault() : x.CreatorId.HasValue ? db.Creators.Where(c => c.Id == x.CreatorId).Select(c => c.DisplayName).FirstOrDefault() : x.CustomerId.HasValue ? db.Customers.Where(c => c.Id == x.CustomerId).Select(c => c.DisplayName).FirstOrDefault() : null, email = x.Email, phone = x.NormalizedPhoneNumber, businessName = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.TradingName).FirstOrDefault() : null, publicBusinessId = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.PublicMerchantId).FirstOrDefault() : null, assignedLocation = x.CashierId.HasValue ? db.CashierLocationAssignments.Where(a => a.CashierId == x.CashierId && a.IsActive).OrderByDescending(a => a.IsPrimary).Select(a => a.MerchantLocation.Name).FirstOrDefault() : null, role = x.Role.ToString(), status = x.Status.ToString(), x.IsEmailVerified, x.IsPhoneVerified, isLocked = x.LockoutEndUtc > now, x.LastLoginAtUtc, walletBalance = x.Role == UserRole.MerchantAdmin && x.MerchantId.HasValue ? db.MerchantWallets.Where(w => w.MerchantId == x.MerchantId && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() : null, requiredMinimum = x.Role == UserRole.MerchantAdmin && x.MerchantId.HasValue ? minimum : (decimal?)null, fundingStatus = x.Role != UserRole.MerchantAdmin || !x.MerchantId.HasValue ? null : x.Status == AccountStatus.Suspended ? "Suspended" : x.Status == AccountStatus.Closed ? "Deactivated" : x.Status != AccountStatus.Active ? "Pending Approval" : (db.MerchantWallets.Where(w => w.MerchantId == x.MerchantId && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() ?? 0m) < minimum ? "Insufficient Funds" : "Active" }), page, pageSize, ct));
+        var total = await query.CountAsync(ct);
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize == 0 ? 25 : pageSize, 1, MaxPageSize);
+        var rows = await query.OrderByDescending(x => x.CreatedAtUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new
+            {
+                x.Id,
+                name = x.Role == UserRole.PlatformAdmin || x.Role == UserRole.OperationsAdmin ? (x.DisplayName ?? x.Email) : x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.PrimaryContactName).FirstOrDefault() : x.CashierId.HasValue ? db.Cashiers.Where(c => c.Id == x.CashierId).Select(c => c.FirstName + " " + c.LastName).FirstOrDefault() : x.CreatorId.HasValue ? db.Creators.Where(c => c.Id == x.CreatorId).Select(c => c.DisplayName).FirstOrDefault() : x.CustomerId.HasValue ? db.Customers.Where(c => c.Id == x.CustomerId).Select(c => c.DisplayName).FirstOrDefault() : x.Email,
+                cashierName = x.CashierId.HasValue ? db.Cashiers.Where(c => c.Id == x.CashierId).Select(c => c.FirstName + " " + c.LastName).FirstOrDefault() : x.CreatorId.HasValue ? db.Creators.Where(c => c.Id == x.CreatorId).Select(c => c.DisplayName).FirstOrDefault() : x.CustomerId.HasValue ? db.Customers.Where(c => c.Id == x.CustomerId).Select(c => c.DisplayName).FirstOrDefault() : null,
+                email = x.Email,
+                phone = x.NormalizedPhoneNumber,
+                businessName = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.TradingName).FirstOrDefault() : null,
+                publicBusinessId = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.PublicMerchantId).FirstOrDefault() : null,
+                merchantBusinessType = x.MerchantId.HasValue ? db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.BusinessType).FirstOrDefault() : null,
+                publicCreatorId = x.CreatorId.HasValue ? db.Creators.Where(c => c.Id == x.CreatorId).Select(c => c.PublicCreatorId).FirstOrDefault() : null,
+                publicCustomerId = x.CustomerId.HasValue ? db.Customers.Where(c => c.Id == x.CustomerId).Select(c => c.PublicCustomerId).FirstOrDefault() : null,
+                merchantId = x.MerchantId,
+                assignedLocation = x.CashierId.HasValue ? db.CashierLocationAssignments.Where(a => a.CashierId == x.CashierId && a.IsActive).OrderByDescending(a => a.IsPrimary).Select(a => a.MerchantLocation.Name).FirstOrDefault() : null,
+                role = x.Role.ToString(),
+                status = x.Status.ToString(),
+                x.IsEmailVerified,
+                x.IsPhoneVerified,
+                isLocked = x.LockoutEndUtc > now,
+                x.LastLoginAtUtc,
+                walletBalance = x.Role == UserRole.MerchantAdmin && x.MerchantId.HasValue ? db.MerchantWallets.Where(w => w.MerchantId == x.MerchantId && w.CurrencyCode == "ETB").Select(w => (decimal?)w.AvailableBalance).FirstOrDefault() : null
+            })
+            .ToListAsync(ct);
+
+        var items = rows.Select(x =>
+        {
+            var requiredMinimum = x.role == nameof(UserRole.MerchantAdmin) && x.merchantBusinessType is not null ? MinimumForBusinessType(minimums, x.merchantBusinessType) : (decimal?)null;
+            var fundingStatus = x.role != nameof(UserRole.MerchantAdmin) || x.businessName is null || requiredMinimum is null
+                ? null
+                : x.status == nameof(AccountStatus.Suspended)
+                    ? "Suspended"
+                    : x.status == nameof(AccountStatus.Closed)
+                        ? "Deactivated"
+                        : x.status != nameof(AccountStatus.Active)
+                            ? "Pending Approval"
+                            : (x.walletBalance ?? 0m) < requiredMinimum
+                                ? "Insufficient Funds"
+                                : "Active";
+            return new
+            {
+                x.Id,
+                x.name,
+                x.cashierName,
+                x.email,
+                x.phone,
+                x.businessName,
+                x.publicBusinessId,
+                x.merchantId,
+                x.merchantBusinessType,
+                x.assignedLocation,
+                x.role,
+                x.status,
+                x.IsEmailVerified,
+                x.IsPhoneVerified,
+                x.isLocked,
+                x.LastLoginAtUtc,
+                x.walletBalance,
+                requiredMinimum,
+                fundingStatus
+            };
+        }).ToList();
+
+        return Results.Ok(new { items, page, pageSize, total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
     }
     private static Task<IResult> Cashiers(int page, int pageSize, ApplicationDbContext db, CancellationToken ct) => CashierPage(null, page, pageSize, db, ct);
     private static Task<IResult> MerchantCashiers(Guid merchantId, int page, int pageSize, ApplicationDbContext db, CancellationToken ct) => CashierPage(merchantId, page, pageSize, db, ct);
@@ -245,16 +402,16 @@ public static class AdminEndpoints
     { var query = db.PurchaseTransactions.AsNoTracking(); if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => x.PublicTransactionId.Contains(q)); if (merchantId.HasValue) query = query.Where(x => x.MerchantId == merchantId); if (creatorId.HasValue) query = query.Where(x => x.CreatorId == creatorId); if (status.HasValue) query = query.Where(x => x.Status == status); if (from.HasValue) query = query.Where(x => x.TransactionDateUtc >= Normalize(from, null)); if (to.HasValue) query = query.Where(x => x.TransactionDateUtc <= Normalize(to, null)); return Results.Ok(await Page(query.OrderByDescending(x => x.TransactionDateUtc).Select(x => new { x.Id, x.PublicTransactionId, x.MerchantId, x.CreatorId, x.MerchantLocationId, x.CashierId, actorRole = x.CashierId.HasValue ? "Cashier" : "Business Owner", actorName = x.CashierId.HasValue ? db.Cashiers.Where(c => c.Id == x.CashierId).Select(c => c.FirstName + " " + c.LastName).FirstOrDefault() : db.Merchants.Where(m => m.Id == x.MerchantId).Select(m => m.PrimaryContactName).FirstOrDefault(), x.CreatedByUserId, x.PurchaseAmount, x.CurrencyCode, status = x.Status.ToString(), x.TransactionDateUtc, x.CorrelationId, idempotencyKey = MaskKey(x.IdempotencyKey) }), page, pageSize, ct)); }
     private static async Task<IResult> Wallets(string? q, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
     {
-        var minimum = await db.PlatformFinancialSettings.AsNoTracking().Where(x => x.CurrencyCode == "ETB").Select(x => (decimal?)x.MinimumBusinessWalletBalance).SingleOrDefaultAsync(ct) ?? 0m;
+        var minimums = await BusinessWalletMinimumQueries.CurrentMinimumsAsync(db, "ETB", ct);
         var query = from w in db.MerchantWallets.AsNoTracking()
                     join m in db.Merchants.AsNoTracking() on w.MerchantId equals m.Id
                     select new
                     {
                         id = w.Id,
                         business = m.TradingName,
+                        businessType = m.BusinessType,
+                        merchantStatus = m.Status.ToString(),
                         w.AvailableBalance,
-                        requiredMinimum = minimum,
-                        fundingStatus = m.Status == MerchantStatus.Suspended ? "Suspended" : m.Status == MerchantStatus.Closed ? "Deactivated" : m.Status != MerchantStatus.Active ? "Pending Approval" : w.AvailableBalance < minimum ? "Insufficient Funds" : "Active",
                         lastDeposit = db.MerchantDeposits
                             .Where(d => d.MerchantId == m.Id && d.Status == MerchantDepositStatus.Completed)
                             .OrderByDescending(d => d.VerifiedAtUtc)
@@ -263,7 +420,34 @@ public static class AdminEndpoints
                         status = w.Status.ToString()
                     };
         if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => x.business.Contains(q));
-        return Results.Ok(await Page(query.OrderBy(x => x.business), page, pageSize, ct));
+        var total = await query.CountAsync(ct);
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize == 0 ? 25 : pageSize, 1, MaxPageSize);
+        var rows = await query.OrderBy(x => x.business).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        var items = rows.Select(x =>
+        {
+            var requiredMinimum = MinimumForBusinessType(minimums, x.businessType);
+            var fundingStatus = x.merchantStatus == nameof(MerchantStatus.Suspended)
+                ? "Suspended"
+                : x.merchantStatus == nameof(MerchantStatus.Closed)
+                    ? "Deactivated"
+                    : x.merchantStatus != nameof(MerchantStatus.Active)
+                        ? "Pending Approval"
+                        : x.AvailableBalance < requiredMinimum
+                            ? "Insufficient Funds"
+                            : "Active";
+            return new
+            {
+                x.id,
+                x.business,
+                x.AvailableBalance,
+                requiredMinimum,
+                fundingStatus,
+                x.lastDeposit,
+                x.status
+            };
+        }).ToList();
+        return Results.Ok(new { items, page, pageSize, total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
     }
     private static async Task<IResult> Partnerships(Guid? merchantId, Guid? creatorId, PartnershipStatus? status, int page, int pageSize, ApplicationDbContext db, CancellationToken ct)
     { var q = db.MerchantCreatorPartnerships.AsNoTracking(); if (merchantId.HasValue) q = q.Where(x => x.MerchantId == merchantId); if (creatorId.HasValue) q = q.Where(x => x.CreatorId == creatorId); if (status.HasValue) q = q.Where(x => x.Status == status); return Results.Ok(await Page(q.OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.MerchantId, x.CreatorId, status = x.Status.ToString(), x.CreatedAtUtc, x.UpdatedAtUtc }), page, pageSize, ct)); }
@@ -322,7 +506,7 @@ public static class AdminEndpoints
                 case UserRole.PlatformAdmin:
                     {
                         if (string.IsNullOrWhiteSpace(email)) return Results.Problem(detail: "Email is required for PlatformAdmin.", statusCode: StatusCodes.Status400BadRequest);
-                        var account = new UserAccount { Id = Guid.NewGuid(), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.PlatformAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        var account = new UserAccount { Id = Guid.NewGuid(), DisplayName = CleanOptional(request.DisplayName), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.PlatformAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
                         account.PasswordHash = passwords.Hash(account, request.Password);
                         db.Add(account);
                         createdAccounts.Add(account.Id);
@@ -331,7 +515,7 @@ public static class AdminEndpoints
                 case UserRole.OperationsAdmin:
                     {
                         if (string.IsNullOrWhiteSpace(email)) return Results.Problem(detail: "Email is required for OperationsAdmin.", statusCode: StatusCodes.Status400BadRequest);
-                        var account = new UserAccount { Id = Guid.NewGuid(), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.OperationsAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
+                        var account = new UserAccount { Id = Guid.NewGuid(), DisplayName = CleanOptional(request.DisplayName), Email = email, NormalizedEmail = normalizedEmail, PhoneNumber = phone, NormalizedPhoneNumber = phone is null ? null : normalizedPhone, Role = UserRole.OperationsAdmin, Status = AccountStatus.Active, IsEmailVerified = true, IsPhoneVerified = phone is not null, CreatedAtUtc = now, CreatedBy = actor.ToString() };
                         account.PasswordHash = passwords.Hash(account, request.Password);
                         db.Add(account);
                         createdAccounts.Add(account.Id);
@@ -435,22 +619,70 @@ public static class AdminEndpoints
     private static async Task<IResult> ChangeAccountStatus(Guid id, string action, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct)
     {
         var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound();
-        if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
         if (string.IsNullOrWhiteSpace(request.Reason)) return Results.BadRequest(new { error = "A reason is required." });
-        var normalized = action.Trim().ToLowerInvariant(); var before = account.Status;
-        if (normalized == "lock") { account.LockoutEndUtc = DateTime.UtcNow.AddYears(100); account.FailedLoginCount = Math.Max(account.FailedLoginCount, 5); }
-        else if (normalized == "unlock") { account.LockoutEndUtc = null; account.FailedLoginCount = 0; }
-        else if (normalized is "suspend" or "deactivate") account.Status = normalized == "deactivate" ? AccountStatus.Closed : AccountStatus.Suspended;
-        else if (normalized == "reactivate" && account.Status is AccountStatus.Suspended or AccountStatus.Closed) account.Status = AccountStatus.Active;
+        var normalized = action.Trim().ToLowerInvariant(); var before = account.Status; var now = DateTime.UtcNow;
+        if (normalized == "lock") { if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid(); account.LockoutEndUtc = now.AddYears(100); account.FailedLoginCount = Math.Max(account.FailedLoginCount, 5); }
+        else if (normalized == "unlock") { if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid(); account.LockoutEndUtc = null; account.FailedLoginCount = 0; }
+        else if (normalized is "suspend" or "deactivate")
+        {
+            if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
+            account.Status = normalized == "deactivate" ? AccountStatus.Closed : AccountStatus.Suspended;
+        }
+        else if (normalized == "reactivate" && account.Status is AccountStatus.Suspended or AccountStatus.Closed)
+        {
+            if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
+            account.Status = AccountStatus.Active;
+        }
+        else if (normalized == "delete")
+        {
+            if (user.Role != nameof(UserRole.PlatformAdmin)) return Results.Forbid();
+            if (account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid();
+            await DeleteAccount(account, db, now, ct);
+        }
         else if (normalized == "reactivate") return Results.Conflict(new { error = "Only a suspended or deactivated approved account can be reactivated." });
         else return Results.BadRequest(new { error = "Unsupported account action." });
-        if (account.CreatorId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var creator = await db.Creators.SingleAsync(x => x.Id == account.CreatorId, ct); creator.Status = normalized == "reactivate" ? CreatorStatus.Active : normalized == "deactivate" ? CreatorStatus.Closed : CreatorStatus.Suspended; creator.UpdatedAtUtc = DateTime.UtcNow; }
-        if (account.Role == UserRole.MerchantAdmin && account.MerchantId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var merchant = await db.Merchants.SingleAsync(x => x.Id == account.MerchantId, ct); merchant.Status = normalized == "reactivate" ? MerchantStatus.Active : normalized == "deactivate" ? MerchantStatus.Closed : MerchantStatus.Suspended; merchant.UpdatedAtUtc = DateTime.UtcNow; }
-        if (account.Role == UserRole.Cashier && account.CashierId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var cashier = await db.Cashiers.SingleAsync(x => x.Id == account.CashierId, ct); cashier.IsActive = normalized == "reactivate"; cashier.UpdatedAtUtc = DateTime.UtcNow; }
-        account.UpdatedAtUtc = DateTime.UtcNow; await AddAudit(db, user.UserAccountId!.Value, $"AdminAccount{char.ToUpperInvariant(normalized[0]) + normalized[1..]}", id, $"{request.Reason}; PreviousStatus={before}; NewStatus={account.Status}", h.TraceIdentifier, ct); return Results.NoContent();
+        if (account.CreatorId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var creator = await db.Creators.SingleAsync(x => x.Id == account.CreatorId, ct); creator.Status = normalized == "reactivate" ? CreatorStatus.Active : normalized == "deactivate" ? CreatorStatus.Closed : CreatorStatus.Suspended; creator.UpdatedAtUtc = now; }
+        if (account.Role == UserRole.MerchantAdmin && account.MerchantId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var merchant = await db.Merchants.SingleAsync(x => x.Id == account.MerchantId, ct); merchant.Status = normalized == "reactivate" ? MerchantStatus.Active : normalized == "deactivate" ? MerchantStatus.Closed : MerchantStatus.Suspended; merchant.UpdatedAtUtc = now; }
+        if (account.Role == UserRole.Cashier && account.CashierId.HasValue && normalized is "suspend" or "deactivate" or "reactivate") { var cashier = await db.Cashiers.SingleAsync(x => x.Id == account.CashierId, ct); cashier.IsActive = normalized == "reactivate"; cashier.UpdatedAtUtc = now; }
+        account.UpdatedAtUtc = now; await AddAudit(db, user.UserAccountId!.Value, $"AdminAccount{char.ToUpperInvariant(normalized[0]) + normalized[1..]}", id, $"{request.Reason}; PreviousStatus={before}; NewStatus={account.Status}", h.TraceIdentifier, ct); return Results.NoContent();
+    }
+
+    private static async Task DeleteAccount(UserAccount account, ApplicationDbContext db, DateTime now, CancellationToken ct)
+    {
+        await db.RefreshTokens.Where(x => x.UserAccountId == account.Id && x.RevokedAtUtc == null).ExecuteUpdateAsync(x => x.SetProperty(token => token.RevokedAtUtc, now).SetProperty(token => token.RevokedReason, "Account deleted"), ct);
+        account.Status = AccountStatus.Closed;
+        account.Email = $"deleted+{account.Id:N}@deleted.weymela.invalid";
+        account.NormalizedEmail = account.Email.ToUpperInvariant();
+        account.PhoneNumber = null;
+        account.NormalizedPhoneNumber = null;
+        account.PasswordHash = string.Empty;
+        account.IsEmailVerified = false;
+        account.IsPhoneVerified = false;
+        account.RecoveryEmail = null;
+        account.NormalizedRecoveryEmail = null;
+        account.IsRecoveryEmailVerified = false;
+        account.FirebaseUid = null;
+        account.PinHash = null;
+        account.PinFailedAttemptCount = 0;
+        account.PinLockedAtUtc = null;
+        account.PinRetryNotBeforeUtc = null;
+        account.PinEnrolledAtUtc = null;
+        account.PinChangedAtUtc = null;
+        account.LockoutEndUtc = null;
+        account.FailedLoginCount = 0;
+        account.LastFailedLoginAtUtc = null;
+        account.LastLoginAtUtc = null;
+        account.BirthDate = null;
+        account.UpdatedAtUtc = now;
+        account.UpdatedBy = "admin-delete";
+        if (account.Role == UserRole.Creator && account.CreatorId.HasValue) { var creator = await db.Creators.SingleAsync(x => x.Id == account.CreatorId, ct); creator.Status = CreatorStatus.Closed; creator.UpdatedAtUtc = now; creator.UpdatedBy = "admin-delete"; }
+        else if (account.Role == UserRole.Customer && account.CustomerId.HasValue) { var customer = await db.Customers.SingleAsync(x => x.Id == account.CustomerId, ct); customer.Status = CustomerStatus.Closed; customer.UpdatedAtUtc = now; customer.UpdatedBy = "admin-delete"; }
+        else if (account.Role == UserRole.MerchantAdmin && account.MerchantId.HasValue) { var merchant = await db.Merchants.SingleAsync(x => x.Id == account.MerchantId, ct); merchant.Status = MerchantStatus.Closed; merchant.UpdatedAtUtc = now; merchant.UpdatedBy = "admin-delete"; }
+        else if (account.Role == UserRole.Cashier && account.CashierId.HasValue) { var cashier = await db.Cashiers.SingleAsync(x => x.Id == account.CashierId, ct); cashier.IsActive = false; cashier.UpdatedAtUtc = now; cashier.UpdatedBy = "admin-delete"; }
     }
     private static async Task<IResult> RevokeSessions(Guid id, AdminReason request, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct); if (account is null) return Results.NotFound(); if (user.Role == nameof(UserRole.OperationsAdmin) && account.Role is UserRole.PlatformAdmin or UserRole.OperationsAdmin) return Results.Forbid(); var tokens = await db.RefreshTokens.Where(x => x.UserAccountId == id && x.RevokedAtUtc == null).ToListAsync(ct); foreach (var token in tokens) token.RevokedAtUtc = DateTime.UtcNow; await AddAudit(db, user.UserAccountId!.Value, "AdminSessionsRevoked", id, request.Reason, h.TraceIdentifier, ct); return Results.NoContent(); }
     private static async Task<IResult> ChangeAlert(Guid id, string status, string reason, HttpContext h, ICurrentUserService user, ApplicationDbContext db, CancellationToken ct) { var alert = await db.OperationalAlerts.SingleOrDefaultAsync(x => x.Id == id, ct); if (alert is null) return Results.NotFound(); var old = alert.Status; alert.Status = status; alert.UpdatedAtUtc = DateTime.UtcNow; if (status == "Acknowledged") { alert.AcknowledgedAtUtc = DateTime.UtcNow; alert.AcknowledgedByUserId = user.UserAccountId; } if (status == "Resolved") alert.ResolvedAtUtc = DateTime.UtcNow; db.OperationalAlertHistories.Add(new() { Id = Guid.NewGuid(), OperationalAlertId = id, PreviousStatus = old, NewStatus = status, ActorUserId = user.UserAccountId!.Value, Reason = reason, ChangedAtUtc = DateTime.UtcNow, CreatedAtUtc = DateTime.UtcNow }); await AddAudit(db, user.UserAccountId.Value, $"OperationalAlert{status}", id, reason, h.TraceIdentifier, ct); return Results.NoContent(); }
+    private static decimal MinimumForBusinessType(IReadOnlyDictionary<string, decimal> minimums, string? businessType) => minimums.TryGetValue(BusinessWalletMinimumQueries.NormalizeBusinessType(businessType), out var minimum) ? minimum : minimums["Other"];
     private static void AddPasswordResetAudit(ApplicationDbContext db, Guid actor, Guid subject, string eventType, string reference, string contact, string status, string correlation, DateTime now)
         => db.OperationalAuditEvents.Add(new()
         {

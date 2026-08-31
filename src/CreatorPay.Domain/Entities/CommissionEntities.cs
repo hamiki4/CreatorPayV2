@@ -64,6 +64,15 @@ public sealed class PlatformFinancialSetting : Entity
     public Guid ChangedByUserId { get; set; }
     public DateTime ChangedAtUtc { get; set; }
 }
+public sealed class BusinessTypeWalletMinimumVersion : Entity
+{
+    public string CurrencyCode { get; set; } = "ETB";
+    public string BusinessType { get; set; } = string.Empty;
+    public int VersionNumber { get; set; }
+    public decimal MinimumBusinessWalletBalance { get; set; }
+    public DateTime EffectiveFromUtc { get; set; }
+    public Guid ChangedByUserId { get; set; }
+}
 public sealed class PayoutScheduleVersion : Entity
 {
     public string CurrencyCode { get; set; } = "ETB";

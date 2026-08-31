@@ -64,7 +64,7 @@ test('creator photos are reused in business and customer discovery cards',()=>{
   assert.match(business,/Find Creators/)
   assert.match(business,/Active Ads/)
   assert.match(business,/Requests/)
-  assert.match(customer,/Discover Businesses/)
+  assert.match(customer,/Discover Promotions/)
   assert.match(profile,/export const creatorPhotoUrl/)
   assert.match(creator,/AccountChrome[^]*photoUrl=\{photo\}/)
   assert.match(creator,/identityMedia=/)

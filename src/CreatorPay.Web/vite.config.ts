@@ -10,5 +10,9 @@ export default defineConfig(({mode}) => {
   }
   const apiUrl=environment.VITE_API_URL??mobileApiUrls[mode]??(mode==='development'?'http://localhost:5225':'')
   const health:Plugin={name:'creatorpay-health',configureServer(server){server.middlewares.use('/healthz',(_request,response)=>{response.statusCode=200;response.setHeader('Content-Type','text/plain');response.end('healthy')})}}
-  return {plugins:[react(),health],define:{'import.meta.env.VITE_API_URL':JSON.stringify(apiUrl)}}
+  return {
+    plugins:[react(),health],
+    server:{allowedHosts:['creatorpay-navfix-web','localhost','127.0.0.1']},
+    define:{'import.meta.env.VITE_API_URL':JSON.stringify(apiUrl)},
+  }
 })

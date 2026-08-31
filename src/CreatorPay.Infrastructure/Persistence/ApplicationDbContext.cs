@@ -22,6 +22,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<CampaignRenewalRequest> CampaignRenewalRequests => Set<CampaignRenewalRequest>();
     public DbSet<PartnershipLocation> PartnershipLocations => Set<PartnershipLocation>();
     public DbSet<PartnershipStatusHistory> PartnershipStatusHistories => Set<PartnershipStatusHistory>();
+    public DbSet<PromotionVideo> PromotionVideos => Set<PromotionVideo>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<LoginAudit> LoginAudits => Set<LoginAudit>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
@@ -43,6 +44,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<CommissionCalculationSnapshot> CommissionCalculationSnapshots => Set<CommissionCalculationSnapshot>();
     public DbSet<CommissionAuditEvent> CommissionAuditEvents => Set<CommissionAuditEvent>();
     public DbSet<PlatformFinancialSetting> PlatformFinancialSettings => Set<PlatformFinancialSetting>();
+    public DbSet<BusinessTypeWalletMinimumVersion> BusinessTypeWalletMinimumVersions => Set<BusinessTypeWalletMinimumVersion>();
     public DbSet<PayoutScheduleVersion> PayoutScheduleVersions => Set<PayoutScheduleVersion>();
     public DbSet<MerchantWallet> MerchantWallets => Set<MerchantWallet>();
     public DbSet<MerchantWalletEntry> MerchantWalletEntries => Set<MerchantWalletEntry>();

@@ -192,6 +192,7 @@ test("Shopper phone registration, activation, login, and supported password rese
     page.getByRole("button", { name: "Check Approval Status" }).click(),
   ]);
   await expect(page.getByRole("status")).toContainText("Status: Approved");
+  await expect(page.getByRole("heading", { name: "Password Reset Approved" })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Your request was approved. Create a new password.");
   await page.getByLabel("New Password").fill(nextPassword);
   await page.getByLabel("Confirm Password").fill(nextPassword);
@@ -336,7 +337,7 @@ test("Business creates phone-only Cashier; OTP activation routes Cashier dashboa
   }
   await signIn(page, cashier);
   await expect(
-    page.getByRole("heading", { name: "Cashier Dashboard" }),
+    page.getByRole("heading", { name: "Cashier", exact: true }),
   ).toBeVisible();
   await noOverflow(page);
 });

@@ -1,3 +1,4 @@
+using CreatorPay.Application.Accounts;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Application.CustomerVerification;
@@ -83,8 +84,8 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         var errors = policy.Validate(request.NewPassword); if (errors.Count > 0) return OperationResult.Failure(string.Join(" ", errors));
         var item = await store.FindResetAsync(tokens.HashToken(request.ResetToken), innerCt); var now = clock.UtcNow;
         if (item is null || item.UsedAtUtc is not null || item.ExpiresAtUtc <= now) return OperationResult.Failure("Invalid or expired reset token.");
-        var user = await store.FindUserAsync(item.UserAccountId, innerCt); if (user is null || user.Status != AccountStatus.Active) return OperationResult.Failure("Invalid or expired reset token.");
-        item.UsedAtUtc = now; item.UsedByIp = context.IpAddress; user.PasswordHash = passwords.Hash(user, request.NewPassword); user.UpdatedAtUtc = now;
+        var user = await store.FindUserAsync(item.UserAccountId, innerCt); if (user is null || !CanSignIn(user)) return OperationResult.Failure("Invalid or expired reset token.");
+        item.UsedAtUtc = now; item.UsedByIp = context.IpAddress; user.PasswordHash = passwords.Hash(user, request.NewPassword); user.FailedLoginCount = 0; user.LastFailedLoginAtUtc = null; user.LockoutEndUtc = null; user.UpdatedAtUtc = now;
         await store.RevokeAllAsync(user.Id, now, "Password reset", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return OperationResult.Success();
     }, ct);
 
@@ -203,7 +204,11 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         return new(access.Token, access.ExpiresAtUtc, raw, expiry, ToCurrent(user));
     }
     private void Audit(Guid? id, string email, bool success, string? reason, RequestContext c, DateTime now) => store.AddAudit(new LoginAudit { Id = Guid.NewGuid(), UserAccountId = id, NormalizedEmail = email, WasSuccessful = success, FailureReason = reason, IpAddress = c.IpAddress, UserAgent = c.UserAgent, CorrelationId = c.CorrelationId, AttemptedAtUtc = now, CreatedAtUtc = now });
-    private static CurrentUser ToCurrent(UserAccount u) => new(u.Id, u.Email, u.PhoneNumber, u.Role, u.Status, u.CreatorId, u.MerchantId, u.SupervisorId, u.CashierId, u.IsEmailVerified, u.IsPhoneVerified);
+    private CurrentUser ToCurrent(UserAccount u)
+    {
+        var effective = EffectiveAccountStatus.FromAccount(u, clock.UtcNow);
+        return new(u.Id, u.Email, u.PhoneNumber, u.Role, u.Status, effective.EffectiveStatus, effective.EffectiveStatusReason, u.CreatorId, u.MerchantId, u.SupervisorId, u.CashierId, u.IsEmailVerified, u.IsPhoneVerified);
+    }
     public static bool CanSignIn(UserAccount user) => user.Status == AccountStatus.Active ||
         user.Status is AccountStatus.PendingVerification or AccountStatus.PendingApproval && IsPinRole(user.Role);
     private static RestrictedAccount? GetRestriction(UserAccount user, DateTime now) => user.LockoutEndUtc is not null && user.LockoutEndUtc > now

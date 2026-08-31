@@ -5,7 +5,7 @@ RUN dotnet restore CreatorPay.slnx && dotnet publish src/CreatorPay.Api/CreatorP
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gosu wget \
+    && apt-get install -y --no-install-recommends gosu libgssapi-krb5-2 wget \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app .

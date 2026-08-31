@@ -6,7 +6,7 @@ namespace CreatorPay.Domain.Tests;
 public sealed class PartnershipEligibilityTests
 {
     static readonly DateTime Now = new(2026, 8, 3, 12, 0, 0, DateTimeKind.Utc);
-    static MerchantCreatorPartnership Eligible() { var p = new MerchantCreatorPartnership { RequestedAtUtc = Now, Creator = new() { Status = CreatorStatus.Active }, Merchant = new() { Status = MerchantStatus.Active } }; p.Approve(Now, Guid.NewGuid()); return p; }
+    static MerchantCreatorPartnership Eligible() { var p = new MerchantCreatorPartnership { RequestedAtUtc = Now, Creator = new() { Status = CreatorStatus.Active }, Merchant = new() { Status = MerchantStatus.Active } }; p.Approve(Now, Guid.NewGuid()); p.ActivatePromotion(Now, Guid.NewGuid()); return p; }
     [Fact] public void EligibleDuringPeriod() => Assert.True(PartnershipEligibilityService.IsEligible(Eligible(), Now));
     [Fact] public void DeniedAtExpiration() { var p = Eligible(); Assert.False(PartnershipEligibilityService.IsEligible(p, Now.AddDays(MerchantCreatorPartnership.ActivePeriodDays))); }
     [Fact] public void DeniedInactiveCreator() { var p = Eligible(); p.Creator.Status = CreatorStatus.Suspended; Assert.False(PartnershipEligibilityService.IsEligible(p, Now)); }

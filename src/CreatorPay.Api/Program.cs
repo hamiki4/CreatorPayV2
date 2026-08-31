@@ -50,6 +50,17 @@ builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = c => c.ProblemDetails.Extensions["correlationId"] = c.HttpContext.TraceIdentifier);
 builder.Services.AddHttpContextAccessor(); builder.Services.AddResponseCompression();
+builder.Services.AddHttpClient<ITikTokVideoUrlResolver, TikTokVideoUrlResolver>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(6);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Weymela-TikTok-Link-Validator/1.0");
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false,
+    ConnectTimeout = TimeSpan.FromSeconds(3),
+    MaxResponseHeadersLength = 32,
+    UseCookies = false
+});
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => o.MultipartBodyLengthLimit = ProfilePhotoLimits.MaximumUploadBytes);
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {

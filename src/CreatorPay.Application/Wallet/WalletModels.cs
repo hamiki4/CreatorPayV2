@@ -12,7 +12,7 @@ public interface IDepositProofStorage
     Task<(Stream Content, string ContentType, string FileName)> OpenAsync(string storageKey, CancellationToken ct);
 }
 public sealed record WalletEntryDto(Guid Id, string EntryType, decimal Amount, decimal BalanceBefore, decimal BalanceAfter, string Description, DateTime CreatedAtUtc);
-public sealed record PurchaseDto(Guid TransactionId, string PublicTransactionId, string Status, decimal PurchaseAmount, string CurrencyCode, decimal TotalCommissionAmount, decimal CreatorCommissionAmount, decimal PlatformCommissionAmount, string CreatorDisplayName, string MerchantLocationName, DateTime? ConfirmedAtUtc, decimal? WalletBalanceAfter, string Message);
+public sealed record PurchaseDto(Guid TransactionId, string PublicTransactionId, string Status, decimal PurchaseAmount, string CurrencyCode, decimal TotalCommissionAmount, decimal CreatorCommissionAmount, decimal PlatformCommissionAmount, string CreatorDisplayName, string CreatorPublicId, string MerchantLocationName, DateTime? ConfirmedAtUtc, decimal? WalletBalanceAfter, string Message);
 public sealed record ConfirmedSaleDto(Guid TransactionId, string PublicTransactionId, DateTime ConfirmedAtUtc, decimal SaleAmount, decimal CommissionAmount, string CreatorName, string CreatorId, string CashierName, string Status, string? LocationName);
 public sealed record ConfirmedSalesReportDto(int ConfirmedSales, decimal TotalSalesAmount, decimal TotalCommissionAmount, IReadOnlyList<ConfirmedSaleDto> Sales, IReadOnlyList<CreatorPerformanceDto> CreatorPerformance);
 public sealed record CreatorPerformanceDto(string CreatorName, string CreatorId, int ConfirmedSales, decimal SalesAmount, decimal CommissionAmount);

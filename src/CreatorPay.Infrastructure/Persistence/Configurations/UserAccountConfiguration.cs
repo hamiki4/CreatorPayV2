@@ -10,6 +10,7 @@ public sealed class UserAccountConfiguration : IEntityTypeConfiguration<UserAcco
     {
         builder.ToTable("user_accounts");
         builder.ConfigureEntity();
+        builder.Property(x => x.DisplayName).HasMaxLength(200);
         builder.Property(x => x.Email).HasMaxLength(320);
         builder.Property(x => x.NormalizedEmail).HasMaxLength(320);
         builder.Property(x => x.PhoneNumber).HasMaxLength(16);

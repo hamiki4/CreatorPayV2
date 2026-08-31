@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using CreatorPay.Application.Authentication;
+using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
@@ -79,7 +80,7 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
-            await db.Database.ExecuteSqlInterpolatedAsync($"""UPDATE platform_financial_settings SET "MinimumBusinessWalletBalance" = 1000, "ChangedAtUtc" = {DateTime.UtcNow} WHERE "CurrencyCode" = 'ETB'""");
+            await db.SaveChangesAsync();
         }
 
         var first = await Upload(client, png, "photo.png", "image/png");
@@ -93,6 +94,10 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
         var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+        var promotion = await Post(client, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl = "https://www.tiktok.com/@profile-photo/video/1234567890123456789" });
+        var promotionId = (await promotion.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{promotionId}/approve", new { reason = (string?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { })).StatusCode);
 
         var me = await Get(client, "/api/v1/creators/me");
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
@@ -137,7 +142,7 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         await using (var db = Db())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"MerchantWallets\" SET \"AvailableBalance\" = 2000 WHERE \"MerchantId\" = {MerchantId}");
-            await db.Database.ExecuteSqlInterpolatedAsync($"""UPDATE platform_financial_settings SET "MinimumBusinessWalletBalance" = 1000, "ChangedAtUtc" = {DateTime.UtcNow} WHERE "CurrencyCode" = 'ETB'""");
+            await db.SaveChangesAsync();
         }
         using var activeClient = Client(activeCreator.UserId, activeCreator.CreatorId);
         var png = PngBytes();
@@ -150,6 +155,12 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
         var partnershipId = (await requested.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/partnerships/{partnershipId}/approve", new { reason = "Approved" })).StatusCode);
+        const string videoUrl = "https://www.tiktok.com/@active-photo/video/1234567890123456789";
+        var promoVideo = await Post(activeClient, $"/api/v1/creator/partnerships/{partnershipId}/promotion-video", new { videoUrl });
+        Assert.Equal(HttpStatusCode.Created, promoVideo.StatusCode);
+        var promoVideoId = (await promoVideo.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Post(merchant, $"/api/v1/merchant/promotion-videos/{promoVideoId}/approve", new { reason = (string?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(activeClient, $"/api/v1/creator/partnerships/{partnershipId}/go-live", new { })).StatusCode);
 
         var invited = await Post(merchant, "/api/v1/merchant/partnerships/invitations", new { creatorId = pendingCreator.CreatorId, introductoryMessage = "Join us" });
         Assert.Equal(HttpStatusCode.Created, invited.StatusCode);
@@ -177,6 +188,8 @@ public sealed class CreatorProfilePhotoTests : IAsyncLifetime
         var advertisingRows = await advertising.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         var advertisingRow = Assert.Single(advertisingRows!.EnumerateArray(), x => x.GetProperty("creatorId").GetGuid() == activeCreator.CreatorId);
         Assert.Contains("/photo?v=", advertisingRow.GetProperty("creatorProfileImageUrl").GetString());
+        Assert.Equal(videoUrl, advertisingRow.GetProperty("promotionVideoUrl").GetString());
+        Assert.Equal("Live", advertisingRow.GetProperty("promotionVideoStatus").GetString());
 
         var businessDetail = await Get(customer, $"/api/v1/customer/discovery/businesses/{MerchantId}");
         Assert.Equal(HttpStatusCode.OK, businessDetail.StatusCode);

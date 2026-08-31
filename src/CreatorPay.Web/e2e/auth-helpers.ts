@@ -4,7 +4,11 @@ import type { Page } from '@playwright/test'
 const password=process.env.E2E_SHOPPER_PASSWORD!
 
 function phoneFor(identity:string){
+  if(identity==='shopper@e2e.invalid')return process.env.E2E_SHOPPER_PHONE!
+  if(identity==='creator@e2e.invalid')return process.env.E2E_CREATOR_PHONE!
+  if(identity==='business-1@e2e.invalid')return process.env.E2E_OWNER_PHONE!
   if(identity==='owner@e2e.invalid')return process.env.E2E_OWNER_PHONE!
+  if(identity==='cashier@e2e.invalid')return process.env.E2E_CASHIER_PHONE!
   const match=identity.match(/^(creator-request|creator-invite|creator-pending|business)-(\d)@/)
   if(!match)throw Error(`No E2E phone mapping for ${identity}`)
   const prefixes:Record<string,string>={'creator-request':'+25194400000','creator-invite':'+25195500000','creator-pending':'+25196600000','business':'+25193400000'}

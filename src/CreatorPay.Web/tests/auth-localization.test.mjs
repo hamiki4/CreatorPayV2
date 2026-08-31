@@ -37,10 +37,12 @@ test('registration validates passwords and Ethiopian phones',()=>{
   assert.match(auth,/Passwords do not match\./)
   assert.match(auth,/\^0\[79\]\\d\{8\}\$/)
   assert.match(auth,/\^\\\+251\[79\]\\d\{8\}\$/)
+  assert.ok(auth.includes('Unable to submit password reset request. Please try again.'))
   assert.match(auth,/\/api\/v1\/auth\/signup-settings/)
   assert.match(auth,/Minimum required TikTok followers:/)
   assert.match(authCompact,/const\{confirmation,platform,profileUrl,followerCount,\.\.\.request\}=creator/)
   assert.match(authCompact,/const\{confirmation,\.\.\.request\}=business/)
+  assert.match(authCompact,/r\.status>=500\?failureMessage:authErrorMessage\(r\.status,v,failureMessage\)/)
 })
 
 test('Shopper registration submits synchronized password confirmation exactly once',()=>{
@@ -50,6 +52,13 @@ test('Shopper registration submits synchronized password confirmation exactly on
   assert.match(authCompact,/\.\.\.credentials,phoneNumber:p/)
   assert.match(authCompact,/if\(shopperSubmitting\.current\)return/)
   assert.doesNotMatch(auth,/const\{confirmation,\.\.\.request\}=shopper/)
+})
+
+test('Ethiopian phone normalization accepts local and international forms for forgot-password inputs',()=>{
+  assert.ok(auth.includes('function normalizeEthiopianPhone(value: string)'))
+  assert.ok(auth.includes('if (/^0[79]\\d{8}$/.test(compact)) return `+251${compact.slice(1)}`;'))
+  assert.ok(auth.includes('if (/^\\+251[79]\\d{8}$/.test(compact)) return compact;'))
+  assert.ok(auth.includes('if (/^251[79]\\d{8}$/.test(compact)) return `+${compact}`;'))
 })
 
 test('authenticated roles route only to their assigned dashboard',()=>{

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, statusLabel } from "./apiClient";
-const money = (n: number, c = "ETB") =>
-  new Intl.NumberFormat("en-ET", { style: "currency", currency: c }).format(n);
+import { formatAmount, formatDate, formatDateTime } from "./displayFormat";
+const money = (n: number, _currency?: string) => formatAmount(n);
 const Badge = ({ value }: { value: string }) => (
   <span className={`badge status-${value.toLowerCase()}`}>
     {statusLabel(value)}
@@ -80,23 +80,8 @@ type Revenue = {
   history: RevenueHistoryRow[];
 };
 
-const displayDate = (value: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));
-const displayDateTime = (value: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })
-    .format(new Date(value))
-    .replace(",", "");
+const displayDate = formatDate;
+const displayDateTime = formatDateTime;
 export function AdminPayoutWorkspace() {
   const [tab, setTab] = useState<"creators" | "shoppers" | "revenue">(
       "creators",
@@ -256,7 +241,7 @@ export function AdminPayoutWorkspace() {
             </article>
           </div>
           <form
-            className="filter-bar"
+            className="filter-bar payout-filter-bar"
             onSubmit={(e) => {
               e.preventDefault();
               setAppliedSearch(search);
@@ -264,7 +249,7 @@ export function AdminPayoutWorkspace() {
               void loadHistory(1, search);
             }}
           >
-            <label>
+            <label className="payout-filter-search">
               {tab === "creators"
                 ? "Search Creator Name or Creator ID"
                 : "Search Customer Name"}
@@ -274,21 +259,23 @@ export function AdminPayoutWorkspace() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <button>Search</button>
             <label>From <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
             <label>To <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></label>
             <label>Status <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">All</option><option value="Paid">Paid</option><option value="Requested">Requested</option><option value="Processing">Processing</option><option value="Scheduled">Scheduled</option><option value="Failed">Failed</option><option value="Cancelled">Cancelled</option></select></label>
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                setSearch("");
-                setAppliedSearch("");
-                setFromDate(""); setToDate(""); setStatusFilter(""); setHistoryPage(1); void loadHistory(1, "", { from: "", to: "", status: "" });
-              }}
-            >
-              Clear
-            </button>
+            <div className="payout-filter-actions">
+              <button>Search</button>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  setSearch("");
+                  setAppliedSearch("");
+                  setFromDate(""); setToDate(""); setStatusFilter(""); setHistoryPage(1); void loadHistory(1, "", { from: "", to: "", status: "" });
+                }}
+              >
+                Clear
+              </button>
+            </div>
           </form>
           <div className="table-wrap">
             <table className="admin-payout-table">
@@ -310,16 +297,16 @@ export function AdminPayoutWorkspace() {
               <tbody>
                 {lines.map((x) => (
                   <tr key={x.partyId}>
-                    <td>
+                    <td data-label={tab === "creators" ? "Creator Name" : "Customer Name"}>
                       {x.partyName}
                       {tab === "shoppers" && (
                         <small className="secondary-id">{x.partyId}</small>
                       )}
                     </td>
-                    {tab === "creators" && <td>{x.partyId}</td>}
-                    <td>{money(x.eligibleAmount, cycle.currencyCode)}</td>
-                    <td>{money(x.reservedAmount, cycle.currencyCode)}</td>
-                    <td>
+                    {tab === "creators" && <td data-label="Creator ID">{x.partyId}</td>}
+                    <td data-label={tab === "creators" ? "Eligible Amount" : "Eligible Cashback"}>{money(x.eligibleAmount, cycle.currencyCode)}</td>
+                    <td data-label="Reserved/In Batch">{money(x.reservedAmount, cycle.currencyCode)}</td>
+                    <td data-label="Payout Status">
                       {x.status === "PAID" ? (
                         <Badge value="PAID" />
                       ) : (
@@ -381,7 +368,7 @@ export function AdminPayoutWorkspace() {
   );
 }
 function RevenueHistory({rows,currency}:{rows:RevenueHistoryRow[];currency:string}) {
-  return <div className="table-wrap"><table className="platform-revenue-history"><thead><tr><th>Period Start</th><th>Period End</th><th>Transactions</th><th>Platform Revenue</th></tr></thead><tbody>{rows.map((x)=><tr key={x.periodStartUtc}><td>{displayDate(x.periodStartUtc)}</td><td>{displayDate(x.periodEndUtc)}</td><td>{x.transactionCount}</td><td>{money(x.platformRevenue,currency)}</td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table className="platform-revenue-history"><thead><tr><th>Period Start</th><th>Period End</th><th>Transactions</th><th>Platform Revenue</th></tr></thead><tbody>{rows.map((x)=><tr key={x.periodStartUtc}><td data-label="Period Start">{displayDate(x.periodStartUtc)}</td><td data-label="Period End">{displayDate(x.periodEndUtc)}</td><td data-label="Transactions">{x.transactionCount}</td><td data-label="Platform Revenue">{money(x.platformRevenue,currency)}</td></tr>)}</tbody></table></div>;
 }
 function History({ rows }: { rows: HistoryRow[] }) {
   return (
@@ -400,12 +387,12 @@ function History({ rows }: { rows: HistoryRow[] }) {
         <tbody>
           {rows.map((x, i) => (
             <tr key={`${x.cutoffAtUtc}-${i}`}>
-              <td>{displayDate(x.cycleStartUtc)}</td>
-              <td>{displayDateTime(x.cutoffAtUtc)}</td>
-              <td>{displayDate(x.payoutDateUtc)}</td>
-              <td>{x.partyCount}</td>
-              <td>{money(x.totalAmount)}</td>
-              <td>
+              <td data-label="Cycle Start">{displayDate(x.cycleStartUtc)}</td>
+              <td data-label="Cutoff">{displayDateTime(x.cutoffAtUtc)}</td>
+              <td data-label="Payout Date">{displayDate(x.payoutDateUtc)}</td>
+              <td data-label="Count">{x.partyCount}</td>
+              <td data-label="Total">{money(x.totalAmount)}</td>
+              <td data-label="Status">
                 <Badge value={x.status} />
               </td>
             </tr>
@@ -420,7 +407,7 @@ function PayoutHistoryTable({ page, currency, onPage }: { page?: PayoutHistoryPa
   const totalPages = Math.max(1, Math.ceil(page.totalCount / page.pageSize));
   return <>
     <div className="summary-grid payout-history-totals"><article><span>Payout records</span><strong>{page.totalCount}</strong></article><article><span>Total paid</span><strong>{money(page.totalPaidAmount, currency)}</strong></article></div>
-    <div className="table-wrap"><table className="admin-payout-history-table"><thead><tr><th>{"Name"}</th><th>Public ID</th><th>Cycle Start</th><th>Cutoff</th><th>Payout Date</th><th>Eligible Amount</th><th>Paid Amount</th><th>Status</th><th>Reference</th></tr></thead><tbody>{page.items.map((x) => <tr key={x.payoutReference}><td>{x.partyName}</td><td>{x.partyId}</td><td>{displayDate(x.cycleStartUtc)}</td><td>{displayDateTime(x.cutoffAtUtc)}</td><td>{x.payoutDateUtc ? displayDate(x.payoutDateUtc) : "—"}</td><td>{money(x.eligibleAmount, currency)}</td><td>{money(x.paidAmount, currency)}</td><td><Badge value={x.status} /></td><td><code>{x.payoutReference}</code>{x.batchReference && <small className="secondary-id">{x.batchReference}</small>}</td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table className="admin-payout-history-table"><thead><tr><th>{"Name"}</th><th>Public ID</th><th>Cycle Start</th><th>Cutoff</th><th>Payout Date</th><th>Eligible Amount</th><th>Paid Amount</th><th>Status</th><th>Reference</th></tr></thead><tbody>{page.items.map((x) => <tr key={x.payoutReference}><td data-label="Name">{x.partyName}</td><td data-label="Public ID">{x.partyId}</td><td data-label="Cycle Start">{displayDate(x.cycleStartUtc)}</td><td data-label="Cutoff">{displayDateTime(x.cutoffAtUtc)}</td><td data-label="Payout Date">{x.payoutDateUtc ? displayDate(x.payoutDateUtc) : "—"}</td><td data-label="Eligible Amount">{money(x.eligibleAmount, currency)}</td><td data-label="Paid Amount">{money(x.paidAmount, currency)}</td><td data-label="Status"><Badge value={x.status} /></td><td data-label="Reference"><code>{x.payoutReference}</code>{x.batchReference && <small className="secondary-id">{x.batchReference}</small>}</td></tr>)}</tbody></table></div>
     <div className="pagination-controls" aria-label="Payout history pages"><button disabled={page.page <= 1} onClick={() => onPage(page.page - 1)}>Previous</button><span>Page {page.page} of {totalPages}</span><button disabled={page.page >= totalPages} onClick={() => onPage(page.page + 1)}>Next</button></div>
   </>;
 }

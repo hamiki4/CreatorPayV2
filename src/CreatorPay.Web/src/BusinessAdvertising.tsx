@@ -4,9 +4,11 @@ import { daysLeftText, relationshipState } from "./relationshipTime";
 import { currentPartnerships } from "./partnershipState";
 import { rankMatches, useTypeahead } from "./typeahead";
 import { ProfileAvatar } from "./profileMedia";
-type Creator = {
+import { NavIcon } from "./navIcons";
+export type BusinessCreator = {
   id: string;
   publicCreatorId: string;
+  creatorCode?: string;
   displayName: string;
   city: string;
   phoneNumber?: string;
@@ -14,12 +16,13 @@ type Creator = {
   contentCategories: string;
   socialPlatform?: string;
   socialProfileUrl?: string;
-  followerCount?: number;
+  followerCount?: number | null;
   profileImageUrl?: string;
 };
 export type BusinessRelationship = {
   id: string;
   creatorId: string;
+  creatorPublicId?: string;
   creatorName: string;
   creatorSocialPlatform?: string;
   creatorSocialProfileUrl?: string;
@@ -36,7 +39,17 @@ export type BusinessRelationship = {
   creatorCity?: string;
   creatorProfileImageUrl?: string;
   creatorPhoneNumber?: string;
+  promotionVideo?: {
+    id: string;
+    videoUrl: string;
+    platform: string;
+    status: string;
+    submittedAtUtc: string;
+    reviewedAtUtc?: string;
+    rejectionReason?: string;
+  };
 };
+const displayDate = (value?: string) => value ? new Intl.DateTimeFormat("en-GB", {day: "2-digit", month: "2-digit", year: "numeric"}).format(new Date(value)) : "—";
 const socialPlatforms = new Map([
   ["tiktok", "TikTok"],
   ["instagram", "Instagram"],
@@ -95,25 +108,14 @@ function CreatorIdentity({
       <div className="creator-identity-text">
         <strong>{name}</strong>
         {phoneNumber && <small style={{ display: 'block' }}>{phoneNumber}</small>}
-        {city && <small style={{ display: 'block' }}>📍 {city}</small>}
+        {city && <small className="business-creator-city"><NavIcon name="mapPin" size={16} />{city}</small>}
       </div>
     </div>
   );
 }
-const status = (value: string) =>
-  value === "Approved"
-    ? "Active"
-    : value === "Rejected"
-      ? "Declined"
-      : value === "Revoked"
-        ? "Deactivated"
-        : value === "Pending"
-          ? "Pending"
-          : "Inactive";
-
-export function FindCreators({ refresh }: { refresh: () => void }) {
-  const [q, setQ] = useState(""),
-    [items, setItems] = useState<Creator[]>([]),
+export function FindCreators({ refresh, initialQuery = "" }: { refresh: () => void; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery),
+    [items, setItems] = useState<BusinessCreator[]>([]),
     [relationships, setRelationships] = useState<BusinessRelationship[]>([]),
     [message, setMessage] = useState(""),
     [loading, setLoading] = useState(true);
@@ -126,7 +128,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
     setMessage("");
     try {
       return rankMatches(
-        await api<Creator[]>(
+        await api<BusinessCreator[]>(
           `/api/v1/merchant/creators/search?q=${encodeURIComponent(term)}`,
         ),
         term,
@@ -148,7 +150,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
   useEffect(() => {
     void load();
   }, []);
-  async function invite(x: Creator) {
+  async function invite(x: BusinessCreator) {
     try {
       await api("/api/v1/merchant/partnerships/invitations", {
         method: "POST",
@@ -162,7 +164,7 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
       setMessage("We couldn't send that invitation.");
     }
   }
-  async function reactivate(x: Creator, relationship: BusinessRelationship) {
+  async function reactivate(x: BusinessCreator, relationship: BusinessRelationship) {
     try {
       await api(`/api/v1/merchant/partnerships/${relationship.id}/reactivate`, {
         method: "POST",
@@ -177,10 +179,10 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
     }
   }
   const currentRelationships = currentPartnerships(relationships, (x) => x.creatorId);
-  function stateFor(creator: Creator) {
+  function stateFor(creator: BusinessCreator) {
     const relationship = currentRelationships.find((x) => x.creatorId === creator.id);
     if (!relationship)
-      return { label: "No Relationship", daysText: null, canInvite: true };
+      return { label: "NO RELATIONSHIP", daysText: null, canInvite: true };
     if (relationship.status === "Pending")
       return { label: "Invitation Pending", daysText: null, canInvite: false };
     if (relationship.status === "Approved") {
@@ -208,12 +210,12 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
       <p>Search approved Creators and invite them to advertise.</p>
       <form className="business-search" onSubmit={search}>
         <label>
-          Creator name or public ID
+          Creator Name
           <input
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name or public ID"
+            placeholder="Search Creator"
           />
         </label>
         <button disabled={loading}>{loading ? "Searching…" : "Search"}</button>
@@ -271,107 +273,32 @@ export function FindCreators({ refresh }: { refresh: () => void }) {
 
 export function ActiveCreators({
   items,
-  refresh,
+  refresh: _refresh,
 }: {
   items: BusinessRelationship[];
   refresh: () => void;
 }) {
-  const [message, setMessage] = useState(""),
-    [reconciledId, setReconciledId] = useState<string>(),
-    visible = items.filter((x) => relationshipState(x).label === "Active");
-  useEffect(() => {
-    const pending = items.find((x) => x.status === "Approved" && x.activationRequired && x.id !== reconciledId);
-    if (!pending) return;
-    setReconciledId(pending.id);
-    void api(`/api/v1/merchant/partnerships/${pending.id}/reconcile-readiness`, { method: "POST" })
-      .then(refresh)
-      .catch((error) => console.error("Partnership readiness reconciliation failed", error));
-  }, [items, reconciledId, refresh]);
-  async function change(
-    x: BusinessRelationship,
-    action: "activate" | "deactivate" | "reactivate",
-  ) {
-    if (
-      action === "deactivate" &&
-      !confirm(
-        "Deactivate this advertising relationship? New attributed sales will stop immediately.",
-      )
-    )
-      return;
-    const endpoint = action === "deactivate" ? "suspend" : action;
-    try {
-      await api(`/api/v1/merchant/partnerships/${x.id}/${endpoint}`, {
-        method: "POST",
-        body: JSON.stringify({
-          reason:
-            action === "deactivate"
-              ? "Deactivated by Business"
-              : action === "reactivate"
-                ? "Reactivated by Business"
-                : "Activated by Business",
-        }),
-      });
-      setMessage(
-        `${x.creatorName} ad is now ${action === "deactivate" ? "deactivated" : "active"}.`,
-      );
-      refresh();
-    } catch (error) {
-      console.error(error);
-      setMessage((error as Error).message);
-    }
-  }
+  const visible = items.filter((x) => relationshipState(x).label === "Active");
   return (
     <section className="creator-section">
       <h2>Active Ads</h2>
-      {message && <p role="status">{message}</p>}
-          {visible.length === 0 ? (
-        <p className="compact-empty">
-          No Creator advertising relationships yet.
-        </p>
+      {visible.length === 0 ? (
+        <p className="compact-empty">No live Creator promotions yet.</p>
       ) : (
         <div className="active-ads">
           {visible.map((x) => {
             const state = relationshipState(x);
             return (
               <article
-              className={`active-ad business-table-row business-active-grid relationship-${state.tone}`}
-              key={x.id}
-            >
-                <div className="creator-card">
-                  <CreatorIdentity
-                    name={x.creatorName}
-                    photoUrl={x.creatorProfileImageUrl}
-                    phoneNumber={x.creatorPhoneNumber}
-                    city={x.creatorCity}
-                  />
-                </div>
-                <span className="creator-meta">
-                  <CreatorMeta
-                    platform={x.creatorSocialPlatform}
-                    profileUrl={x.creatorSocialProfileUrl}
-                  />
-                </span>
-                <span className="table-status">
-                  <span className="status-badge">{state.label}</span>
-                </span>
-                {state.daysLeft !== null && (
-                  <span className="days-left">{daysLeftText(state.daysLeft, state.tone)}</span>
-                )}
-                <span className="table-action">
-                  {state.label === "Active" ? (
-                    <button
-                      className="danger compact-action"
-                      onClick={() => void change(x, "deactivate")}
-                    >
-                      Deactivate Ad
-                    </button>
-                  ) : null}
-                </span>
-                <small>
-                  {x.activatedAtUtc
-                    ? `Activated ${new Date(x.activatedAtUtc).toLocaleDateString()}`
-                    : "Advertising relationship"}
-                </small>
+                className={`active-ad business-table-row business-active-grid relationship-${state.tone}`}
+                key={x.id}
+              >
+                <div data-label="Creator"><CreatorIdentity name={x.creatorName} photoUrl={x.creatorProfileImageUrl} /></div>
+                <span data-label="Creator ID">{/^[0-9]{4}$/.test(x.creatorPublicId ?? "") ? x.creatorPublicId : "—"}</span>
+                <span data-label="Promo Video">{x.promotionVideo?.videoUrl?<a className="promo-video-link" href={x.promotionVideo.videoUrl} target="_blank" rel="noopener noreferrer">View Promo Video</a>:"—"}</span>
+                <span data-label="Activated Date">{displayDate(x.activatedAtUtc)}</span>
+                <span className="days-left" data-label="Days Left">{state.daysLeft===null?"—":daysLeftText(state.daysLeft,state.tone)}</span>
+                <span className="table-status" data-label="Status"><span className="status-badge">Active</span></span>
               </article>
             );
           })}
@@ -383,15 +310,23 @@ export function ActiveCreators({
 
 export function AdvertisingRequests({
   items,
+  businessName,
+  initialSection,
   refresh,
 }: {
   items: BusinessRelationship[];
+  businessName?: string;
+  initialSection: "creator" | "video";
   refresh: () => void;
 }) {
   const [message, setMessage] = useState("");
-  const requests = currentPartnerships(items, (x) => x.creatorId).filter(
-    (x) => !["Approved", "Suspended", "Revoked"].includes(x.status),
-  );
+  const [rejectionReasons, setRejectionReasons] = useState<Record<string,string>>({});
+  const [section, setSection] = useState<"creator" | "video">(initialSection);
+  useEffect(() => setSection(initialSection), [initialSection]);
+  const current = currentPartnerships(items, (x) => x.creatorId);
+  const creatorRequests = current.filter((x) => x.initiatedBy === "Creator" && ["Pending", "Approved", "Rejected"].includes(x.status));
+  const outgoingInvitations = current.filter((x) => x.initiatedBy === "Business" && ["Pending", "Approved", "Rejected"].includes(x.status));
+  const promoApprovals = current.filter((x) => x.promotionVideo);
   async function decide(x: BusinessRelationship, accept: boolean) {
     try {
       await api(
@@ -405,7 +340,7 @@ export function AdvertisingRequests({
       );
       setMessage(
         accept
-          ? `${x.creatorName} approved and is active when Business readiness requirements are satisfied.`
+          ? `${x.creatorName} approved. Awaiting promo video submission.`
           : `Request from ${x.creatorName} declined.`,
       );
       refresh();
@@ -414,8 +349,25 @@ export function AdvertisingRequests({
       setMessage((error as Error).message);
     }
   }
+  async function reviewVideo(x: BusinessRelationship, accept: boolean) {
+    if (!x.promotionVideo) return;
+    try {
+      await api(
+        `/api/v1/merchant/promotion-videos/${x.promotionVideo.id}/${accept ? "approve" : "reject"}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason: accept ? null : rejectionReasons[x.promotionVideo.id]?.trim() || null }),
+        },
+      );
+      setMessage(accept ? `Promotion video for ${x.creatorName} approved.` : `Promotion video for ${x.creatorName} rejected.`);
+      refresh();
+    } catch (error) {
+      console.error(error);
+      setMessage((error as Error).message);
+    }
+  }
   return (
-    <section className="creator-section">
+    <section className="creator-section business-requests">
       <h2>Requests</h2>
       {message && (
         <p
@@ -426,15 +378,15 @@ export function AdvertisingRequests({
           {message}
         </p>
       )}
-      {requests.length === 0 ? (
-        <p className="compact-empty">No pending requests or invitations.</p>
-      ) : (
-        <div className="request-groups">
-          <div>
-            <h3>Incoming Advertising Requests</h3>
-          {requests
-              .filter((x) => x.initiatedBy === "Creator")
-              .map((x) => (
+      <div className="business-request-tabs" role="tablist" aria-label="Request type">
+        <button type="button" role="tab" aria-selected={section === "creator"} className={section === "creator" ? "active" : ""} onClick={() => setSection("creator")}>Creator Requests</button>
+        <button type="button" role="tab" aria-selected={section === "video"} className={section === "video" ? "active" : ""} onClick={() => setSection("video")}>Video Approvals</button>
+      </div>
+      {section === "creator" ? (
+        <div className="request-groups" role="tabpanel">
+          <div className="business-request-section">
+            <h3>Creator Requests</h3>
+            {creatorRequests.length === 0 ? <p className="compact-empty">No Creator requests yet.</p> : creatorRequests.map((x) => (
                 <article key={x.id}>
                 <div className="creator-card">
                   <CreatorIdentity
@@ -443,7 +395,7 @@ export function AdvertisingRequests({
                     phoneNumber={x.creatorPhoneNumber}
                     city={x.creatorCity}
                   />
-                  <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                  <small>{displayDate(x.requestedAtUtc)}</small>
                 </div>
                   <span data-label="Social Media">
                     <SocialMediaLink
@@ -451,47 +403,72 @@ export function AdvertisingRequests({
                       profileUrl={x.creatorSocialProfileUrl}
                     />
                   </span>
-                  <span>{status(x.status)}</span>
+                  <span className={`status-badge status-${x.status.toLowerCase()}`}>{x.status}</span>
                   {x.status === "Pending" && (
-                    <div>
+                    <div className="business-request-actions">
                       <button onClick={() => void decide(x, true)}>
-                        Accept
+                        Approve
                       </button>
                       <button
                         className="quiet"
                         onClick={() => void decide(x, false)}
                       >
-                        Decline
+                        Reject
                       </button>
                     </div>
                   )}
                 </article>
               ))}
           </div>
-          <div>
-            <h3>Outgoing Invitations</h3>
-          {requests
-              .filter((x) => x.initiatedBy === "Business")
-              .map((x) => (
-                <article key={x.id}>
+          {outgoingInvitations.length > 0 && <div className="business-request-section business-outgoing-invitations">
+            <h3>Business Invitations</h3>
+            {outgoingInvitations.map((x) => (
+              <article key={x.id}>
                 <div className="creator-card">
-                  <CreatorIdentity
-                    name={x.creatorName}
-                    photoUrl={x.creatorProfileImageUrl}
-                    phoneNumber={x.creatorPhoneNumber}
-                    city={x.creatorCity}
-                  />
-                  <small>{new Date(x.requestedAtUtc).toLocaleDateString()}</small>
+                  <CreatorIdentity name={x.creatorName} photoUrl={x.creatorProfileImageUrl} phoneNumber={x.creatorPhoneNumber} city={x.creatorCity}/>
+                  <small>{displayDate(x.requestedAtUtc)}</small>
                 </div>
-                  <span data-label="Social Media">
-                    <SocialMediaLink
-                      platform={x.creatorSocialPlatform}
-                      profileUrl={x.creatorSocialProfileUrl}
+                <span data-label="Social Media"><SocialMediaLink platform={x.creatorSocialPlatform} profileUrl={x.creatorSocialProfileUrl}/></span>
+                <span className={`status-badge status-${x.status.toLowerCase()}`}>{x.status}</span>
+              </article>
+            ))}
+          </div>}
+        </div>
+      ) : (
+        <div className="request-groups" role="tabpanel">
+          <div className="business-request-section">
+            <h3>Video Approvals</h3>
+            {promoApprovals.length === 0 ? <p className="compact-empty">No promotion videos have been submitted yet.</p> : promoApprovals.map((x) => {
+              const approvalStatus = x.promotionVideo?.status === "Pending" ? "Pending Your Approval" : x.promotionVideo?.status === "Rejected" ? "Rejected" : "Approved";
+              return (
+                <article key={x.promotionVideo?.id ?? x.id}>
+                  <div className="creator-card">
+                    <CreatorIdentity
+                      name={x.creatorName}
+                      photoUrl={x.creatorProfileImageUrl}
+                      phoneNumber={x.creatorPhoneNumber}
+                      city={x.creatorCity}
                     />
-                  </span>
-                  <span>{status(x.status)}</span>
+                    <small>{displayDate(x.promotionVideo?.submittedAtUtc ?? x.requestedAtUtc)}</small>
+                  </div>
+                  <strong>Promo Video Approval</strong>
+                  <span>Creator: {x.creatorName}</span>
+                  {/^[0-9]{4}$/.test(x.creatorPublicId ?? "") && <span>Creator ID: {x.creatorPublicId}</span>}
+                  {businessName && <span>Business: {businessName}</span>}
+                  <span className={`status-badge status-${approvalStatus === "Rejected" ? "rejected" : approvalStatus === "Approved" ? "approved" : "pending"}`}>{approvalStatus}</span>
+                  <a
+                    href={x.promotionVideo?.videoUrl ?? "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="quiet"
+                  >
+                    View Promo Video
+                  </a>
+                  {x.promotionVideo?.status === "Pending" && <><label className="promo-rejection-reason">Rejection reason (optional)<input value={rejectionReasons[x.promotionVideo?.id ?? x.id]??""} maxLength={180} onChange={event=>setRejectionReasons(current=>({...current,[x.promotionVideo?.id ?? x.id]:event.target.value}))} placeholder="Short reason" /></label>
+                  <div className="business-request-actions"><button onClick={() => void reviewVideo(x, true)}>Approve</button><button className="danger" onClick={() => void reviewVideo(x, false)}>Reject</button></div></>}
                 </article>
-              ))}
+              );
+            })}
           </div>
         </div>
       )}

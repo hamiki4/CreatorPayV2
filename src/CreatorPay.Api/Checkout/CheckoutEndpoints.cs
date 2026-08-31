@@ -1,3 +1,4 @@
+using CreatorPay.Application.Accounts;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Checkout;
 using CreatorPay.Application.CustomerVerification;
@@ -26,7 +27,15 @@ public static class CheckoutEndpoints
         c.MapPost("/checkouts/{id:guid}/approve", async (Guid id, HttpRequest h, ICurrentUserService u, ICheckoutService s, IHubContext<CheckoutHub> hub, CancellationToken ct) => { try { var x = await s.ApproveAsync(u.CustomerId!.Value, id, Key(h), ct); await hub.Clients.Group($"merchant:{x.MerchantId}").SendAsync("CheckoutCompleted", x, ct); return Results.Ok(x); } catch (KeyNotFoundException x) { return Results.Problem(statusCode: 404, detail: x.Message); } catch (UnauthorizedAccessException x) { return Results.Problem(statusCode: 403, detail: x.Message); } catch (ArgumentException x) { return Results.Problem(statusCode: 400, detail: x.Message); } catch (InvalidOperationException x) { return Results.Problem(statusCode: 409, detail: x.Message); } });
         c.MapPost("/checkouts/{id:guid}/reject", (Guid id, ICurrentUserService u, ICheckoutService s, CancellationToken ct) => Run(() => s.RejectAsync(u.CustomerId!.Value, id, ct)));
         c.MapGet("/wallet", (ICurrentUserService u, ICheckoutService s, CancellationToken ct) => Run(() => s.GetWalletAsync(u.CustomerId!.Value, ct)));
-        c.MapGet("/profile", async (ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => await Run(async () => await (from account in db.UserAccounts.AsNoTracking() join customer in db.Customers.AsNoTracking() on account.CustomerId equals customer.Id where account.Id == u.UserAccountId && customer.Id == u.CustomerId select new CustomerProfileDto(customer.DisplayName, account.Email, customer.PhoneNumber, account.Status.ToString(), account.IsEmailVerified, account.IsPhoneVerified)).SingleAsync(ct)));
+        c.MapGet("/profile", async (ICurrentUserService u, ApplicationDbContext db, IUtcClock clock, CancellationToken ct) => await Run(async () =>
+        {
+            var row = await (from account in db.UserAccounts.AsNoTracking()
+                             join customer in db.Customers.AsNoTracking() on account.CustomerId equals customer.Id
+                             where account.Id == u.UserAccountId && customer.Id == u.CustomerId
+                             select new { account, customer }).SingleAsync(ct);
+            var effective = EffectiveAccountStatus.FromCustomer(row.account, clock.UtcNow);
+            return new CustomerProfileDto(row.customer.DisplayName, row.account.Email, row.customer.PhoneNumber, row.account.Status.ToString(), effective.EffectiveStatus, effective.EffectiveStatusReason, row.account.IsEmailVerified, row.account.IsPhoneVerified);
+        }));
         c.MapPost("/cashback-payouts", (HttpRequest h, ICurrentUserService u, ICheckoutService s, CancellationToken ct) => Run(() => s.RequestPayoutAsync(u.CustomerId!.Value, Key(h), ct), 201));
         c.MapGet("/cashback-payouts", (ICurrentUserService u, ICheckoutService s, CancellationToken ct) => Run(() => s.GetPayoutsAsync(u.CustomerId, ct)));
         var cashier = e.MapGroup("/api/v1/cashier/checkouts").RequireAuthorization("CashierOnly");

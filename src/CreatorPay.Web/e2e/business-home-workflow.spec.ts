@@ -1,0 +1,161 @@
+import {expect,test} from './fixtures'
+import type {APIRequestContext,Page} from '@playwright/test'
+import {login} from './auth-helpers'
+
+const apiBase=process.env.E2E_API_URL!
+const password=process.env.E2E_SHOPPER_PASSWORD!
+
+async function apiLogin(request:APIRequestContext,email:string){
+  const response=await request.post(`${apiBase}/api/v1/auth/login`,{data:{email,password}})
+  expect(response.ok(),await response.text()).toBeTruthy()
+  const body=await response.json()
+  return{Authorization:`Bearer ${body.accessToken}`}
+}
+
+async function loginWorkflowBusiness(page:Page,suffix:'1'|'2'){
+  await page.goto('/help',{waitUntil:'domcontentloaded'})
+  await page.evaluate(()=>{localStorage.clear();sessionStorage.clear()})
+  await page.goto('/',{waitUntil:'domcontentloaded'})
+  const welcome=page.getByRole('button',{name:'Already have an account? Sign In',exact:true})
+  const phone=page.getByLabel('Phone Number')
+  await expect(phone.or(welcome)).toBeVisible({timeout:30_000})
+  if(!(await phone.isVisible()))await welcome.click()
+  await phone.fill(`+25193400000${suffix}`)
+  await page.getByRole('textbox',{name:'Password',exact:true}).fill(password)
+  const response=page.waitForResponse(item=>item.request().method()==='POST'&&new URL(item.url()).pathname==='/api/v1/auth/login')
+  await page.locator('form').getByRole('button',{name:'Sign In',exact:true}).dispatchEvent('click')
+  expect((await response).ok()).toBeTruthy()
+  const setup=page.getByRole('heading',{name:/^(Complete your secure setup|Create 5-digit PIN)$/})
+  const app=page.locator('main.app')
+  await expect(setup.or(app)).toBeVisible({timeout:30_000})
+  if(await app.isVisible())return
+  const pinInputs=page.locator('label.pin-entry input')
+  await pinInputs.nth(0).fill('12345')
+  await pinInputs.nth(1).fill('12345')
+  await page.getByRole('button',{name:'Create PIN',exact:true}).click()
+  await expect(app).toBeVisible({timeout:30_000})
+}
+
+test('Business Home separates request and video counts through approval, Go Live, and rejection',async({page,request})=>{
+  test.setTimeout(180_000)
+  const creatorHeaders=await apiLogin(request,'creator-request-1@e2e.invalid')
+  const merchantHeaders=await apiLogin(request,'business-1@e2e.invalid')
+  const customerHeaders=await apiLogin(request,'shopper@e2e.invalid')
+  const discovery=await request.get(`${apiBase}/api/v1/creator/merchants/search?q=${encodeURIComponent('Desktop Workflow Business')}`,{headers:creatorHeaders})
+  expect(discovery.ok(),await discovery.text()).toBeTruthy()
+  const business=(await discovery.json()).find((item:{tradingName:string})=>item.tradingName==='Desktop Workflow Business')
+  expect(business).toBeTruthy()
+
+  const requested=await request.post(`${apiBase}/api/v1/creator/partnerships/requests`,{headers:creatorHeaders,data:{merchantId:business.id,introductoryMessage:'Business Home workflow'}})
+  expect(requested.ok(),await requested.text()).toBeTruthy()
+  const partnership=await requested.json()
+
+  await loginWorkflowBusiness(page,'1')
+  const creatorRequests=page.locator('.business-dashboard-cards > button').filter({hasText:'Creator Requests'})
+  await expect(creatorRequests.locator('strong')).toHaveText('1')
+  await creatorRequests.click()
+  await expect(page.getByRole('tab',{name:'Creator Requests'})).toHaveAttribute('aria-selected','true')
+  const requestCard=page.locator('.business-request-section article').filter({hasText:'Desktop Request Creator'})
+  await expect(requestCard).toContainText('Pending')
+  await requestCard.getByRole('button',{name:'Approve',exact:true}).click()
+  await expect(page.getByText('Desktop Request Creator approved. Awaiting promo video submission.',{exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'Home',exact:true}).click()
+  await expect(page.locator('.business-dashboard-cards > button').filter({hasText:'Creator Requests'}).locator('strong')).toHaveText('0')
+
+  const videoUrl='https://www.tiktok.com/@weymela/video/3333333333333333333?lang=en'
+  const submitted=await request.post(`${apiBase}/api/v1/creator/partnerships/${partnership.id}/promotion-video`,{headers:creatorHeaders,data:{videoUrl}})
+  expect(submitted.ok(),await submitted.text()).toBeTruthy()
+  await page.reload()
+  const videoApprovals=page.locator('.business-dashboard-cards > button').filter({hasText:'Video Approvals'})
+  await expect(videoApprovals.locator('strong')).toHaveText('1')
+  await videoApprovals.click()
+  await expect(page.getByRole('tab',{name:'Video Approvals'})).toHaveAttribute('aria-selected','true')
+  const videoCard=page.locator('.business-request-section article').filter({hasText:'Desktop Request Creator'})
+  await expect(videoCard).toContainText('Pending Your Approval')
+  await expect(videoCard).toContainText('Business: Desktop Workflow Business')
+  await expect(videoCard.getByRole('link',{name:'View Promo Video'})).toHaveAttribute('href',videoUrl)
+  await videoCard.getByRole('button',{name:'Approve',exact:true}).click()
+  await expect(page.getByText('Promotion video for Desktop Request Creator approved.',{exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'Home',exact:true}).click()
+  await expect(page.locator('.business-dashboard-cards > button').filter({hasText:'Video Approvals'}).locator('strong')).toHaveText('0')
+
+  const beforeLive=await request.get(`${apiBase}/api/v1/customer/discovery/advertising?q=${encodeURIComponent('Desktop Workflow Business')}`,{headers:customerHeaders})
+  expect(beforeLive.ok(),await beforeLive.text()).toBeTruthy()
+  expect((await beforeLive.json()).some((item:{businessName:string})=>item.businessName==='Desktop Workflow Business')).toBeFalsy()
+
+  const goLive=await request.post(`${apiBase}/api/v1/creator/partnerships/${partnership.id}/go-live`,{headers:creatorHeaders,data:{}})
+  expect(goLive.ok(),await goLive.text()).toBeTruthy()
+  const liveRelationship=await goLive.json()
+  expect(new Date(liveRelationship.expiresAtUtc).getTime()-new Date(liveRelationship.activatedAtUtc).getTime()).toBe(30*24*60*60*1000)
+  await page.reload()
+  await expect(page.locator('.business-dashboard-cards > button').filter({hasText:'Active Ads'}).locator('strong')).toHaveText('1')
+  await page.locator('.business-dashboard-cards > button').filter({hasText:'Active Ads'}).click()
+  const activeAd=page.locator('.business-active-grid').filter({hasText:'Desktop Request Creator'})
+  await expect(activeAd).toContainText('Active')
+  await expect(activeAd.getByRole('link',{name:'View Promo Video'})).toHaveAttribute('href',videoUrl)
+
+  const afterLive=await request.get(`${apiBase}/api/v1/customer/discovery/advertising?q=${encodeURIComponent('Desktop Workflow Business')}`,{headers:customerHeaders})
+  expect(afterLive.ok(),await afterLive.text()).toBeTruthy()
+  const customerPromotion=(await afterLive.json()).find((item:{businessName:string})=>item.businessName==='Desktop Workflow Business')
+  expect(customerPromotion?.promotionVideoUrl).toBe(videoUrl)
+
+  const rejectedCreatorHeaders=await apiLogin(request,'creator-request-2@e2e.invalid')
+  const rejectedMerchantHeaders=await apiLogin(request,'business-2@e2e.invalid')
+  const mobileDiscovery=await request.get(`${apiBase}/api/v1/creator/merchants/search?q=${encodeURIComponent('Mobile Workflow Business')}`,{headers:rejectedCreatorHeaders})
+  const mobileBusiness=(await mobileDiscovery.json()).find((item:{tradingName:string})=>item.tradingName==='Mobile Workflow Business')
+  const rejectedRequest=await request.post(`${apiBase}/api/v1/creator/partnerships/requests`,{headers:rejectedCreatorHeaders,data:{merchantId:mobileBusiness.id,introductoryMessage:'Reject this video'}})
+  const rejectedPartnership=await rejectedRequest.json()
+  expect((await request.post(`${apiBase}/api/v1/merchant/partnerships/${rejectedPartnership.id}/approve`,{headers:rejectedMerchantHeaders,data:{reason:'Approved'}})).ok()).toBeTruthy()
+  const rejectedUrl='https://www.tiktok.com/@weymela/video/4444444444444444444'
+  expect((await request.post(`${apiBase}/api/v1/creator/partnerships/${rejectedPartnership.id}/promotion-video`,{headers:rejectedCreatorHeaders,data:{videoUrl:rejectedUrl}})).ok()).toBeTruthy()
+
+  await loginWorkflowBusiness(page,'2')
+  await expect(page.locator('.business-dashboard-cards > button').filter({hasText:'Video Approvals'}).locator('strong')).toHaveText('1')
+  await page.locator('.business-dashboard-cards > button').filter({hasText:'Video Approvals'}).click()
+  const rejectCard=page.locator('.business-request-section article').filter({hasText:'Mobile Request Creator'})
+  await rejectCard.getByRole('button',{name:'Reject',exact:true}).click()
+  await expect(page.getByText('Promotion video for Mobile Request Creator rejected.',{exact:true})).toBeVisible()
+  const rejectedRelationships=await request.get(`${apiBase}/api/v1/creator/partnerships`,{headers:rejectedCreatorHeaders})
+  const rejectedRelationship=(await rejectedRelationships.json()).find((item:{id:string})=>item.id===rejectedPartnership.id)
+  expect(rejectedRelationship.promotionVideo.status).toBe('Rejected')
+  expect(rejectedRelationship.promotionVideo.rejectionReason).toBe('Please contact the business for more information.')
+  expect((await request.post(`${apiBase}/api/v1/creator/partnerships/${rejectedPartnership.id}/go-live`,{headers:rejectedCreatorHeaders,data:{}})).status()).toBe(409)
+  const rejectedDiscovery=await request.get(`${apiBase}/api/v1/customer/discovery/advertising?q=${encodeURIComponent('Mobile Workflow Business')}`,{headers:customerHeaders})
+  expect((await rejectedDiscovery.json()).some((item:{businessName:string})=>item.businessName==='Mobile Workflow Business')).toBeFalsy()
+
+  await page.evaluate(()=>localStorage.clear())
+  await login(page,'creator-request-2@e2e.invalid')
+  await page.getByRole('button',{name:'Active Ads',exact:true}).click()
+  const rejectedRow=page.locator('.creator-ads-row.relationship-active').filter({hasText:'Mobile Workflow Business'})
+  await expect(rejectedRow.getByText('Rejected',{exact:true})).toBeVisible()
+  await expect(rejectedRow.getByText('Business feedback',{exact:true})).toBeVisible()
+  await expect(rejectedRow).toContainText('Please contact the business for more information.')
+  await rejectedRow.getByRole('button',{name:'Revise & Resubmit',exact:true}).click()
+  const revisionDialog=page.getByRole('dialog',{name:'Revise Promotion Video'})
+  await expect(revisionDialog.getByLabel('Promotion Video Link')).toHaveValue('')
+  const replacementUrl='https://www.tiktok.com/@weymela/video/5555555555555555555'
+  await revisionDialog.getByLabel('Promotion Video Link').fill(replacementUrl)
+  await revisionDialog.getByRole('button',{name:'Submit for Approval'}).click()
+  await expect(page.getByRole('status')).toContainText('Promotion video submitted. Waiting for business approval.')
+  await expect(rejectedRow.getByText('Pending Approval',{exact:true})).toBeVisible()
+
+  const pendingRevisionResponse=await request.get(`${apiBase}/api/v1/merchant/promotion-videos`,{headers:rejectedMerchantHeaders})
+  const pendingRevision=(await pendingRevisionResponse.json()).find((item:{id:string})=>item.id===rejectedPartnership.id)
+  expect(pendingRevision.promotionVideo.status).toBe('Pending')
+  expect(pendingRevision.promotionVideo.videoUrl).toBe(replacementUrl)
+
+  await page.evaluate(()=>localStorage.clear())
+  await loginWorkflowBusiness(page,'2')
+  await page.locator('.business-dashboard-cards > button').filter({hasText:'Video Approvals'}).click()
+  const revisionCard=page.locator('.business-request-section article').filter({hasText:'Mobile Request Creator'})
+  await expect(revisionCard.getByRole('link',{name:'View Promo Video'})).toHaveAttribute('href',replacementUrl)
+  await revisionCard.getByRole('button',{name:'Approve',exact:true}).click()
+  const hiddenAfterRevisionApproval=await request.get(`${apiBase}/api/v1/customer/discovery/advertising?q=${encodeURIComponent('Mobile Workflow Business')}`,{headers:customerHeaders})
+  expect((await hiddenAfterRevisionApproval.json()).some((item:{businessName:string})=>item.businessName==='Mobile Workflow Business')).toBeFalsy()
+
+  const replacementLive=await request.post(`${apiBase}/api/v1/creator/partnerships/${rejectedPartnership.id}/go-live`,{headers:rejectedCreatorHeaders,data:{}})
+  expect(replacementLive.ok(),await replacementLive.text()).toBeTruthy()
+  const replacementVisible=await request.get(`${apiBase}/api/v1/customer/discovery/advertising?q=${encodeURIComponent('Mobile Workflow Business')}`,{headers:customerHeaders})
+  const replacementPromotion=(await replacementVisible.json()).find((item:{businessName:string})=>item.businessName==='Mobile Workflow Business')
+  expect(replacementPromotion.promotionVideoUrl).toBe(replacementUrl)
+})
