@@ -266,7 +266,8 @@ test('Welcome mode changes reset every controlled authentication flow',()=>{
 test('public authentication uses support-approved recovery without verification UX',()=>{
   assert.match(auth,/Welcome back\. Keep shopping, promoting, and earning with Weymela\./)
   assert.match(auth,/Welcome to Weymela — where customers save, creators earn, and businesses grow\./)
-  for(const value of ['Request Password Reset','Check Approval Status','Request New Password Reset','waiting for admin approval','Your password reset request was rejected.','Your previous password reset request is no longer active. Please request a new password reset.','Phone Number or Email','Contact Weymela Support','mailto:support@weymela.com?subject=Weymela%20Support%20Request','password-reset-requests'])assert.ok(auth.includes(value))
+  for(const value of ['Request Password Reset','Check Approval Status','Request New Password Reset','Password Reset Approved','waiting for admin approval','Your password reset request was rejected.','Your password reset approval has expired.','Your previous password reset request is no longer active. Please request a new password reset.','Phone Number','Contact Weymela Support','mailto:support@weymela.com?subject=Weymela%20Support%20Request','password-reset-requests','weymela_password_reset_recovery','savePasswordResetRecovery','readPasswordResetRecovery','removePasswordResetRecovery'])assert.ok(auth.includes(value))
+  assert.match(auth,/PasswordInput[\s\S]*New Password/)
   assert.match(authEndpoints,/No account was found with that phone number or email\. Please create a new account\./)
   assert.match(auth,/Status:\s*\{resetStatus\}/)
   assert.match(auth,/resetStatusMessage\s*\|\|\s*passwordResetStatusText\(resetStatus\)/)

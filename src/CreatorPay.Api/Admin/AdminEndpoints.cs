@@ -1,6 +1,7 @@
 using CreatorPay.Api.Authentication;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.CustomerVerification;
+using CreatorPay.Application.Notifications;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Eligibility;
@@ -61,7 +62,7 @@ public static class AdminEndpoints
         return Results.Ok(items);
     }
 
-    private static async Task<IResult> ApprovePasswordReset(Guid id, HttpContext h, ICurrentUserService current, ApplicationDbContext db, ITokenService tokens, IOptions<PasswordResetOptions> options, CancellationToken ct)
+    private static async Task<IResult> ApprovePasswordReset(Guid id, HttpContext h, ICurrentUserService current, ApplicationDbContext db, ITokenService tokens, IOptions<PasswordResetOptions> options, INotificationService notifications, CancellationToken ct)
     {
         var request = await db.SupportRequests.SingleOrDefaultAsync(x => x.Id == id && x.Subject == "Password Reset", ct);
         if (request is null) return Results.NotFound();
@@ -74,7 +75,21 @@ public static class AdminEndpoints
         request.Status = "Approved"; request.UpdatedAtUtc = now;
         AddPasswordResetAudit(db, current.UserAccountId!.Value, request.Id, "PasswordResetAuthorized", request.PublicReference, request.Contact, request.Status, h.TraceIdentifier, now);
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new { status = "Pending", authorized = true });
+        await notifications.CreateAsync(new(
+            NotificationType.SecurityAlert,
+            $"password-reset-approved:{request.PublicReference}",
+            new Dictionary<string, string>
+            {
+                ["Title"] = "Password reset approved",
+                ["Body"] = "Your password reset request was approved. Return to Password Recovery to create a new password.",
+                ["TargetPath"] = "/",
+            },
+            [new NotificationRecipientRequest(user.Id, NotificationRecipientType.User, NotificationChannel.InApp, null, null)],
+            NotificationPriority.High,
+            h.TraceIdentifier,
+            nameof(SupportRequest),
+            request.Id.ToString()), ct);
+        return Results.Ok(new { status = "Approved", authorized = true });
     }
 
     private static async Task<IResult> RejectPasswordReset(Guid id, HttpContext h, ICurrentUserService current, ApplicationDbContext db, CancellationToken ct)

@@ -84,8 +84,8 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         var errors = policy.Validate(request.NewPassword); if (errors.Count > 0) return OperationResult.Failure(string.Join(" ", errors));
         var item = await store.FindResetAsync(tokens.HashToken(request.ResetToken), innerCt); var now = clock.UtcNow;
         if (item is null || item.UsedAtUtc is not null || item.ExpiresAtUtc <= now) return OperationResult.Failure("Invalid or expired reset token.");
-        var user = await store.FindUserAsync(item.UserAccountId, innerCt); if (user is null || user.Status != AccountStatus.Active) return OperationResult.Failure("Invalid or expired reset token.");
-        item.UsedAtUtc = now; item.UsedByIp = context.IpAddress; user.PasswordHash = passwords.Hash(user, request.NewPassword); user.UpdatedAtUtc = now;
+        var user = await store.FindUserAsync(item.UserAccountId, innerCt); if (user is null || !CanSignIn(user)) return OperationResult.Failure("Invalid or expired reset token.");
+        item.UsedAtUtc = now; item.UsedByIp = context.IpAddress; user.PasswordHash = passwords.Hash(user, request.NewPassword); user.FailedLoginCount = 0; user.LastFailedLoginAtUtc = null; user.LockoutEndUtc = null; user.UpdatedAtUtc = now;
         await store.RevokeAllAsync(user.Id, now, "Password reset", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return OperationResult.Success();
     }, ct);
 
