@@ -50,8 +50,8 @@ test('Android manifest permits only HTTPS networking and protects session data',
 
 test('android release version is bumped for the next production upload',()=>{
   const gradle=read('android/app/build.gradle')
-  assert.match(gradle,/versionCode 8/)
-  assert.match(gradle,/versionName "0\.1\.7"/)
+  assert.match(gradle,/versionCode 9/)
+  assert.match(gradle,/versionName "1\.0\.0"/)
 })
 
 test('mobile modes select exact non-secret PILOT and Production API URLs',()=>{
