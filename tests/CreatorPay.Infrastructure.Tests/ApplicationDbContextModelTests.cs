@@ -1,4 +1,5 @@
 using CreatorPay.Domain.Entities;
+using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -59,6 +60,19 @@ public sealed class ApplicationDbContextModelTests
         Assert.True(FindIndex(typeof(RefreshToken), "TokenHash").IsUnique);
         Assert.True(FindIndex(typeof(PasswordResetToken), "TokenHash").IsUnique);
         Assert.False(FindIndex(typeof(RefreshToken), "UserAccountId", "ExpiresAtUtc").IsUnique);
+    }
+
+    [Fact]
+    public void Model_creates_V3_external_identity_profile_and_session_boundaries()
+    {
+        Assert.NotNull(_model.FindEntityType(typeof(ExternalIdentity)));
+        Assert.NotNull(_model.FindEntityType(typeof(ExternalProfileLink)));
+        Assert.NotNull(_model.FindEntityType(typeof(ExternalApplicationSession)));
+        Assert.True(FindIndex(typeof(ExternalIdentity), "Issuer", "Environment", "ExternalUserId").IsUnique);
+        Assert.True(FindIndex(typeof(ExternalProfileLink), "ProvisioningKey").IsUnique);
+        Assert.True(FindIndex(typeof(ExternalProfileLink), "UserAccountId").IsUnique);
+        Assert.Equal(AuthenticationSource.Local,
+            _model.FindEntityType(typeof(UserAccount))!.FindProperty("AuthenticationSource")!.GetDefaultValue());
     }
 
     [Fact]

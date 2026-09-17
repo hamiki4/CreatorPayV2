@@ -2,12 +2,14 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { api, ApiError } from "./apiClient";
 import { clearSession } from "./sessionStore";
 import { PasswordInput } from "./PasswordInput";
+import {isExternalSession} from './externalSession'
 
 type Status={isEligible:boolean;isPinEnrolled:boolean;isLocked:boolean;failedAttemptCount:number};
 const validPin=(value:string)=>/^\d{5}$/.test(value);
 export function PinEntry({value,onChange,label}:{value:string;onChange:(v:string)=>void;label:string}){return <label className="pin-entry"><span>{label}</span><input inputMode="numeric" autoComplete="new-password" pattern="[0-9]{5}" maxLength={5} required value={value} onChange={e=>onChange(e.target.value.replace(/\D/g,"").slice(0,5))}/><span className="pin-cells" aria-hidden="true">{Array.from({length:5},(_,i)=><i key={i}>{value[i]?"•":""}</i>)}</span></label>}
 
 export function PinEnrollmentGate({children}:{children:ReactNode}){
+  if(isExternalSession())return <>{children}</>;
   const [status,setStatus]=useState<Status|null>(null),[pin,setPin]=useState(""),[confirmation,setConfirmation]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[bootstrapFailed,setBootstrapFailed]=useState(false);
   const load=()=>api<Status>("/api/v1/auth/pin/status").then(data=>{setStatus(data);setBootstrapFailed(false)}).catch(e=>{console.error(e);setBootstrapFailed(true);setMessage((e as Error).message)});
   useEffect(()=>{void load()},[]);

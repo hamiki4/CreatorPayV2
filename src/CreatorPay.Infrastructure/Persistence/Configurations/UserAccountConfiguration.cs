@@ -1,4 +1,5 @@
 using CreatorPay.Domain.Entities;
+using CreatorPay.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -16,6 +17,8 @@ public sealed class UserAccountConfiguration : IEntityTypeConfiguration<UserAcco
         builder.Property(x => x.PhoneNumber).HasMaxLength(16);
         builder.Property(x => x.NormalizedPhoneNumber).HasMaxLength(16);
         builder.Property(x => x.PasswordHash).HasMaxLength(1000).IsRequired();
+        builder.Property(x => x.AuthenticationSource).HasConversion<string>().HasMaxLength(32).IsRequired()
+            .HasDefaultValue(AuthenticationSource.Local);
         builder.Property(x => x.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.LastLoginAtUtc).HasColumnType("timestamp with time zone");

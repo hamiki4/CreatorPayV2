@@ -47,14 +47,18 @@ async function installAdminSessionAndApi(page: Page, role: typeof roles[number])
   }, {accessToken: fakeToken(role)})
 
   let rows = notices()
-  await page.route('https://api-pilot.weymela.com/**', async (route: Route) => {
+  await page.route('**/api/v1/**', async (route: Route) => {
     const request = route.request()
     const url = new URL(request.url())
+    if (url.pathname.startsWith('/api/v1/integration/v3/')) return route.continue()
     const json = (value: unknown, status = 200) => route.fulfill({
       status,
       contentType: 'application/json',
       body: JSON.stringify(value),
-      headers: {'access-control-allow-origin': '*'},
+      headers: {
+        'access-control-allow-origin': new URL(page.url()).origin,
+        'access-control-allow-credentials': 'true',
+      },
     })
 
     if (url.pathname === '/api/v1/notifications/unread-count') return json({count: rows.filter((x) => !('readAtUtc' in x)).length})

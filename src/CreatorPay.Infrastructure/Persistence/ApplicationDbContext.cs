@@ -6,6 +6,9 @@ namespace CreatorPay.Infrastructure.Persistence;
 public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : DbContext(options)
 {
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+    public DbSet<ExternalIdentity> ExternalIdentities => Set<ExternalIdentity>();
+    public DbSet<ExternalProfileLink> ExternalProfileLinks => Set<ExternalProfileLink>();
+    public DbSet<ExternalApplicationSession> ExternalApplicationSessions => Set<ExternalApplicationSession>();
     public DbSet<Creator> Creators => Set<Creator>();
     public DbSet<CreatorSocialProfile> CreatorSocialProfiles => Set<CreatorSocialProfile>();
     public DbSet<Customer> Customers => Set<Customer>(); public DbSet<CustomerWallet> CustomerWallets => Set<CustomerWallet>(); public DbSet<CustomerCashbackEntry> CustomerCashbackEntries => Set<CustomerCashbackEntry>(); public DbSet<CustomerRecoveryBalance> CustomerRecoveryBalances => Set<CustomerRecoveryBalance>(); public DbSet<CustomerPayoutRequest> CustomerPayoutRequests => Set<CustomerPayoutRequest>(); public DbSet<CheckoutSession> CheckoutSessions => Set<CheckoutSession>(); public DbSet<SavedPromotion> SavedPromotions => Set<SavedPromotion>(); public DbSet<MerchantStoreQr> MerchantStoreQrs => Set<MerchantStoreQr>(); public DbSet<MerchantPromotionProfile> MerchantPromotionProfiles => Set<MerchantPromotionProfile>(); public DbSet<MerchantTrialCredit> MerchantTrialCredits => Set<MerchantTrialCredit>(); public DbSet<PlatformRevenueEntry> PlatformRevenueEntries => Set<PlatformRevenueEntry>();

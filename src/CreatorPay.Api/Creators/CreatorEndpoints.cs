@@ -2,6 +2,8 @@ using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Creators;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using CreatorPay.Infrastructure.Integration;
+using CreatorPay.Domain.Enums;
 
 namespace CreatorPay.Api.Creators;
 
@@ -28,8 +30,10 @@ public static class CreatorEndpoints
         group.MapDelete("/me/profile-photo", async (ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RemoveProfilePhotoAsync(user.UserAccountId!.Value, ct))).RequireAuthorization("CreatorOnboarding");
         group.MapGet("/pending", async (ICreatorService service, CancellationToken ct) => Results.Ok(await service.GetPendingAsync(ct))).RequireAuthorization("AdminOperationsOnly");
         group.MapGet("/{creatorId:guid}", async (Guid creatorId, ICreatorService service, CancellationToken ct) => ToHttp(await service.GetAsync(creatorId, ct))).RequireAuthorization("AdminOperationsOnly");
-        group.MapPost("/approve", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.ApproveAsync(request.CreatorId, user.UserAccountId!.Value, ct))).RequireAuthorization("AdminOperationsOnly");
-        group.MapPost("/reject", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RejectAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("AdminOperationsOnly");
+        group.MapPost("/approve", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, ExternalIntegrationService integration, CancellationToken ct) =>
+        { var result = await service.ApproveAsync(request.CreatorId, user.UserAccountId!.Value, ct); var synchronized = await integration.SynchronizeLifecycleAsync(UserRole.Creator, request.CreatorId, "ACTIVE", ct); return synchronized && !result.Succeeded ? Results.Ok(new { succeeded = true }) : ToHttp(result); }).RequireAuthorization("AdminOperationsOnly");
+        group.MapPost("/reject", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, ExternalIntegrationService integration, CancellationToken ct) =>
+        { var result = await service.RejectAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct); var synchronized = await integration.SynchronizeLifecycleAsync(UserRole.Creator, request.CreatorId, "REJECTED", ct); return synchronized && !result.Succeeded ? Results.Ok(new { succeeded = true }) : ToHttp(result); }).RequireAuthorization("AdminOperationsOnly");
         group.MapPost("/request-correction", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.RequestCorrectionAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("AdminOperationsOnly");
         group.MapPost("/suspend", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.SuspendAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("AdminOperationsOnly");
         group.MapPost("/reactivate", async (CreatorDecisionRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.ReactivateAsync(request.CreatorId, user.UserAccountId!.Value, request.Reason, ct))).RequireAuthorization("AdminOperationsOnly");

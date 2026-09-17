@@ -4,6 +4,8 @@ using CreatorPay.Application.Merchants;
 using CreatorPay.Domain.Entities;
 using CreatorPay.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using CreatorPay.Infrastructure.Integration;
+using CreatorPay.Domain.Enums;
 
 namespace CreatorPay.Api.Merchants;
 
@@ -22,8 +24,10 @@ public static class MerchantEndpoints
         admin.MapGet("/pending", async (IMerchantService s, CancellationToken ct) => Results.Ok(await s.GetPendingAsync(ct)));
         admin.MapGet("/{merchantId:guid}", async (Guid merchantId, IMerchantService s, CancellationToken ct) => ToHttp(await s.GetAsync(merchantId, ct)));
         admin.MapPut("/{merchantId:guid}/business-type", async (Guid merchantId, BusinessTypeRequest request, ICurrentUserService u, ApplicationDbContext db, CancellationToken ct) => await UpdateBusinessType(merchantId, request, u, db, ct)).RequireAuthorization("PlatformAdminOnly");
-        admin.MapPost("/approve", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.ApproveAsync(r.MerchantId, u.UserAccountId!.Value, ct)));
-        admin.MapPost("/reject", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.RejectAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));
+        admin.MapPost("/approve", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, ExternalIntegrationService integration, CancellationToken ct) =>
+        { var result = await s.ApproveAsync(r.MerchantId, u.UserAccountId!.Value, ct); var synchronized = await integration.SynchronizeLifecycleAsync(UserRole.MerchantAdmin, r.MerchantId, "ACTIVE", ct); return synchronized && !result.Succeeded ? Results.Ok(new { succeeded = true }) : ToHttp(result); });
+        admin.MapPost("/reject", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, ExternalIntegrationService integration, CancellationToken ct) =>
+        { var result = await s.RejectAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct); var synchronized = await integration.SynchronizeLifecycleAsync(UserRole.MerchantAdmin, r.MerchantId, "REJECTED", ct); return synchronized && !result.Succeeded ? Results.Ok(new { succeeded = true }) : ToHttp(result); });
         admin.MapPost("/request-correction", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.RequestCorrectionAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));
         admin.MapPost("/suspend", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.SuspendAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));
         admin.MapPost("/reactivate", async (MerchantDecisionRequest r, ICurrentUserService u, IMerchantService s, CancellationToken ct) => ToHttp(await s.ReactivateAsync(r.MerchantId, u.UserAccountId!.Value, r.Reason, ct)));

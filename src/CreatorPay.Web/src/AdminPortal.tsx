@@ -8,6 +8,7 @@ import { AdminAccountCreate } from "./AdminAccountCreate";
 import { businessTypes } from "./AuthWorkspace";
 import { formatDateTime, formatUserFacingText } from "./displayFormat";
 import { NavIcon, NavIconName } from "./navIcons";
+import {getExternalSession,isExternalSession,signOutExternalSession,switchExternalProfile} from './externalSession'
 
 type Row = Record<string, unknown>;
 type Page<T = Row> = { items: T[]; page: number; total: number; totalPages: number };
@@ -136,6 +137,7 @@ const dashboardShortcuts: Record<string, { href: string; icon: NavIconName }> = 
 
 async function api<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
+    credentials: "include",
     headers: { Authorization: `Bearer ${token()}` },
   });
   if (handleUnauthorized(response.status)) throw Error("Your session has expired.");
@@ -155,6 +157,7 @@ const notificationFallback = "This section is temporarily unavailable.";
 async function notificationApi<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token()}`,
@@ -173,6 +176,8 @@ async function notificationApi<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 function currentRole(): AdminRole | "" {
+  const external = getExternalSession();
+  if (external?.role === "PlatformAdmin") return "PlatformAdmin";
   try {
     const payload = JSON.parse(
       atob(token().split(".")[1].replace(/-/g, "+").replace(/_/g, "/")),
@@ -276,7 +281,9 @@ export function AdminPortal({ operations }: { operations: Ops }) {
   }
 
   const navRoleLabel = role === "PlatformAdmin" ? "Platform" : "Operations";
-  const visibleNav = platformNav.filter((item) => role === "PlatformAdmin" || item.roles.includes(role));
+  const visibleNav = platformNav.filter((item) => (role === "PlatformAdmin" || item.roles.includes(role))
+    && (!isExternalSession() || !["password-reset-requests", "admin-accounts"].includes(item.id)));
+  const externalAuthPage = isExternalSession() && ["password-reset-requests", "admin-accounts"].includes(page);
 
   return (
     <div className={`admin-shell admin-shell--${role === "PlatformAdmin" ? "platform" : "operations"}`}>
@@ -319,7 +326,7 @@ export function AdminPortal({ operations }: { operations: Ops }) {
       <div className="admin-main">
         <AdminHeader role={role} showSearch={role === "PlatformAdmin"} onMenu={() => setMenuOpen(true)} />
         <main id="admin-content" tabIndex={-1}>
-          {blockedByRole ? null : denied ? (
+          {blockedByRole ? null : denied || externalAuthPage ? (
             <Forbidden
               text={
                 "This page is unavailable."
@@ -439,6 +446,7 @@ function CreatorReview() {
 
     const response = await fetch(`${apiBase}/api/v1/creators/${action}`, {
       method: "POST",
+      credentials: "include",
       headers: {
         Authorization: `Bearer ${token()}`,
         "Content-Type": "application/json",
@@ -567,6 +575,7 @@ function BusinessReview() {
 
     const response = await fetch(`${apiBase}/api/v1/admin/merchants/${action}`, {
       method: "POST",
+      credentials: "include",
       headers: {
         Authorization: `Bearer ${token()}`,
         "Content-Type": "application/json",
@@ -683,6 +692,7 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
   }
 
   function logout() {
+    if(isExternalSession()){void signOutExternalSession();return}
     clearAuthState();
     location.assign("/");
   }
@@ -792,6 +802,7 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
           <NavIcon name="notifications" />
           {unread > 0 && <span className="notification-count" aria-hidden="true">{unread > 99 ? "99+" : unread}</span>}
         </button>
+        {isExternalSession() && <button className="quiet" onClick={() => void switchExternalProfile()}>Switch profile</button>}
         <button className="quiet" onClick={logout}>
           Sign out
         </button>
@@ -1130,6 +1141,7 @@ function AccountPage({
     if (!reason) return;
     const response = await fetch(`${apiBase}/api/v1/admin/accounts/${id}/${name}`, {
       method: "POST",
+      credentials: "include",
       headers: {
         Authorization: `Bearer ${token()}`,
         "Content-Type": "application/json",
@@ -1154,6 +1166,7 @@ function AccountPage({
     try {
       const response = await fetch(`${apiBase}/api/v1/admin/merchants/${editing.merchantId}/business-type`, {
         method: "PUT",
+        credentials: "include",
         headers: {
           Authorization: `Bearer ${token()}`,
           "Content-Type": "application/json",
@@ -1417,6 +1430,7 @@ function PasswordResetRequests() {
     if (!confirm(`${action === "approve" ? "Authorize" : "Reject"} this password reset request?`)) return;
     const response = await fetch(`${apiBase}/api/v1/admin/password-reset-requests/${id}/${action}`, {
       method: "POST",
+      credentials: "include",
       headers: { Authorization: `Bearer ${token()}` },
     });
     if (!response.ok) {
@@ -1432,6 +1446,7 @@ function PasswordResetRequests() {
     if (!reason) return;
     const response = await fetch(`${apiBase}/api/v1/admin/password-reset-requests/${id}/delete`, {
       method: "POST",
+      credentials: "include",
       headers: {
         Authorization: `Bearer ${token()}`,
         "Content-Type": "application/json",

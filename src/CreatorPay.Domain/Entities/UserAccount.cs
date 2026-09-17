@@ -11,6 +11,7 @@ public sealed class UserAccount : Entity
     public string? PhoneNumber { get; set; }
     public string? NormalizedPhoneNumber { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
+    public AuthenticationSource AuthenticationSource { get; set; } = AuthenticationSource.Local;
     public UserRole Role { get; set; }
     public AccountStatus Status { get; set; }
     public Guid? CreatorId { get; set; }

@@ -68,7 +68,8 @@ public static class AdminEndpoints
         if (request is null) return Results.NotFound();
         if (request.Status != "Pending") return Results.Conflict(new { detail = "This password reset request has already been reviewed." });
         if (!Guid.TryParse(request.Message, out var userId)) return Results.Problem("The request cannot be authorized.", statusCode: 409);
-        var user = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == userId && x.Role != UserRole.PlatformAdmin, ct);
+        var user = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == userId && x.Role != UserRole.PlatformAdmin
+            && x.AuthenticationSource == AuthenticationSource.Local, ct);
         if (user is null) return Results.Problem("The request cannot be authorized.", statusCode: 409);
         var now = DateTime.UtcNow;
         db.PasswordResetTokens.Add(new PasswordResetToken { Id = Guid.NewGuid(), UserAccountId = user.Id, TokenHash = tokens.HashToken(request.PublicReference), CreatedAtUtc = now, ExpiresAtUtc = now.AddMinutes(options.Value.TokenLifetimeMinutes), RequestedByIp = h.Connection.RemoteIpAddress?.ToString() });

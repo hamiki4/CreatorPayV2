@@ -142,10 +142,31 @@ public sealed class PhoneOtpPersistenceTests : IAsyncLifetime
         Assert.False((await service.ResetPasswordAsync(new(user.NormalizedPhoneNumber!, "000000", "New-password-2!", "New-password-2!"), null, default)).Succeeded);
     }
 
+    [DockerFact]
+    public async Task V3_external_account_cannot_issue_verify_or_reset_through_phone_otp()
+    {
+        await using var db = Db();
+        var user = await AddUser(db, "+251911000107", "Old-password-1!");
+        user.AuthenticationSource = AuthenticationSource.V3External;
+        user.Status = AccountStatus.Active;
+        await db.SaveChangesAsync();
+        var service = Service(db);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.IssueAsync(user, "PasswordReset", null, default));
+        Assert.True((await service.ResendAsync(user.NormalizedPhoneNumber!, "PasswordReset", null, default)).Succeeded);
+        await service.RequestPasswordResetAsync(user.NormalizedPhoneNumber!, null, default);
+        Assert.False((await service.VerifyRegistrationAsync(user.NormalizedPhoneNumber!, otp.TestCode, default)).Succeeded);
+        Assert.False((await service.ResetPasswordAsync(new(user.NormalizedPhoneNumber!, otp.TestCode,
+            "New-password-2!", "New-password-2!"), null, default)).Succeeded);
+        Assert.Empty(await db.PhoneOtpChallenges.Where(x => x.UserAccountId == user.Id).ToListAsync());
+    }
+
     private ApplicationDbContext Db() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(container.GetConnectionString()).Options);
 
     private PhoneOtpService Service(ApplicationDbContext db) => new(db, new CapturingSender(), Options.Create(otp), clock, passwords,
-        new PasswordPolicyValidator(Options.Create(new PasswordOptions())), new EnvironmentStub());
+        new PasswordPolicyValidator(Options.Create(new PasswordOptions())), new EnvironmentStub(),
+        new LocalAuthenticationPolicy());
 
     private async Task<UserAccount> AddUser(ApplicationDbContext db, string phone, string password)
     {

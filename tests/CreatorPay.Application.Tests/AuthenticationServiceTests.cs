@@ -146,6 +146,17 @@ public sealed class AuthenticationServiceTests
         Assert.False(result.Succeeded);
     }
 
+    [Fact]
+    public async Task V3_external_account_is_not_pin_eligible_even_if_legacy_pin_data_exists()
+    {
+        var user = User(UserRole.Customer, AccountStatus.Active);
+        user.AuthenticationSource = AuthenticationSource.V3External;
+        user.PinHash = "legacy-pin-data";
+        var result = await Service(new FakeStore(user)).GetPinStatusAsync(user.Id, default);
+        Assert.True(result.Succeeded);
+        Assert.False(result.Value!.IsEligible);
+    }
+
     [Theory]
     [InlineData(false, "user@example.com")]
     [InlineData(true, "different@example.com")]
@@ -174,7 +185,7 @@ public sealed class AuthenticationServiceTests
     private static readonly DateTime Now = new(2026, 8, 5, 12, 0, 0, DateTimeKind.Utc);
     private static UserAccount User(UserRole role, AccountStatus status) => new() { Id = Guid.NewGuid(), Email = $"{role}@example.com", NormalizedEmail = $"{role}@example.com".ToUpperInvariant(), PhoneNumber = $"+2519{Math.Abs((int)role):D8}"[..13], NormalizedPhoneNumber = $"+2519{Math.Abs((int)role):D8}"[..13], PasswordHash = "Correct1!", Role = role, Status = status };
     private static RequestContext Context() => new("127.0.0.1", "tests", "correlation");
-    private static AuthenticationService Service(FakeStore store, IFirebaseIdentityVerifier? firebase = null) => new(store, new FakePasswords(), new FakeTokens(), new FakeClock(), new FakeNotifier(), new PasswordPolicyValidator(Options.Create(new PasswordOptions())), Options.Create(new JwtOptions()), Options.Create(new LockoutOptions()), Options.Create(new PasswordResetOptions()), firebase ?? new FakeFirebase(null));
+    private static AuthenticationService Service(FakeStore store, IFirebaseIdentityVerifier? firebase = null) => new(store, new FakePasswords(), new FakeTokens(), new FakeClock(), new FakeNotifier(), new PasswordPolicyValidator(Options.Create(new PasswordOptions())), Options.Create(new JwtOptions()), Options.Create(new LockoutOptions()), Options.Create(new PasswordResetOptions()), firebase ?? new FakeFirebase(null), new LocalAuthenticationPolicy());
 
     private sealed class FakePasswords : IPasswordHasher { public string Hash(UserAccount user, string password) => password; public PasswordVerification Verify(UserAccount user, string hash, string password) => hash == password ? PasswordVerification.Success : PasswordVerification.Failed; }
     private sealed class FakeTokens : ITokenService { public (string Token, DateTime ExpiresAtUtc) CreateAccessToken(UserAccount user) => ($"access-{user.Role}-{Guid.NewGuid():N}", Now.AddMinutes(15)); public string CreateOpaqueToken() => $"opaque-{Guid.NewGuid():N}"; public string HashToken(string token) => $"hash-{token}"; }

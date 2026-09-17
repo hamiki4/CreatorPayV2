@@ -8,6 +8,11 @@ public interface ITokenService { (string Token, DateTime ExpiresAtUtc) CreateAcc
 public interface IUtcClock { DateTime UtcNow { get; } }
 public interface IPasswordResetNotifier { Task NotifyAsync(UserAccount user, string rawToken, CancellationToken cancellationToken); }
 public interface IFirebaseIdentityVerifier { Task<Result<FirebaseIdentityProof>> VerifyIdTokenAsync(string idToken, bool checkRevoked, CancellationToken ct); }
+public interface IExternalAuthenticationPolicy { bool LocalAuthenticationAllowed(UserAccount user); }
+public sealed class LocalAuthenticationPolicy : IExternalAuthenticationPolicy
+{
+    public bool LocalAuthenticationAllowed(UserAccount user) => user.AuthenticationSource == Domain.Enums.AuthenticationSource.Local;
+}
 public interface ICurrentUserService { bool IsAuthenticated { get; } Guid? UserAccountId { get; } string? Role { get; } Guid? MerchantId { get; } Guid? CreatorId { get; } Guid? CustomerId { get; } Guid? SupervisorId { get; } Guid? CashierId { get; } }
 public interface IAuthenticationService
 {

@@ -11,6 +11,7 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddSingleton<IExternalAuthenticationPolicy, LocalAuthenticationPolicy>();
         services.AddSingleton<PasswordPolicyValidator>();
         services.AddScoped<ICreatorService, CreatorService>();
         services.AddScoped<IMerchantService, MerchantService>();

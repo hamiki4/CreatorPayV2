@@ -29,12 +29,15 @@ public sealed class PilotTestSmsOtpSender(IHostEnvironment environment) : ISmsOt
 }
 
 public sealed class PhoneOtpService(ApplicationDbContext db, ISmsOtpSender sender, IOptions<SmsOtpOptions> configured,
-    IUtcClock clock, IPasswordHasher passwords, PasswordPolicyValidator passwordPolicy, IHostEnvironment environment) : IPhoneOtpService
+    IUtcClock clock, IPasswordHasher passwords, PasswordPolicyValidator passwordPolicy, IHostEnvironment environment,
+    IExternalAuthenticationPolicy externalAuthentication) : IPhoneOtpService
 {
     readonly SmsOtpOptions options = configured.Value;
 
     public async Task IssueAsync(UserAccount user, string purpose, string? requestedByIp, CancellationToken ct)
     {
+        if (!externalAuthentication.LocalAuthenticationAllowed(user))
+            throw new InvalidOperationException("Local authentication is not available for this account.");
         if (string.IsNullOrWhiteSpace(user.NormalizedPhoneNumber)) throw new InvalidOperationException("Account has no phone identity.");
         var now = clock.UtcNow;
         var recent = await db.PhoneOtpChallenges.Where(x => x.UserAccountId == user.Id && x.Purpose == purpose && x.UsedAtUtc == null).OrderByDescending(x => x.CreatedAtUtc).FirstOrDefaultAsync(ct);
@@ -59,14 +62,17 @@ public sealed class PhoneOtpService(ApplicationDbContext db, ISmsOtpSender sende
 
     public async Task<PhoneOtpResult> ResendAsync(string phoneNumber, string purpose, string? requestedByIp, CancellationToken ct)
     {
-        var user = await Find(phoneNumber, ct); if (user is null) return PhoneOtpResult.Success();
+        var user = await Find(phoneNumber, ct);
+        if (user is null || !externalAuthentication.LocalAuthenticationAllowed(user)) return PhoneOtpResult.Success();
         try { await IssueAsync(user, purpose, requestedByIp, ct); return PhoneOtpResult.Success(); }
         catch (InvalidOperationException x) { return PhoneOtpResult.Failure(x.Message); }
     }
 
     public async Task<PhoneOtpResult> VerifyRegistrationAsync(string phoneNumber, string code, CancellationToken ct)
     {
-        var user = await Find(phoneNumber, ct); if (user is null) return PhoneOtpResult.Failure("Invalid or expired verification code.");
+        var user = await Find(phoneNumber, ct);
+        if (user is null || !externalAuthentication.LocalAuthenticationAllowed(user))
+            return PhoneOtpResult.Failure("Invalid or expired verification code.");
         var verified = await Verify(user, "Registration", code, ct); if (!verified.Succeeded) return verified;
         var now = clock.UtcNow; user.IsPhoneVerified = true;
         if (user.Role == UserRole.Customer) user.Status = AccountStatus.Active;
@@ -79,7 +85,8 @@ public sealed class PhoneOtpService(ApplicationDbContext db, ISmsOtpSender sende
 
     public async Task RequestPasswordResetAsync(string phoneNumber, string? requestedByIp, CancellationToken ct)
     {
-        var user = await Find(phoneNumber, ct); if (user is null || user.Role == UserRole.PlatformAdmin) return;
+        var user = await Find(phoneNumber, ct);
+        if (user is null || user.Role == UserRole.PlatformAdmin || !externalAuthentication.LocalAuthenticationAllowed(user)) return;
         try { await IssueAsync(user, "PasswordReset", requestedByIp, ct); } catch (InvalidOperationException) { }
     }
 
@@ -87,7 +94,9 @@ public sealed class PhoneOtpService(ApplicationDbContext db, ISmsOtpSender sende
     {
         if (request.NewPassword != request.Confirmation) return PhoneOtpResult.Failure("Password confirmation does not match.");
         var errors = passwordPolicy.Validate(request.NewPassword); if (errors.Count > 0) return PhoneOtpResult.Failure(string.Join(" ", errors));
-        var user = await Find(request.PhoneNumber, ct); if (user is null || user.Role == UserRole.PlatformAdmin) return PhoneOtpResult.Failure("Invalid or expired verification code.");
+        var user = await Find(request.PhoneNumber, ct);
+        if (user is null || user.Role == UserRole.PlatformAdmin || !externalAuthentication.LocalAuthenticationAllowed(user))
+            return PhoneOtpResult.Failure("Invalid or expired verification code.");
         var verified = await Verify(user, "PasswordReset", request.Code, ct); if (!verified.Succeeded) return verified;
         var now = clock.UtcNow; user.PasswordHash = passwords.Hash(user, request.NewPassword); user.UpdatedAtUtc = now;
         await db.RefreshTokens.Where(x => x.UserAccountId == user.Id && x.RevokedAtUtc == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAtUtc, now).SetProperty(x => x.RevokedReason, "Password reset").SetProperty(x => x.RevokedByIp, usedByIp), ct);

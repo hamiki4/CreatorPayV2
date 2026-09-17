@@ -7,7 +7,7 @@ const token=getAccessToken
 const invalidResponse='This section is temporarily unavailable.'
 
 async function notificationApi<T>(path:string,init?:RequestInit):Promise<T>{
-  const response=await fetch(`${apiBase}${path}`,{...init,headers:{'Content-Type':'application/json',Authorization:`Bearer ${token()}`,...init?.headers}})
+  const response=await fetch(`${apiBase}${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token()}`,...init?.headers}})
   if(response.status===204){if(!response.ok)throw new Error('This section is temporarily unavailable.');return undefined as T}
   const contentType=response.headers.get('content-type')?.toLowerCase()??''
   if(!contentType.includes('json')){console.error(`Invalid notification response (${response.status}, ${contentType})`);throw new Error(invalidResponse)}

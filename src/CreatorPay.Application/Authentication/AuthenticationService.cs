@@ -8,7 +8,8 @@ namespace CreatorPay.Application.Authentication;
 
 public sealed class AuthenticationService(IAuthenticationStore store, IPasswordHasher passwords, ITokenService tokens, IUtcClock clock,
     IPasswordResetNotifier notifier, PasswordPolicyValidator policy, IOptions<JwtOptions> jwt, IOptions<LockoutOptions> lockout,
-    IOptions<PasswordResetOptions> resetOptions, IFirebaseIdentityVerifier firebase) : IAuthenticationService
+    IOptions<PasswordResetOptions> resetOptions, IFirebaseIdentityVerifier firebase,
+    IExternalAuthenticationPolicy externalAuthentication) : IAuthenticationService
 {
     private const string InvalidEmailCredentials = "Invalid email or password.";
     private const string InvalidPhoneCredentials = "Invalid phone number or password.";
@@ -19,6 +20,8 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         else { try { user = await store.FindUserByPhoneAsync(EthiopianMobileNumber.Normalize(identifier), ct); } catch (ArgumentException) { user = null; } }
         var email = user?.NormalizedPhoneNumber ?? NormalizeLogin(identifier);
         if (user is null) { Audit(null, email, false, "InvalidCredentials", context, now); await store.SaveAsync(ct); return Result<TokenPair>.Failure(invalidCredentials); }
+        if (!externalAuthentication.LocalAuthenticationAllowed(user))
+        { Audit(user.Id, email, false, "ExternalAuthenticationRequired", context, now); await store.SaveAsync(ct); return Result<TokenPair>.Failure(invalidCredentials); }
         var verification = passwords.Verify(user, user.PasswordHash, request.Password);
         if (verification == PasswordVerification.Failed)
         {
@@ -51,7 +54,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         if (existing is null) return Result<TokenPair>.Failure("Invalid refresh token.");
         if (!existing.IsActive(now)) { await store.RevokeFamilyAsync(existing.TokenFamily, now, "Token reuse detected", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure("Invalid refresh token."); }
         var user = await store.FindUserAsync(existing.UserAccountId, innerCt);
-        if (user is null || !CanSignIn(user) || user.LockoutEndUtc > now) { await store.RevokeFamilyAsync(existing.TokenFamily, now, "Account ineligible", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure("Invalid refresh token."); }
+        if (user is null || !externalAuthentication.LocalAuthenticationAllowed(user) || !CanSignIn(user) || user.LockoutEndUtc > now) { await store.RevokeFamilyAsync(existing.TokenFamily, now, "Account ineligible", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure("Invalid refresh token."); }
         existing.UsedAtUtc = now; existing.RevokedAtUtc = now; existing.RevokedReason = "Rotated"; existing.RevokedByIp = context.IpAddress;
         var pair = IssuePair(user, existing.TokenFamily, context, now); existing.ReplacedByTokenHash = tokens.HashToken(pair.RefreshToken);
         await store.SaveAsync(innerCt); return Result<TokenPair>.Success(pair);
@@ -68,13 +71,13 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     {
         if (request.NewPassword != request.Confirmation) return OperationResult.Failure("Password confirmation does not match.");
         var errors = policy.Validate(request.NewPassword); if (errors.Count > 0) return OperationResult.Failure(string.Join(" ", errors));
-        var user = await store.FindUserAsync(userId, ct); if (user is null || passwords.Verify(user, user.PasswordHash, request.CurrentPassword) == PasswordVerification.Failed) return OperationResult.Failure("Current password is invalid.");
+        var user = await store.FindUserAsync(userId, ct); if (user is null || !externalAuthentication.LocalAuthenticationAllowed(user) || passwords.Verify(user, user.PasswordHash, request.CurrentPassword) == PasswordVerification.Failed) return OperationResult.Failure("Current password is invalid.");
         if (passwords.Verify(user, user.PasswordHash, request.NewPassword) != PasswordVerification.Failed) return OperationResult.Failure("New password must differ from the current password.");
         user.PasswordHash = passwords.Hash(user, request.NewPassword); user.UpdatedAtUtc = clock.UtcNow; await store.RevokeAllAsync(user.Id, clock.UtcNow, "Password changed", context.IpAddress, ct); await store.SaveAsync(ct); return OperationResult.Success();
     }
     public async Task ForgotPasswordAsync(string email, RequestContext context, CancellationToken ct)
     {
-        var user = await store.FindUserByEmailAsync(Normalize(email), ct); if (user is null || user.Status != AccountStatus.Active) return;
+        var user = await store.FindUserByEmailAsync(Normalize(email), ct); if (user is null || user.Status != AccountStatus.Active || !externalAuthentication.LocalAuthenticationAllowed(user)) return;
         var raw = tokens.CreateOpaqueToken(); var now = clock.UtcNow; store.AddReset(new PasswordResetToken { Id = Guid.NewGuid(), UserAccountId = user.Id, TokenHash = tokens.HashToken(raw), CreatedAtUtc = now, ExpiresAtUtc = now.AddMinutes(resetOptions.Value.TokenLifetimeMinutes), RequestedByIp = context.IpAddress });
         await store.SaveAsync(ct); await notifier.NotifyAsync(user, raw, ct);
     }
@@ -84,7 +87,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         var errors = policy.Validate(request.NewPassword); if (errors.Count > 0) return OperationResult.Failure(string.Join(" ", errors));
         var item = await store.FindResetAsync(tokens.HashToken(request.ResetToken), innerCt); var now = clock.UtcNow;
         if (item is null || item.UsedAtUtc is not null || item.ExpiresAtUtc <= now) return OperationResult.Failure("Invalid or expired reset token.");
-        var user = await store.FindUserAsync(item.UserAccountId, innerCt); if (user is null || !CanSignIn(user)) return OperationResult.Failure("Invalid or expired reset token.");
+        var user = await store.FindUserAsync(item.UserAccountId, innerCt); if (user is null || !externalAuthentication.LocalAuthenticationAllowed(user) || !CanSignIn(user)) return OperationResult.Failure("Invalid or expired reset token.");
         item.UsedAtUtc = now; item.UsedByIp = context.IpAddress; user.PasswordHash = passwords.Hash(user, request.NewPassword); user.FailedLoginCount = 0; user.LastFailedLoginAtUtc = null; user.LockoutEndUtc = null; user.UpdatedAtUtc = now;
         await store.RevokeAllAsync(user.Id, now, "Password reset", context.IpAddress, innerCt); await store.SaveAsync(innerCt); return OperationResult.Success();
     }, ct);
@@ -93,14 +96,14 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     {
         var user = await store.FindUserAsync(userId, ct);
         if (user is null) return Result<PinStatus>.Failure("User not found.");
-        var eligible = IsPinRole(user.Role);
+        var eligible = externalAuthentication.LocalAuthenticationAllowed(user) && IsPinRole(user.Role);
         return Result<PinStatus>.Success(new(eligible, user.PinHash is not null, user.PinLockedAtUtc is not null, user.PinFailedAttemptCount));
     }
 
     public async Task<OperationResult> LinkFirebaseAsync(Guid userId, LinkFirebaseRequest request, RequestContext context, CancellationToken ct)
     {
         var user = await store.FindUserAsync(userId, ct);
-        if (user is null || !IsPinRole(user.Role)) return OperationResult.Failure("PIN enrollment is not available for this account.");
+        if (user is null || !externalAuthentication.LocalAuthenticationAllowed(user) || !IsPinRole(user.Role)) return OperationResult.Failure("PIN enrollment is not available for this account.");
         var proofResult = await firebase.VerifyIdTokenAsync(request.FirebaseIdToken, true, ct);
         if (!proofResult.Succeeded) return OperationResult.Failure(proofResult.Error!);
         var proof = proofResult.Value!;
@@ -122,7 +125,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
     public async Task<OperationResult> EnrollPinAsync(Guid userId, PinRequest request, RequestContext context, CancellationToken ct)
     {
         var user = await store.FindUserAsync(userId, ct);
-        if (user is null || !IsPinRole(user.Role)) return OperationResult.Failure("PIN enrollment is not available for this account.");
+        if (user is null || !externalAuthentication.LocalAuthenticationAllowed(user) || !IsPinRole(user.Role)) return OperationResult.Failure("PIN enrollment is not available for this account.");
         if (user.PinHash is not null) return OperationResult.Failure("A PIN is already enrolled. Use Forgot PIN to replace it.");
         if (!ValidPin(request.Pin) || request.Pin != request.Confirmation) return OperationResult.Failure("PIN must contain exactly 5 numeric digits and match confirmation.");
         var now = clock.UtcNow; user.PinHash = passwords.Hash(user, PinCredential(request.Pin)); user.PinVersion = 1;
@@ -136,7 +139,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         var now = clock.UtcNow; string normalized;
         try { normalized = EthiopianMobileNumber.Normalize(request.PhoneNumber); } catch (ArgumentException) { normalized = string.Empty; }
         var user = normalized.Length == 0 ? null : await store.FindUserByPhoneAsync(normalized, innerCt);
-        if (user is null || !IsPinRole(user.Role) || user.PinHash is null)
+        if (user is null || !externalAuthentication.LocalAuthenticationAllowed(user) || !IsPinRole(user.Role) || user.PinHash is null)
         { Audit(user?.Id, normalized, false, "PinInvalid", context, now); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure("Invalid phone number or PIN."); }
         if (user.PinLockedAtUtc is not null)
         { Audit(user.Id, normalized, false, "PinLocked", context, now); await store.SaveAsync(innerCt); return Result<TokenPair>.Failure(PinLockedMessage); }
@@ -174,7 +177,7 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         string normalized;
         try { normalized = EthiopianMobileNumber.Normalize(request.PhoneNumber); } catch (ArgumentException) { normalized = string.Empty; }
         var user = normalized.Length == 0 ? null : await store.FindUserByPhoneAsync(normalized, innerCt);
-        var verified = user is not null && IsPinRole(user.Role) && CanSignIn(user) &&
+        var verified = user is not null && externalAuthentication.LocalAuthenticationAllowed(user) && IsPinRole(user.Role) && CanSignIn(user) &&
             (user.LockoutEndUtc is null || user.LockoutEndUtc <= now) &&
             passwords.Verify(user, user.PasswordHash, request.Password) != PasswordVerification.Failed;
         if (!verified)
@@ -209,8 +212,8 @@ public sealed class AuthenticationService(IAuthenticationStore store, IPasswordH
         var effective = EffectiveAccountStatus.FromAccount(u, clock.UtcNow);
         return new(u.Id, u.Email, u.PhoneNumber, u.Role, u.Status, effective.EffectiveStatus, effective.EffectiveStatusReason, u.CreatorId, u.MerchantId, u.SupervisorId, u.CashierId, u.IsEmailVerified, u.IsPhoneVerified);
     }
-    public static bool CanSignIn(UserAccount user) => user.Status == AccountStatus.Active ||
-        user.Status is AccountStatus.PendingVerification or AccountStatus.PendingApproval && IsPinRole(user.Role);
+    public static bool CanSignIn(UserAccount user) => user.AuthenticationSource == AuthenticationSource.Local && (user.Status == AccountStatus.Active ||
+        user.Status is AccountStatus.PendingVerification or AccountStatus.PendingApproval && IsPinRole(user.Role));
     private static RestrictedAccount? GetRestriction(UserAccount user, DateTime now) => user.LockoutEndUtc is not null && user.LockoutEndUtc > now
         ? new("AccountLocked", "Your account is locked. Please contact Weymela support.")
         : user.Status switch

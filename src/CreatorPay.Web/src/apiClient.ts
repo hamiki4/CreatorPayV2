@@ -21,7 +21,7 @@ async function refreshAccessToken(){
 export async function api<T>(path:string,init?:RequestInit,retry=true):Promise<T>{
   try{
     const accessToken=token()
-    const response=await fetch(`${apiBase}${path}`,{...init,headers:{...(init?.body instanceof FormData?{}:{'Content-Type':'application/json'}),...(accessToken?{Authorization:`Bearer ${accessToken}`}:{ }),...init?.headers}})
+    const response=await fetch(`${apiBase}${path}`,{...init,credentials:'include',headers:{...(init?.body instanceof FormData?{}:{'Content-Type':'application/json'}),'X-Weymela-Product-Request':'1',...(accessToken?{Authorization:`Bearer ${accessToken}`}:{ }),...init?.headers}})
     if(response.status===401&&retry&&await refreshAccessToken())return api<T>(path,init,false)
     if(handleUnauthorized(response.status))throw new ApiError('Your session has expired. Please sign in again.',`Authentication required at ${path}.`)
     const contentType=response.headers.get('content-type')?.toLowerCase()??''
@@ -44,7 +44,7 @@ export async function api<T>(path:string,init?:RequestInit,retry=true):Promise<T
 export async function apiBlob(path:string,retry=true):Promise<Blob>{
   try{
     const accessToken=token()
-    const response=await fetch(`${apiBase}${path}`,{headers:{...(accessToken?{Authorization:`Bearer ${accessToken}`}:{ })}})
+    const response=await fetch(`${apiBase}${path}`,{credentials:'include',headers:{...(accessToken?{Authorization:`Bearer ${accessToken}`}:{ })}})
     if(response.status===401&&retry&&await refreshAccessToken())return apiBlob(path,false)
     if(handleUnauthorized(response.status))throw new ApiError('Your session has expired. Please sign in again.',`Authentication required at ${path}.`)
     if(!response.ok)throw new Error(`Request failed (${response.status})`)

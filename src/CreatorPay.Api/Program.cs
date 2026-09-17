@@ -23,12 +23,16 @@ using CreatorPay.Api.Checkout;
 using CreatorPay.Api.Discovery;
 using CreatorPay.Api.Testing;
 using CreatorPay.Api.Support;
+using CreatorPay.Api.Integration;
 using CreatorPay.Application;
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Creators;
 using CreatorPay.Application.Operations;
+using CreatorPay.Application.Integration;
 using CreatorPay.Domain.Enums;
 using CreatorPay.Infrastructure;
+using CreatorPay.Infrastructure.Integration;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -43,6 +47,7 @@ if (builder.Environment.IsEnvironment("E2E")) rateLimits.AuthPermitLimit = Math.
 var cors = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
 var featureFlags = builder.Configuration.GetSection(FeatureFlagOptions.SectionName).Get<FeatureFlagOptions>() ?? new();
 var reverseProxy = builder.Configuration.GetSection(ReverseProxyOptions.SectionName).Get<ReverseProxyOptions>() ?? new();
+var v3Integration = V3IntegrationOptions.Load(builder.Configuration, builder.Environment.EnvironmentName);
 
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(o => { o.IncludeScopes = true; o.TimestampFormat = "O"; });
@@ -73,11 +78,27 @@ builder.Services.Configure<HealthOptions>(builder.Configuration.GetSection(Healt
 builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection(RateLimitOptions.SectionName));
 builder.Services.Configure<ErrorMonitoringOptions>(builder.Configuration.GetSection(ErrorMonitoringOptions.SectionName));
 builder.Services.AddSingleton<IErrorMonitoringHook, LoggingErrorMonitoringHook>();
-builder.Services.AddCors(o => o.AddPolicy("Web", p => { if (cors.AllowedOrigins.Length > 0) p.WithOrigins(cors.AllowedOrigins).AllowAnyHeader().AllowAnyMethod(); }));
+builder.Services.AddCors(o => o.AddPolicy("Web", p => { if (cors.AllowedOrigins.Length > 0) p.WithOrigins(cors.AllowedOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials(); }));
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>(); builder.Services.AddApplication(); builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddHealthChecks().AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]).AddCheck<DatabaseHealthCheck>("postgresql", tags: ["ready", "database"]);
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
+builder.Services.AddSingleton(v3Integration);
+builder.Services.AddSingleton<IExternalAuthenticationPolicy>(new V3ExternalAuthenticationPolicy(v3Integration));
+builder.Services.AddHttpClient<IV3AuthorityClient, V3AuthorityClient>(client =>
+{
+    if (v3Integration.Enabled) client.BaseAddress = new Uri(v3Integration.V3ApiUrl);
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false, MaxConnectionsPerServer = 8 });
+builder.Services.AddScoped<ExternalIntegrationService>();
+builder.Services.AddAuthentication(o =>
+{
+    o.DefaultAuthenticateScheme = ExternalProductAuthentication.SmartScheme;
+    o.DefaultChallengeScheme = ExternalProductAuthentication.SmartScheme;
+}).AddPolicyScheme(ExternalProductAuthentication.SmartScheme, ExternalProductAuthentication.SmartScheme, o =>
+{
+    o.ForwardDefaultSelector = context => context.Request.Cookies.ContainsKey(ExternalProductAuthentication.CookieName(builder.Environment))
+        ? ExternalProductAuthentication.CookieScheme : JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, o =>
 {
     o.TokenValidationParameters = new TokenValidationParameters { ValidateIssuer = true, ValidIssuer = jwt.Issuer, ValidateAudience = true, ValidAudience = jwt.Audience, ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)), ValidateLifetime = true, ClockSkew = TimeSpan.FromSeconds(30) };
     o.Events = new JwtBearerEvents
@@ -88,7 +109,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
             if (!Guid.TryParse(context.Principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)) { context.Fail("Invalid access token."); return; }
             var store = context.HttpContext.RequestServices.GetRequiredService<IAuthenticationStore>();
             var user = await store.FindUserAsync(userId, context.HttpContext.RequestAborted); var now = DateTime.UtcNow;
-            if (user is null || !AuthenticationService.CanSignIn(user) || user.LockoutEndUtc > now) { context.Fail("Account is not eligible."); return; }
+            var externalPolicy = context.HttpContext.RequestServices.GetRequiredService<IExternalAuthenticationPolicy>();
+            if (user is null || !externalPolicy.LocalAuthenticationAllowed(user)
+                || !AuthenticationService.CanSignIn(user) || user.LockoutEndUtc > now)
+            { context.Fail("Account is not eligible."); return; }
             if (context.Principal.Identity is ClaimsIdentity identity)
             {
                 foreach (var type in new[] { AuthenticationClaimTypes.AccountStatus, AuthenticationClaimTypes.EmailVerified, AuthenticationClaimTypes.PhoneVerified }) foreach (var claim in identity.FindAll(type).ToArray()) identity.RemoveClaim(claim);
@@ -98,12 +122,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
             }
         }
     };
+}).AddCookie(ExternalProductAuthentication.CookieScheme, o =>
+{
+    o.Cookie.Name = ExternalProductAuthentication.CookieName(builder.Environment);
+    o.Cookie.Path = "/"; o.Cookie.HttpOnly = true; o.Cookie.SameSite = SameSiteMode.Strict;
+    o.Cookie.SecurePolicy = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("E2E")
+        ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    o.ExpireTimeSpan = v3Integration.SessionLifetime; o.SlidingExpiration = false;
+    o.Events = new CookieAuthenticationEvents
+    {
+        OnRedirectToLogin = context => { context.Response.StatusCode = 401; return Task.CompletedTask; },
+        OnRedirectToAccessDenied = context => { context.Response.StatusCode = 403; return Task.CompletedTask; },
+        OnValidatePrincipal = async context =>
+        {
+            if (!Guid.TryParse(context.Principal?.FindFirst(ExternalProductAuthentication.SessionClaim)?.Value, out var sessionId))
+            { context.RejectPrincipal(); return; }
+            var integration = context.HttpContext.RequestServices.GetRequiredService<ExternalIntegrationService>();
+            var current = await integration.ValidateSessionAsync(sessionId, context.HttpContext.RequestAborted);
+            if (current is null) { context.RejectPrincipal(); return; }
+            context.ReplacePrincipal(ExternalProductAuthentication.Principal(current));
+        }
+    };
 });
 builder.Services.AddAuthorization(o =>
 {
     static bool Status(ClaimsPrincipal user, params AccountStatus[] statuses) => statuses.Any(status => user.HasClaim(AuthenticationClaimTypes.AccountStatus, status.ToString()));
     static bool AdminOperations(ClaimsPrincipal user) => (user.IsInRole(nameof(UserRole.PlatformAdmin)) || user.IsInRole(nameof(UserRole.OperationsAdmin))) && Status(user, AccountStatus.Active);
     o.AddPolicy("AuthenticatedUser", p => p.RequireAuthenticatedUser());
+    o.AddPolicy("V3ExternalSession", p => p.RequireAuthenticatedUser().RequireClaim(ExternalProductAuthentication.SourceClaim, "V3External"));
     foreach (var role in Enum.GetValues<UserRole>()) o.AddPolicy($"{role}Only", p => p.RequireAssertion(c => c.User.IsInRole(role.ToString()) && Status(c.User, AccountStatus.Active)));
     o.AddPolicy("AdminOperationsOnly", p => p.RequireAssertion(c => AdminOperations(c.User)));
     o.AddPolicy("CreatorOnboarding", p => p.RequireAssertion(c => c.User.IsInRole(nameof(UserRole.Creator)) && Status(c.User, AccountStatus.PendingVerification, AccountStatus.PendingApproval, AccountStatus.Active)));
@@ -126,7 +172,22 @@ app.UseForwardedHeaders(); if (!app.Environment.IsDevelopment()) app.UseHsts();
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.UseExceptionHandler(); app.UseMiddleware<ErrorMonitoringMiddleware>(); app.UseResponseCompression(); app.UseMiddleware<RequestContextMiddleware>();
 app.Use(async (context, next) => { context.Response.Headers.XContentTypeOptions = "nosniff"; context.Response.Headers.XFrameOptions = "DENY"; context.Response.Headers["Referrer-Policy"] = "no-referrer"; context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"; context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"; context.Response.Headers["Cross-Origin-Resource-Policy"] = "same-site"; context.Response.Headers["Cache-Control"] = "no-store"; await next(); });
-app.UseHttpsRedirection(); app.UseCors("Web"); app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
+app.UseHttpsRedirection(); app.UseCors("Web");
+app.Use(async (context, next) =>
+{
+    var unsafeMethod = !HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method)
+        && !HttpMethods.IsOptions(context.Request.Method) && !HttpMethods.IsTrace(context.Request.Method);
+    var externalCookie = context.Request.Cookies.ContainsKey(ExternalProductAuthentication.CookieName(app.Environment));
+    var callback = context.Request.Path == "/api/v1/integration/v3/callback";
+    if (v3Integration.Enabled && unsafeMethod && externalCookie && !callback
+        && !SameOrigin(context.Request.Headers.Origin.ToString(), v3Integration.ProductWebUrl))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return;
+    }
+    await next();
+});
+app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
 app.Use(async (context, next) =>
 {
     if (app.Environment.IsEnvironment("Pilot") && featureFlags.MaintenanceMode && context.Request.Path.StartsWithSegments("/api/v1/cashier/checkouts"))
@@ -148,8 +209,17 @@ app.MapCheckoutEndpoints(); app.MapHub<CheckoutHub>("/hubs/checkout");
 app.MapDiscoveryEndpoints();
 app.MapSupportEndpoints();
 app.MapPilotExperienceEndpoints();
+app.MapExternalProductEndpoints(app.Environment);
 app.MapE2eSeedEndpoints(app.Environment);
 app.Run();
 
 static Task WriteHealth(HttpContext context, HealthReport report) { context.Response.ContentType = "application/json"; return context.Response.WriteAsJsonAsync(new { status = report.Status.ToString(), service = "CreatorPay API", correlationId = context.TraceIdentifier }); }
+static bool SameOrigin(string supplied, string expected)
+{
+    if (!Uri.TryCreate(supplied, UriKind.Absolute, out var origin)
+        || !Uri.TryCreate(expected, UriKind.Absolute, out var configured)) return false;
+    return origin.Scheme == configured.Scheme && origin.Host == configured.Host && origin.Port == configured.Port
+        && origin.AbsolutePath == "/" && string.IsNullOrEmpty(origin.Query)
+        && string.IsNullOrEmpty(origin.Fragment) && string.IsNullOrEmpty(origin.UserInfo);
+}
 public partial class Program;

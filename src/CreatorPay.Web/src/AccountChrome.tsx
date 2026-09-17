@@ -5,6 +5,7 @@ import {enablePushNotifications} from './pushNotifications'
 import {ProfileAvatar} from './profileMedia'
 import {formatDateTime,formatUserFacingText} from './displayFormat'
 import {NavIcon} from './navIcons'
+import {isExternalSession,switchExternalProfile} from './externalSession'
 
 type Notice={notificationId:string;type:string;title:string;body:string;createdAtUtc:string;readAtUtc?:string;data?:Record<string,string>}
 type NoticePage={items:Notice[];total:number}
@@ -110,6 +111,7 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
               {onManagement && <button role="menuitem" onClick={() => { setSettingsOpen(false); onManagement() }}><span>Cashier Management</span><span className="settings-row-control" aria-hidden="true">›</span></button>}
               <button role="menuitem" className="settings-notification-row" onClick={() => { setSettingsOpen(false); void enablePushNotifications().catch(() => setNotificationError('Notifications could not be enabled.')) }}><span className="settings-row-label">Enable device<br />notifications</span><span className="settings-row-control" aria-hidden="true">›</span></button>
               <button role="menuitem" onClick={() => { setSettingsOpen(false); onHelp() }}><span>Help</span><span className="settings-row-control" aria-hidden="true">›</span></button>
+              {isExternalSession()&&<button role="menuitem" onClick={() => { setSettingsOpen(false); void switchExternalProfile() }}><span>Switch profile</span><span className="settings-row-control" aria-hidden="true">›</span></button>}
               <button role="menuitem" className="signout-action" onClick={() => { setSettingsOpen(false); onSignOut() }}><span>Sign out</span></button>
             </div>
           )}

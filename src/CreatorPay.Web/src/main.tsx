@@ -51,6 +51,8 @@ import { PilotExperience } from "./PilotExperience";
 import { CreatorDashboard } from "./CreatorDashboard";
 import { BusinessDashboard } from "./BusinessDashboard";
 import { NavIcon } from "./navIcons";
+import { ExternalOnboardingWorkspace } from "./ExternalOnboardingWorkspace";
+import {getExternalSession,isExternalSession,loadExternalSession,signOutExternalSession} from './externalSession'
 
 type Location = {
   id: string;
@@ -98,6 +100,8 @@ const t = strings.en;
 const token = getAccessToken;
 const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 function claims(): User {
+  const external=getExternalSession();
+  if(external)return {role:external.role,status:external.status};
   try {
     const value = JSON.parse(
       atob(token().split(".")[1].replace(/-/g, "+").replace(/_/g, "/")),
@@ -118,6 +122,7 @@ async function refreshAccess() {
   if (!refreshToken) return false;
   const response = await fetch(`${apiBase}/api/v1/auth/refresh`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refreshToken }),
   });
@@ -133,6 +138,7 @@ async function api<T>(
 ): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token()}`,
@@ -154,6 +160,7 @@ async function api<T>(
   return response.status === 204 ? (undefined as T) : response.json();
 }
 async function signOut() {
+  if(isExternalSession()){await signOutExternalSession();return}
   const refreshToken = getRefreshToken();
   try {
     if (refreshToken)
@@ -758,6 +765,9 @@ function Root() {
   if (location.pathname === "/terms") return <LegalPage kind="terms" />;
   if (location.pathname === "/privacy") return <LegalPage kind="privacy" />;
   if (location.pathname === "/delete-account") return <LegalPage kind="deleteAccount" />;
+  if (location.pathname === "/onboarding/customer") return <ExternalOnboardingWorkspace kind="customer" />;
+  if (location.pathname === "/onboarding/creator") return <ExternalOnboardingWorkspace kind="creator" />;
+  if (location.pathname === "/onboarding/business") return <ExternalOnboardingWorkspace kind="business" />;
   if (location.pathname.includes("/staff-invitations/accept"))
     return <AcceptInvitation />;
   const offerCode = location.pathname.match(/^\/(?:offers|o)\/([^/]+)/)?.[1];
@@ -879,7 +889,17 @@ function registerServiceWorker() {
 }
 
 void canonicalOriginMigration.then(() => hydrateSession())
-  .then(() => {
+  .then(() => loadExternalSession())
+  .then((external) => {
+    const publicPath=["/help","/contact","/terms","/privacy","/delete-account"].includes(location.pathname);
+    if(external.integrationEnabled&&!external.session&&!publicPath){
+      location.replace(external.authenticationUrl??"/");
+      return;
+    }
+    if(external.session&&location.pathname==="/"&&external.session.destination){
+      location.replace(external.session.destination);
+      return;
+    }
     renderApplication();
     registerServiceWorker();
   })

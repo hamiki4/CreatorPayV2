@@ -32,6 +32,7 @@ export function OnboardingStatus({
 
   useEffect(() => {
     fetch(`${base}${path}`, {
+      credentials: 'include',
       headers: {
         Authorization: `Bearer ${getAccessToken() ?? ''}`,
       },
