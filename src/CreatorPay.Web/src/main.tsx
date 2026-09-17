@@ -52,7 +52,7 @@ import { CreatorDashboard } from "./CreatorDashboard";
 import { BusinessDashboard } from "./BusinessDashboard";
 import { NavIcon } from "./navIcons";
 import { ExternalOnboardingWorkspace } from "./ExternalOnboardingWorkspace";
-import {getExternalSession,isExternalSession,loadExternalSession,signOutExternalSession} from './externalSession'
+import {externalOnboardingPath,getExternalSession,isExternalSession,loadExternalSession,signOutExternalSession} from './externalSession'
 
 type Location = {
   id: string;
@@ -894,6 +894,11 @@ void canonicalOriginMigration.then(() => hydrateSession())
     const publicPath=["/help","/contact","/terms","/privacy","/delete-account"].includes(location.pathname);
     if(external.integrationEnabled&&!external.session&&!publicPath){
       location.replace(external.authenticationUrl??"/");
+      return;
+    }
+    const onboardingPath=externalOnboardingPath(external.session);
+    if(onboardingPath&&!publicPath&&location.pathname!==onboardingPath){
+      location.replace("/onboarding");
       return;
     }
     if(external.session&&location.pathname==="/"&&external.session.destination){

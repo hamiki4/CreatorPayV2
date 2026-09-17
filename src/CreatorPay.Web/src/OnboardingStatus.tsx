@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AccountStatusBadge } from './AccountChrome'
+import { getExternalSession } from './externalSession'
 import { getAccessToken } from './sessionStore'
 
 type Status = {
@@ -40,12 +41,18 @@ export function OnboardingStatus({
       .then(async response => {
         const body = await response.json().catch(() => ({}))
 
+        if (!response.ok && (response.status === 401 || response.status === 403) && getExternalSession()?.isOnboarding) {
+          location.replace('/onboarding')
+          return null
+        }
+
         if (!response.ok) {
           throw Error(body.detail ?? `Request failed (${response.status})`)
         }
 
-        setData(body)
+        return body as Status
       })
+      .then(body => { if (body) setData(body) })
       .catch(error => setError(error.message))
   }, [path])
 
@@ -75,8 +82,14 @@ export function OnboardingStatus({
 
   const message =
     role === 'Creator'
-      ? 'Your creator account is under review. You will be able to access the approved creator tools after activation.'
-      : status === 'PendingApproval'
+      ? data.creatorStatus === 'CorrectionRequested'
+        ? 'Review the requested corrections and update your Creator profile.'
+        : data.creatorStatus === 'Rejected'
+          ? data.nextStep
+          : 'Your creator account is under review. You will be able to access the approved creator tools after activation.'
+      : data.merchantStatus === 'CorrectionRequested' || data.merchantStatus === 'Rejected'
+        ? data.nextStep
+        : data.accountStatus === 'PendingApproval'
         ? 'Your account is under review. You will be notified after the Platform Admin approves your account.'
         : data.nextStep
 

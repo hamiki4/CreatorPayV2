@@ -6,6 +6,7 @@ import {repoPath} from './repoPath.mjs'
 const read=name=>readFileSync(new URL(`../src/${name}`,import.meta.url),'utf8')
 const main=read('main.tsx')
 const onboarding=read('ExternalOnboardingWorkspace.tsx')
+const onboardingStatus=read('OnboardingStatus.tsx')
 const session=read('externalSession.ts')
 const chrome=read('AccountChrome.tsx')
 const admin=read('AdminPortal.tsx')
@@ -26,6 +27,9 @@ test('external onboarding keeps profile fields while excluding V2 authentication
   for(const label of ['Preferred name','Legal First Name',"Father's / Last Name",'Public Display Name','Primary City','Primary Social Platform','Social Profile URL','Estimated Follower Count','Trading Name','Business Type','Primary Contact Name','Business Address']) assert.ok(onboarding.includes(label),label)
   assert.doesNotMatch(onboarding,/Password|Confirm password|Create 5-digit PIN|Firebase|verification code|Public ID|User ID|Profile ID/)
   assert.match(onboarding,/do not create another login/)
+  assert.match(onboarding,/Back to profiles/)
+  assert.match(onboarding,/type="button"/)
+  assert.match(onboarding,/location\.replace\("\/onboarding"\)/)
 })
 
 test('V3External navigation exposes profile switching and coordinated logout',()=>{
@@ -40,6 +44,18 @@ test('V3External navigation exposes profile switching and coordinated logout',()
   assert.match(session,/location\.replace\("\/sign-in"\)/)
   assert.doesNotMatch(session,/location\.assign\(value\.redirectUrl\)/)
   assert.match(onboarding,/location\.replace\(result\.destination\)/)
+})
+
+test('missing external profiles recover to V3 lifecycle routing before product status APIs run',()=>{
+  assert.match(session,/externalOnboardingPath/)
+  assert.match(session,/"\/onboarding\/creator"/)
+  assert.match(session,/"\/onboarding\/business"/)
+  assert.match(main,/externalOnboardingPath\(external\.session\)/)
+  assert.match(main,/location\.replace\("\/onboarding"\)/)
+  assert.match(onboardingStatus,/response\.status === 401 \|\| response\.status === 403/)
+  assert.match(onboardingStatus,/getExternalSession\(\)\?\.isOnboarding/)
+  assert.match(onboardingStatus,/location\.replace\('\/onboarding'\)/)
+  assert.match(onboardingStatus,/CorrectionRequested/)
 })
 
 test('legacy V2 PIN and Admin password tools are bypassed for external sessions',()=>{

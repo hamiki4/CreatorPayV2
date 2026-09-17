@@ -6,6 +6,13 @@ let current: ExternalSessionUser | null = null;
 export function setExternalSession(value: ExternalSessionUser | null) { current = value; }
 export function getExternalSession() { return current; }
 export function isExternalSession() { return current !== null; }
+export function externalOnboardingPath(session: ExternalSessionUser | null) {
+  if (!session?.isOnboarding) return null;
+  return session.role === "Customer" ? "/onboarding/customer"
+    : session.role === "Creator" ? "/onboarding/creator"
+    : session.role === "MerchantAdmin" ? "/onboarding/business"
+    : null;
+}
 
 export async function loadExternalSession() {
   const response = await fetch(`${apiBase}/api/v1/integration/v3/session`, { credentials: "include", cache: "no-store" });
