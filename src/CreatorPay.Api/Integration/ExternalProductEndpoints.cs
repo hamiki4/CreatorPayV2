@@ -86,7 +86,9 @@ internal static class ExternalProductEndpoints
                 session.Session.Role,
                 status = session.User?.Status.ToString() ?? "Onboarding",
                 isOnboarding = session.Session.IsOnboarding,
-                destination = session.Session.IsOnboarding ? null : Destination(session.Session.Role)
+                destination = session.Session.IsOnboarding ? null : Destination(session.Session.Role),
+                accountEmail = context.User.FindFirst(ExternalProductAuthentication.AccountEmailClaim)?.Value,
+                accountPhone = context.User.FindFirst(ExternalProductAuthentication.AccountPhoneClaim)?.Value
             });
         }).RequireAuthorization("V3ExternalSession");
 
@@ -114,6 +116,12 @@ internal static class ExternalProductEndpoints
                 await service.ProvisionBusinessAsync(SessionId(context), input, ct), environment, ct);
         })
             .RequireAuthorization("V3ExternalSession");
+        group.MapPut("/creator/social-profiles", async (ExternalCreatorSocialProfilesUpdate input,
+            HttpContext context, ExternalIntegrationService service, CancellationToken ct) =>
+        {
+            if (!ProductRequest(context, service)) return Results.Forbid();
+            return Results.Ok(await service.UpdateCreatorSocialProfilesAsync(SessionId(context), input, ct));
+        }).RequireAuthorization("V3ExternalSession");
 
         group.MapPost("/switch-profile", async (HttpContext context, ExternalIntegrationService service,
             CancellationToken ct) =>

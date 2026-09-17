@@ -140,7 +140,9 @@ builder.Services.AddAuthentication(o =>
             var integration = context.HttpContext.RequestServices.GetRequiredService<ExternalIntegrationService>();
             var current = await integration.ValidateSessionAsync(sessionId, context.HttpContext.RequestAborted);
             if (current is null) { context.RejectPrincipal(); return; }
-            context.ReplacePrincipal(ExternalProductAuthentication.Principal(current));
+            context.ReplacePrincipal(ExternalProductAuthentication.Principal(current,
+                context.Principal?.FindFirst(ExternalProductAuthentication.AccountEmailClaim)?.Value,
+                context.Principal?.FindFirst(ExternalProductAuthentication.AccountPhoneClaim)?.Value));
         }
     };
 });

@@ -11,7 +11,8 @@ public static class V3HandoffPurposes
 public sealed record V3IdentityAssertion(string Issuer, string Environment, string Audience, Guid UserId,
     Guid IdentityBindingId, long IdentityBindingVersion, DateTime AuthenticatedAtUtc, string Purpose,
     string Role, Guid? ProfileSubjectId, Guid? BusinessId, string DisplayName, string AuthorityStatus,
-    string DeviceAssurance, DateTime IssuedAtUtc, DateTime ExpiresAtUtc);
+    string DeviceAssurance, string AccountEmail, string? AccountPhone, DateTime IssuedAtUtc,
+    DateTime ExpiresAtUtc);
 public sealed record V3AuthorityRequest(Guid UserId, Guid IdentityBindingId, long IdentityBindingVersion,
     string Role, Guid? ProfileSubjectId, Guid? BusinessId, string Purpose);
 public sealed record V3AuthorityResult(bool Active, string Status, long IdentityBindingVersion);
@@ -28,12 +29,18 @@ public interface IV3AuthorityClient
 }
 
 public sealed record ExternalCustomerRegistration(string DisplayName);
+public sealed record ExternalCreatorSocialProfile(SocialPlatform Platform, string? ProfileUrl,
+    long? AudienceCount);
 public sealed record ExternalCreatorRegistration(string FirstName, string LastName, string DisplayName,
-    string PhoneNumber, string? Email, string City, string? Zone, string Biography, string ContentCategories,
-    SocialPlatform PrimarySocialPlatform, string SocialProfileUrl, long FollowerCount);
+    string City, string? Zone, string Biography, string ContentCategories,
+    IReadOnlyList<ExternalCreatorSocialProfile>? SocialProfiles);
 public sealed record ExternalBusinessRegistration(string TradingName, string BusinessType,
-    string PrimaryContactName, string PhoneNumber, string? Email, string BusinessAddress, string City,
-    string Region, string Country, string TimeZone);
+    string PrimaryContactName, string? BusinessContactPhone, string? BusinessContactEmail,
+    string BusinessAddress, string City, string Region, string Country, string TimeZone);
+public sealed record ExternalCreatorSocialProfilesUpdate(
+    IReadOnlyList<ExternalCreatorSocialProfile>? SocialProfiles);
+public sealed record ExternalCreatorSocialProfileResult(SocialPlatform Platform, string ProfileUrl,
+    long AudienceCount, SocialProfileVerificationStatus VerificationStatus, bool IsPrimary);
 public sealed record ExternalProvisioningResult(Guid UserAccountId, Guid ProfileId, string Lifecycle,
     string Destination);
 

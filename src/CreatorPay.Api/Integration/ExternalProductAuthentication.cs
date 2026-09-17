@@ -14,6 +14,8 @@ internal static class ExternalProductAuthentication
     public const string SessionClaim = "v3_external_session";
     public const string SourceClaim = "authentication_source";
     public const string PurposeClaim = "handoff_purpose";
+    public const string AccountEmailClaim = "v3_account_email";
+    public const string AccountPhoneClaim = "v3_account_phone";
 
     public static string CookieName(IWebHostEnvironment environment) =>
         environment.IsDevelopment() || environment.IsEnvironment("E2E")
@@ -23,7 +25,8 @@ internal static class ExternalProductAuthentication
         environment.IsDevelopment() || environment.IsEnvironment("E2E")
             ? DevelopmentHandoffCookieName : ProductionHandoffCookieName;
 
-    public static ClaimsPrincipal Principal(ExternalSessionContext context)
+    public static ClaimsPrincipal Principal(ExternalSessionContext context, string? accountEmail = null,
+        string? accountPhone = null)
     {
         var claims = new List<Claim>
         {
@@ -31,6 +34,8 @@ internal static class ExternalProductAuthentication
             new(SourceClaim, "V3External"),
             new(PurposeClaim, context.Session.Purpose)
         };
+        Add(claims, AccountEmailClaim, accountEmail ?? context.AccountEmail);
+        Add(claims, AccountPhoneClaim, accountPhone ?? context.AccountPhone);
         if (context.User is { } user)
         {
             claims.Add(new(ClaimTypes.NameIdentifier, user.Id.ToString()));
@@ -51,5 +56,9 @@ internal static class ExternalProductAuthentication
     private static void Add(List<Claim> claims, string type, Guid? value)
     {
         if (value.HasValue) claims.Add(new(type, value.Value.ToString()));
+    }
+    private static void Add(List<Claim> claims, string type, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value)) claims.Add(new(type, value));
     }
 }

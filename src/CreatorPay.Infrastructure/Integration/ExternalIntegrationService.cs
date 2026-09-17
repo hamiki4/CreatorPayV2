@@ -13,7 +13,8 @@ using Npgsql;
 namespace CreatorPay.Infrastructure.Integration;
 
 public sealed record ExternalSessionContext(ExternalSessionSnapshot Session, ExternalIdentity Identity,
-    ExternalProfileLink? Profile, UserAccount? User);
+    ExternalProfileLink? Profile, UserAccount? User, string? AccountEmail = null,
+    string? AccountPhone = null);
 
 public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3AuthorityClient authority,
     V3IntegrationOptions options, IUtcClock clock)
@@ -130,7 +131,7 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
             await transaction.CommitAsync(ct);
             var user = session.UserAccountId is Guid userId
                 ? await db.UserAccounts.AsNoTracking().SingleAsync(x => x.Id == userId, ct) : null;
-            return Context(session, identity, link, user);
+            return Context(session, identity, link, user, assertion.AccountEmail, assertion.AccountPhone);
         }
         catch (Exception exception) when (retry && IsRetryable(exception))
         {
@@ -211,12 +212,11 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
         ExternalCreatorRegistration request, CancellationToken ct) => ProvisionAsync(sessionId,
         UserRole.Creator, request.DisplayName, async (identity, link, now, innerCt) =>
         {
-            var phone = EthiopianMobileNumber.Normalize(request.PhoneNumber);
+            var socialProfiles = NormalizeSocialProfiles(request.SocialProfiles);
             if (request.FirstName.Trim().Length is < 1 or > 100 || request.LastName.Trim().Length is < 1 or > 100
                 || request.DisplayName.Trim().Length is < 2 or > 200 || request.City.Trim().Length is < 1 or > 120
-                || request.Biography.Trim().Length > 1000 || request.ContentCategories.Trim().Length > 500
-                || request.FollowerCount < 0 || !Uri.TryCreate(request.SocialProfileUrl, UriKind.Absolute, out var social)
-                || social.Scheme != "https") throw new ArgumentException("Complete the required Creator details.");
+                || request.Biography.Trim().Length > 1000 || request.ContentCategories.Trim().Length > 500)
+                throw new ArgumentException("Complete the required Creator details.");
             var creatorId = Guid.NewGuid();
             var creator = new Creator
             {
@@ -226,9 +226,9 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
                 FirstName = request.FirstName.Trim(),
                 LastName = request.LastName.Trim(),
                 DisplayName = request.DisplayName.Trim(),
-                PhoneNumber = phone,
-                NormalizedPhoneNumber = phone,
-                Email = request.Email?.Trim() ?? "",
+                PhoneNumber = "",
+                NormalizedPhoneNumber = "",
+                Email = "",
                 PreferredLanguage = "en",
                 City = request.City.Trim(),
                 Zone = request.Zone?.Trim(),
@@ -239,19 +239,18 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
                 CreatedAtUtc = now,
                 CreatedBy = "V3External"
             };
-            creator.SocialProfiles.Add(new CreatorSocialProfile
+            for (var index = 0; index < socialProfiles.Count; index++)
             {
-                Id = Guid.NewGuid(),
-                CreatorId = creatorId,
-                Platform = request.PrimarySocialPlatform,
-                Handle = request.SocialProfileUrl.Trim().ToUpperInvariant(),
-                ProfileUrl = request.SocialProfileUrl.Trim(),
-                FollowerCount = request.FollowerCount,
-                IsPrimary = true,
-                VerificationStatus = SocialProfileVerificationStatus.Unverified,
-                CreatedAtUtc = now,
-                CreatedBy = "V3External"
-            });
+                var social = socialProfiles[index];
+                creator.SocialProfiles.Add(new CreatorSocialProfile
+                {
+                    Id = Guid.NewGuid(), CreatorId = creatorId, Platform = social.Platform,
+                    Handle = social.ProfileUrl.ToUpperInvariant(), ProfileUrl = social.ProfileUrl,
+                    FollowerCount = social.AudienceCount, IsPrimary = index == 0,
+                    VerificationStatus = SocialProfileVerificationStatus.Unverified,
+                    CreatedAtUtc = now, CreatedBy = "V3External"
+                });
+            }
             var user = ExternalUser(UserRole.Creator, AccountStatus.PendingApproval, now);
             user.CreatorId = creatorId; user.DisplayName = creator.DisplayName;
             db.Add(creator); db.Add(user);
@@ -262,7 +261,13 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
         ExternalBusinessRegistration request, CancellationToken ct) => ProvisionAsync(sessionId,
         UserRole.MerchantAdmin, request.TradingName, async (identity, link, now, innerCt) =>
         {
-            var phone = EthiopianMobileNumber.Normalize(request.PhoneNumber);
+            var phone = string.IsNullOrWhiteSpace(request.BusinessContactPhone) ? ""
+                : EthiopianMobileNumber.Normalize(request.BusinessContactPhone);
+            var contactEmail = request.BusinessContactEmail?.Trim();
+            if (contactEmail?.Length == 0) contactEmail = null;
+            if (contactEmail is not null && (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute()
+                    .IsValid(contactEmail) || contactEmail.Length > 320))
+                throw new ArgumentException("Business contact email is invalid.");
             if (request.TradingName.Trim().Length is < 2 or > 250 || !BusinessTypes.IsSupported(request.BusinessType.Trim())
                 || request.PrimaryContactName.Trim().Length is < 1 or > 200 || request.BusinessAddress.Trim().Length < 1
                 || request.City.Trim().Length < 1 || request.Region.Trim().Length < 1
@@ -280,7 +285,7 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
                 PrimaryContactName = request.PrimaryContactName.Trim(),
                 PhoneNumber = phone,
                 NormalizedPhoneNumber = phone,
-                Email = request.Email?.Trim(),
+                Email = contactEmail,
                 PreferredLanguage = "en",
                 TermsAcceptedAtUtc = now,
                 BusinessAddress = request.BusinessAddress.Trim(),
@@ -297,6 +302,40 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
             db.Add(merchant); db.Add(user);
             return (user, merchantId, merchant.TradingName, "PENDING", "/business");
         }, ct);
+
+    public async Task<IReadOnlyList<ExternalCreatorSocialProfileResult>> UpdateCreatorSocialProfilesAsync(
+        Guid sessionId, ExternalCreatorSocialProfilesUpdate request, CancellationToken ct)
+    {
+        var context = await ValidateSessionAsync(sessionId, ct)
+            ?? throw new UnauthorizedAccessException("The Weymela product session has expired.");
+        if (context.Session.Role != UserRole.Creator || context.User?.CreatorId is not Guid creatorId
+            || context.User.Status != AccountStatus.Active
+            || context.Profile?.Status != ExternalProfileStatus.Active)
+            throw new UnauthorizedAccessException("An active Creator profile is required.");
+        var normalized = NormalizeSocialProfiles(request.SocialProfiles);
+        var creator = await db.Creators.Include(x => x.SocialProfiles)
+            .SingleOrDefaultAsync(x => x.Id == creatorId, ct)
+            ?? throw new InvalidOperationException("The Creator profile is unavailable.");
+        var now = clock.UtcNow;
+        db.CreatorSocialProfiles.RemoveRange(creator.SocialProfiles);
+        for (var index = 0; index < normalized.Count; index++)
+        {
+            var social = normalized[index];
+            db.CreatorSocialProfiles.Add(new CreatorSocialProfile
+            {
+                Id = Guid.NewGuid(), CreatorId = creator.Id, Platform = social.Platform,
+                Handle = social.ProfileUrl.ToUpperInvariant(), ProfileUrl = social.ProfileUrl,
+                FollowerCount = social.AudienceCount, IsPrimary = index == 0,
+                VerificationStatus = SocialProfileVerificationStatus.Unverified,
+                CreatedAtUtc = now, CreatedBy = context.User.Id.ToString()
+            });
+        }
+        creator.UpdatedAtUtc = now; creator.UpdatedBy = context.User.Id.ToString();
+        await db.SaveChangesAsync(ct);
+        return normalized.Select((social, index) => new ExternalCreatorSocialProfileResult(
+            social.Platform, social.ProfileUrl, social.AudienceCount,
+            SocialProfileVerificationStatus.Unverified, index == 0)).ToArray();
+    }
 
     public async Task<bool> SynchronizeLifecycleAsync(UserRole role, Guid profileId, string lifecycle, CancellationToken ct)
     {
@@ -568,13 +607,65 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
     }
     private static bool IsRetryable(Exception exception)
     {
-        var postgres = exception as PostgresException
-            ?? (exception as DbUpdateException)?.InnerException as PostgresException;
-        return postgres?.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.UniqueViolation;
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+            if (current is PostgresException postgres && postgres.SqlState is
+                PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.UniqueViolation)
+                return true;
+        return false;
+    }
+    private sealed record NormalizedSocialProfile(SocialPlatform Platform, string ProfileUrl,
+        long AudienceCount);
+    private static IReadOnlyList<NormalizedSocialProfile> NormalizeSocialProfiles(
+        IReadOnlyList<ExternalCreatorSocialProfile>? profiles)
+    {
+        if (profiles is null || profiles.Count == 0)
+            throw new ArgumentException("Add at least one social profile.");
+        if (profiles.Count > 4 || profiles.GroupBy(x => x.Platform).Any(x => x.Count() > 1))
+            throw new ArgumentException("Add each supported social platform at most once.");
+        var normalized = new List<NormalizedSocialProfile>(profiles.Count);
+        foreach (var profile in profiles)
+        {
+            if (profile.Platform is not (SocialPlatform.TikTok or SocialPlatform.Instagram
+                    or SocialPlatform.YouTube or SocialPlatform.Facebook))
+                throw new ArgumentException("Choose a supported social platform.");
+            if (string.IsNullOrWhiteSpace(profile.ProfileUrl) || profile.AudienceCount is null)
+                throw new ArgumentException("Complete both the profile URL and audience count.");
+            if (profile.AudienceCount < 0)
+                throw new ArgumentException("Audience count must be a non-negative integer.");
+            if (!Uri.TryCreate(profile.ProfileUrl.Trim(), UriKind.Absolute, out var uri)
+                || uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo)
+                || !OfficialHost(profile.Platform, uri.Host) || uri.AbsolutePath is "" or "/")
+                throw new ArgumentException($"Enter a valid {profile.Platform} profile URL.");
+            var builder = new UriBuilder(uri)
+            {
+                Scheme = Uri.UriSchemeHttps, Host = uri.IdnHost.ToLowerInvariant(), Port = -1,
+                Fragment = ""
+            };
+            var url = builder.Uri.AbsoluteUri.TrimEnd('/');
+            if (url.Length > 500)
+                throw new ArgumentException("Social profile URL is too long.");
+            normalized.Add(new(profile.Platform, url, profile.AudienceCount.Value));
+        }
+        return normalized;
+    }
+    private static bool OfficialHost(SocialPlatform platform, string host)
+    {
+        static bool Is(string value, string expected) => value.Equals(expected,
+            StringComparison.OrdinalIgnoreCase) || value.EndsWith('.' + expected,
+            StringComparison.OrdinalIgnoreCase);
+        return platform switch
+        {
+            SocialPlatform.TikTok => Is(host, "tiktok.com"),
+            SocialPlatform.Instagram => Is(host, "instagram.com"),
+            SocialPlatform.YouTube => Is(host, "youtube.com") || Is(host, "youtu.be"),
+            SocialPlatform.Facebook => Is(host, "facebook.com") || Is(host, "fb.com"),
+            _ => false
+        };
     }
     private static ExternalSessionContext Context(ExternalApplicationSession session, ExternalIdentity identity,
-        ExternalProfileLink profile, UserAccount? user) => new(new(session.Id, identity.Id, profile.Id,
+        ExternalProfileLink profile, UserAccount? user, string? accountEmail = null,
+        string? accountPhone = null) => new(new(session.Id, identity.Id, profile.Id,
             session.UserAccountId, session.Role, session.Purpose,
             session.Purpose == V3HandoffPurposes.ProfileOnboarding && session.UserAccountId is null,
-            session.ExpiresAtUtc), identity, profile, user);
+            session.ExpiresAtUtc), identity, profile, user, accountEmail, accountPhone);
 }

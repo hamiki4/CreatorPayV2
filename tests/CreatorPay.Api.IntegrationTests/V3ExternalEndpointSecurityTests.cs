@@ -110,6 +110,16 @@ public sealed class V3ExternalEndpointSecurityTests : IDisposable
             (await client.GetAsync("/api/v1/integration/v3/callback")).StatusCode);
     }
 
+    [Fact]
+    public async Task Creator_social_profile_updates_require_an_authenticated_external_session()
+    {
+        using var response = await client.PutAsJsonAsync(
+            "/api/v1/integration/v3/creator/social-profiles",
+            new { socialProfiles = Array.Empty<object>() });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     public void Dispose()
     {
         client.Dispose();

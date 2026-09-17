@@ -137,9 +137,9 @@ public sealed class V3ExternalIntegrationTests : IAsyncLifetime
         }
         await using (var db = Db())
             _ = await Service(db, authority).ProvisionCreatorAsync(sessionId,
-                new ExternalCreatorRegistration("Mimi", "Abebe", "Mimi Creates", "0911111111", null,
-                    "Addis Ababa", null, "", "Food", SocialPlatform.TikTok,
-                    "https://example.test/mimi", 1000), default);
+                new ExternalCreatorRegistration("Mimi", "Abebe", "Mimi Creates", "Addis Ababa",
+                    null, "", "Food", [new(SocialPlatform.TikTok,
+                        "https://www.tiktok.com/@mimi", 1000)]), default);
         await using (var db = Db())
         {
             var resumed = await Service(db, authority)
@@ -176,9 +176,9 @@ public sealed class V3ExternalIntegrationTests : IAsyncLifetime
         await using (var db = Db()) _ = await Service(db, authority).ProvisionCustomerAsync(customerSession,
             new ExternalCustomerRegistration("Mimi"), default);
         await using (var db = Db()) _ = await Service(db, authority).ProvisionCreatorAsync(creatorSession,
-            new ExternalCreatorRegistration("Mimi", "Abebe", "Mimi Creates", "0911111111", null,
-                "Addis Ababa", null, "", "Food", SocialPlatform.TikTok,
-                "https://example.test/mimi", 1000), default);
+            new ExternalCreatorRegistration("Mimi", "Abebe", "Mimi Creates", "Addis Ababa",
+                null, "", "Food", [new(SocialPlatform.TikTok,
+                    "https://www.tiktok.com/@mimi", 1000)]), default);
         await using (var db = Db()) _ = await Service(db, authority).ProvisionBusinessAsync(businessSession,
             new ExternalBusinessRegistration("Mimi Cafe", BusinessTypes.Values[0], "Mimi", "0922222222",
                 null, "Bole Road", "Addis Ababa", "Addis Ababa", "Ethiopia", "Africa/Addis_Ababa"), default);
@@ -237,6 +237,95 @@ public sealed class V3ExternalIntegrationTests : IAsyncLifetime
         Assert.Equal(2, await verify.UserAccounts.CountAsync(x => x.Role == UserRole.MerchantAdmin));
         var keys = await verify.ExternalProfileLinks.Select(x => x.ProvisioningKey).ToListAsync();
         Assert.Equal(keys.Count, keys.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public async Task Creator_onboarding_requires_unique_complete_supported_socials_and_active_edit_keeps_one()
+    {
+        var authority = new FakeAuthority();
+        authority.Queue(Code("creator-socials"), "Creator", V3HandoffPurposes.ProfileOnboarding);
+        Guid sessionId;
+        await using (var db = Db())
+        {
+            var context = await Service(db, authority).RedeemAsync(Code("creator-socials"),
+                "integration-callback", default);
+            sessionId = context.Session.SessionId;
+            Assert.Equal("mimi@example.test", context.AccountEmail);
+            Assert.Equal("+251911111111", context.AccountPhone);
+        }
+
+        static ExternalCreatorRegistration Creator(params ExternalCreatorSocialProfile[] profiles) =>
+            new("Mimi", "Abebe", "Mimi Creates", "Addis Ababa", null, "Food creator",
+                "Food", profiles);
+
+        await using (var db = Db())
+        {
+            var service = Service(db, authority);
+            await Assert.ThrowsAsync<ArgumentException>(() => service.ProvisionCreatorAsync(sessionId,
+                Creator(), default));
+            await Assert.ThrowsAsync<ArgumentException>(() => service.ProvisionCreatorAsync(sessionId,
+                Creator(new ExternalCreatorSocialProfile(SocialPlatform.TikTok,
+                    "https://www.tiktok.com/@mimi", null)), default));
+            await Assert.ThrowsAsync<ArgumentException>(() => service.ProvisionCreatorAsync(sessionId,
+                Creator(new ExternalCreatorSocialProfile(SocialPlatform.TikTok,
+                    null, 10)), default));
+            await Assert.ThrowsAsync<ArgumentException>(() => service.ProvisionCreatorAsync(sessionId,
+                Creator(new ExternalCreatorSocialProfile(SocialPlatform.TikTok,
+                    "https://www.tiktok.com/@mimi", -1)), default));
+            await Assert.ThrowsAsync<ArgumentException>(() => service.ProvisionCreatorAsync(sessionId,
+                Creator(new ExternalCreatorSocialProfile(SocialPlatform.TikTok,
+                        "https://www.tiktok.com/@mimi", 10),
+                    new ExternalCreatorSocialProfile(SocialPlatform.TikTok,
+                        "https://www.tiktok.com/@mimi-two", 20)), default));
+        }
+
+        await using (var db = Db())
+            _ = await Service(db, authority).ProvisionCreatorAsync(sessionId, Creator(
+                new ExternalCreatorSocialProfile(SocialPlatform.TikTok,
+                    "https://WWW.TIKTOK.COM/@mimi/", 10),
+                new ExternalCreatorSocialProfile(SocialPlatform.Instagram,
+                    "https://instagram.com/mimi", 20),
+                new ExternalCreatorSocialProfile(SocialPlatform.YouTube,
+                    "https://youtube.com/@mimi", 30),
+                new ExternalCreatorSocialProfile(SocialPlatform.Facebook,
+                    "https://facebook.com/mimi", 40)), default);
+
+        await using (var db = Db())
+        {
+            var profiles = await db.CreatorSocialProfiles.OrderBy(x => x.FollowerCount).ToListAsync();
+            Assert.Equal(4, profiles.Count);
+            Assert.Equal("https://www.tiktok.com/@mimi", profiles[0].ProfileUrl);
+            Assert.All(profiles, x => Assert.Equal(SocialProfileVerificationStatus.Unverified,
+                x.VerificationStatus));
+            Assert.Single(profiles, x => x.IsPrimary);
+            var creator = await db.Creators.Include(x => x.SocialProfiles).SingleAsync();
+            var user = await db.UserAccounts.SingleAsync(x => x.CreatorId == creator.Id);
+            var link = await db.ExternalProfileLinks.SingleAsync(x => x.UserAccountId == user.Id);
+            creator.Approve(Now, user.Id); user.Status = AccountStatus.Active;
+            link.Status = ExternalProfileStatus.Active;
+            await db.SaveChangesAsync();
+            Assert.Empty(user.Email); Assert.True(string.IsNullOrEmpty(user.PhoneNumber));
+            Assert.Empty(creator.PhoneNumber);
+        }
+
+        await using (var db = Db())
+        {
+            var service = Service(db, authority);
+            await Assert.ThrowsAsync<ArgumentException>(() => service.UpdateCreatorSocialProfilesAsync(
+                sessionId, new([]), default));
+            var updated = await service.UpdateCreatorSocialProfilesAsync(sessionId, new([
+                new(SocialPlatform.YouTube, "https://youtube.com/@mimi-updated", 55),
+                new(SocialPlatform.Facebook, "https://facebook.com/mimi-updated", 65)
+            ]), default);
+            Assert.Equal(2, updated.Count);
+        }
+        await using (var db = Db())
+        {
+            var profiles = await db.CreatorSocialProfiles.OrderBy(x => x.Platform).ToListAsync();
+            Assert.Equal(2, profiles.Count);
+            Assert.Contains(profiles, x => x.Platform == SocialPlatform.YouTube && x.FollowerCount == 55);
+            Assert.Contains(profiles, x => x.Platform == SocialPlatform.Facebook && x.FollowerCount == 65);
+        }
     }
 
     [Fact]
@@ -330,7 +419,7 @@ public sealed class V3ExternalIntegrationTests : IAsyncLifetime
             var assertion = new V3IdentityAssertion("weymela-v3-test", "Test", "creatorpay-test",
                 userId ?? Guid.NewGuid(), bindingId ?? Guid.NewGuid(), 1, Now, purpose, role, subject,
                 role == "Business" ? subject : null, role + " profile", "Active", "V3_DEVICE_UNLOCKED",
-                Now, Now.AddMinutes(5));
+                "mimi@example.test", "+251911111111", Now, Now.AddMinutes(5));
             assertions.Add(code, assertion);
             return assertion;
         }

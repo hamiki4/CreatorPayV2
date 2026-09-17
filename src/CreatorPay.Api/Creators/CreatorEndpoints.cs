@@ -1,5 +1,6 @@
 using CreatorPay.Application.Authentication;
 using CreatorPay.Application.Creators;
+using CreatorPay.Api.Integration;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using CreatorPay.Infrastructure.Integration;
@@ -16,7 +17,13 @@ public static class CreatorEndpoints
         group.MapPost("/verify-email", async (VerifyCreatorRequest request, ICreatorService service, CancellationToken ct) => ToHttp(await service.VerifyEmailAsync(request.Token, ct))).RequireRateLimiting("auth-sensitive");
         group.MapPost("/verify-phone", async (VerifyCreatorRequest request, ICreatorService service, CancellationToken ct) => ToHttp(await service.VerifyPhoneAsync(request.Token, ct))).RequireRateLimiting("auth-sensitive");
         group.MapGet("/me", async (ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.GetMeAsync(user.UserAccountId!.Value, ct))).RequireAuthorization("CreatorOnboarding");
-        group.MapPut("/me", async (UpdateCreatorProfileRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) => ToHttp(await service.UpdateMeAsync(user.UserAccountId!.Value, request, ct))).RequireAuthorization("CreatorOnboarding");
+        group.MapPut("/me", async (UpdateCreatorProfileRequest request, HttpContext context,
+            ICurrentUserService user, ICreatorService service, CancellationToken ct) =>
+            context.User.HasClaim(ExternalProductAuthentication.SourceClaim, "V3External")
+                ? Results.Problem("V3 account identity cannot be changed from Creator profile editing.",
+                    statusCode: StatusCodes.Status403Forbidden)
+                : ToHttp(await service.UpdateMeAsync(user.UserAccountId!.Value, request, ct)))
+            .RequireAuthorization("CreatorOnboarding");
         group.MapPost("/me/profile-photo", async (HttpRequest request, ICurrentUserService user, ICreatorService service, CancellationToken ct) =>
         {
             var requestSize = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();

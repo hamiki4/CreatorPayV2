@@ -10,6 +10,7 @@ import { currentPartnerships } from './partnershipState'
 import { daysLeftText, relationshipState } from './relationshipTime'
 import { formatAmount, formatDate } from './displayFormat'
 import { NavIcon } from './navIcons'
+import { getExternalSession, isExternalSession } from './externalSession'
 
 type Tab = 'home' | 'find' | 'ads' | 'requests' | 'sales' | 'payout' | 'profile'
 type Profile = {
@@ -25,8 +26,12 @@ type Profile = {
   city: string
   biography?: string
   contentCategories?: string
+  socialProfiles?: { platform: SocialPlatform; profileUrl?: string; followerCount: number; verificationStatus: string; isPrimary: boolean }[]
   profileImage?: { fileName: string; contentType: string; sizeBytes: number }
 }
+type SocialPlatform = 'TikTok' | 'Instagram' | 'YouTube' | 'Facebook'
+type SocialDraft = { platform: SocialPlatform; profileUrl: string; audienceCount: string }
+const socialPlatforms: SocialPlatform[] = ['TikTok', 'Instagram', 'YouTube', 'Facebook']
 type Earnings = {
   currencyCode: string
   pendingBalance: number
@@ -64,7 +69,15 @@ function ProfilePanel({
   const [busy, setBusy] = useState(false)
   const [photoMessage, setPhotoMessage] = useState('')
   const [photoState, setPhotoState] = useState<'idle' | 'success' | 'error'>('idle')
+  const [socialDrafts, setSocialDrafts] = useState<SocialDraft[]>([])
+  const [socialMessage, setSocialMessage] = useState('')
+  const [socialState, setSocialState] = useState<'idle' | 'success' | 'error'>('idle')
   const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!profile) return
+    setSocialDrafts((profile.socialProfiles ?? []).filter(row => socialPlatforms.includes(row.platform))
+      .map(row => ({ platform: row.platform, profileUrl: row.profileUrl ?? '', audienceCount: String(row.followerCount) })))
+  }, [profile])
 
   if (error && !profile) {
     return (
@@ -128,6 +141,37 @@ function ProfilePanel({
     }
   }
 
+  function addSocial() {
+    const platform = socialPlatforms.find(item => !socialDrafts.some(row => row.platform === item))
+    if (platform) setSocialDrafts([...socialDrafts, { platform, profileUrl: '', audienceCount: '' }])
+  }
+
+  function updateSocial(index: number, value: Partial<SocialDraft>) {
+    setSocialDrafts(socialDrafts.map((row, rowIndex) => rowIndex === index ? { ...row, ...value } : row))
+  }
+
+  async function saveSocials() {
+    setBusy(true); setSocialMessage(''); setSocialState('idle')
+    try {
+      if (socialDrafts.length === 0) throw new Error('Keep at least one social profile.')
+      const socialProfiles = socialDrafts.map(row => {
+        const audienceCount = Number(row.audienceCount)
+        if (!row.profileUrl.trim() || row.audienceCount === '' || !Number.isSafeInteger(audienceCount) || audienceCount < 0)
+          throw new Error(`Complete a valid URL and audience count for ${row.platform}.`)
+        return { platform: row.platform, profileUrl: row.profileUrl.trim(), audienceCount }
+      })
+      await api('/api/v1/integration/v3/creator/social-profiles', {
+        method: 'PUT', body: JSON.stringify({ socialProfiles }),
+      })
+      const confirmed = await refresh()
+      if (confirmed) onProfileChange(confirmed)
+      setSocialState('success'); setSocialMessage('Social profiles updated.')
+    } catch (error) {
+      setSocialState('error'); setSocialMessage((error as Error).message)
+    } finally { setBusy(false) }
+  }
+
+  const account = getExternalSession()
   return (
     <section className="creator-section">
       <h2>Profile</h2>
@@ -143,9 +187,11 @@ function ProfilePanel({
             <div>
               <strong>{profile.displayName}</strong>
               <p>
-                {profile.email || 'No email provided'}
+                <small>Weymela account email</small><br />
+                {account?.accountEmail || profile.email || 'Unavailable'}
                 <br />
-                {profile.phoneNumber}
+                <small>Weymela account phone</small><br />
+                {account?.accountPhone || profile.phoneNumber || 'Unavailable'}
                 <br />
                 {profile.city}
               </p>
@@ -186,6 +232,17 @@ function ProfilePanel({
           {copy && <small role="status">{copy}</small>}
         </div>
       </div>
+      {isExternalSession() && <div className="compact-panel creator-social-editor">
+        <h3>Social profiles</h3>
+        {socialMessage && <p className={socialState === 'success' ? 'success-note' : 'friendly-error'} role={socialState === 'error' ? 'alert' : 'status'}>{socialMessage}</p>}
+        <div className="social-profile-list">{socialDrafts.map((row, index) => <div className="social-profile-row" key={row.platform}>
+          <label>Platform<select value={row.platform} onChange={event => updateSocial(index, { platform: event.target.value as SocialPlatform })}>{socialPlatforms.map(platform => <option key={platform} value={platform} disabled={socialDrafts.some((current, currentIndex) => currentIndex !== index && current.platform === platform)}>{platform}</option>)}</select></label>
+          <label>{row.platform === 'YouTube' ? 'Channel URL' : row.platform === 'Facebook' ? 'Profile/Page URL' : 'Profile URL'}<input type="url" required value={row.profileUrl} onChange={event => updateSocial(index, { profileUrl: event.target.value })} /></label>
+          <label>{row.platform === 'YouTube' ? 'Subscriber count' : 'Follower count'}<input type="number" min="0" step="1" required value={row.audienceCount} onChange={event => updateSocial(index, { audienceCount: event.target.value })} /></label>
+          <button type="button" className="quiet remove-social" disabled={busy || socialDrafts.length === 1} onClick={() => setSocialDrafts(socialDrafts.filter((_, rowIndex) => rowIndex !== index))}>Remove {row.platform}</button>
+        </div>)}</div>
+        <div className="actions creator-social-actions"><button type="button" disabled={busy || socialDrafts.length === socialPlatforms.length} className="quiet" onClick={addSocial}>Add social platform</button><button type="button" disabled={busy || socialDrafts.length === 0} onClick={() => void saveSocials()}>{busy ? 'Saving…' : 'Save social profiles'}</button></div>
+      </div>}
     </section>
   )
 }

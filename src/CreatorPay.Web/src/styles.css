@@ -3210,3 +3210,31 @@ body:has(.role-business) {
   .account-shell .quiet:hover:not(:disabled) {background:var(--role-accent-soft);color:var(--role-accent)}
   .account-shell .danger:hover:not(:disabled) {background:#9f2f27;color:#fff}
 }
+
+.external-onboarding .full {grid-column:1/-1}
+.external-onboarding-creator {--onboarding-accent:#6034c4;--onboarding-soft:#f1eaff;--onboarding-border:#d5c4f8}
+.external-onboarding-business {--onboarding-accent:#1d4fc1;--onboarding-soft:#e8f0ff;--onboarding-border:#b7cbf8}
+.external-onboarding-creator .auth-card,.external-onboarding-business .auth-card {border-top:5px solid var(--onboarding-accent)}
+.external-onboarding-creator .eyebrow,.external-onboarding-business .eyebrow,
+.external-onboarding-creator legend,.external-onboarding-business legend {color:var(--onboarding-accent)}
+.external-onboarding-creator button:not(.quiet),.external-onboarding-business button:not(.quiet) {background:var(--onboarding-accent)}
+.external-onboarding-creator fieldset,.external-onboarding-business fieldset {border-color:var(--onboarding-border)}
+.external-onboarding-creator .account-identity,.external-onboarding-business .account-identity {background:var(--onboarding-soft)}
+.external-onboarding fieldset,.creator-social-editor {border:1px solid #bdccbf;border-radius:.65rem;padding:1rem}
+.external-onboarding legend,.creator-social-editor h3 {color:#153c27;font-weight:800}
+.external-onboarding .account-identity,.external-onboarding .business-contact {display:grid;grid-template-columns:1fr 1fr;gap:1rem;background:#edf3ee}
+.external-onboarding .account-identity input[readonly] {background:#f2f4f2;color:#365344;cursor:not-allowed}
+.social-profiles,.social-profile-list {display:grid;gap:.75rem}
+.social-profile-row {display:grid;grid-template-columns:minmax(7rem,.7fr) minmax(12rem,1.5fr) minmax(8rem,.8fr) auto;align-items:end;gap:.65rem;padding:.75rem;background:#fff;border:1px solid #d5dfd7;border-radius:.55rem}
+.social-profile-row .remove-social {min-height:2.75rem;white-space:nowrap}
+.social-profiles .add-social {justify-self:start}
+.onboarding-actions {display:grid;grid-template-columns:1fr;margin-top:.5rem}
+.onboarding-back-link {display:block;padding:.75rem 1rem;border-radius:.6rem;text-align:center;text-decoration:none;font-weight:700}
+.creator-social-editor {margin-top:1rem;background:#f8faf7}
+.creator-social-editor h3 {margin-top:0}
+.creator-social-actions {justify-content:flex-end;margin-top:1rem}
+@media (max-width:760px) {
+  .external-onboarding .account-identity,.external-onboarding .business-contact,.social-profile-row {grid-template-columns:1fr}
+  .social-profile-row .remove-social,.social-profiles .add-social,.creator-social-actions button {width:100%}
+  .creator-social-actions {display:grid;grid-template-columns:1fr}
+}

@@ -12,6 +12,7 @@ const chrome=read('AccountChrome.tsx')
 const admin=read('AdminPortal.tsx')
 const pin=read('PinExperience.tsx')
 const routing=read('authSession.ts')
+const creator=read('CreatorDashboard.tsx')
 const endpoints=readFileSync(repoPath(import.meta.url,'src/CreatorPay.Api/Integration/ExternalProductEndpoints.cs'),'utf8')
 const apiHost=readFileSync(repoPath(import.meta.url,'src/CreatorPay.Api/Program.cs'),'utf8')
 
@@ -24,12 +25,19 @@ test('V3-managed routes preserve the existing product workspaces without a secon
 })
 
 test('external onboarding keeps profile fields while excluding V2 authentication credentials',()=>{
-  for(const label of ['Preferred name','Legal First Name',"Father's / Last Name",'Public Display Name','Primary City','Primary Social Platform','Social Profile URL','Estimated Follower Count','Trading Name','Business Type','Primary Contact Name','Business Address']) assert.ok(onboarding.includes(label),label)
+  for(const label of ['Preferred name','Legal First Name',"Father's / Last Name",'Public Display Name','Primary City','Social profiles','TikTok','Instagram','YouTube','Facebook','Trading Name','Business Type','Primary Contact Name','Business Address']) assert.ok(onboarding.includes(label),label)
   assert.doesNotMatch(onboarding,/Password|Confirm password|Create 5-digit PIN|Firebase|verification code|Public ID|User ID|Profile ID/)
-  assert.match(onboarding,/do not create another login/)
+  assert.match(onboarding,/Account email/)
+  assert.match(onboarding,/Account phone/)
+  assert.match(onboarding,/readOnly/)
+  assert.doesNotMatch(onboarding,/Primary Social Platform|Estimated Follower Count/)
+  assert.match(onboarding,/Business Contact Phone/)
+  assert.match(onboarding,/Business Contact Email/)
   assert.match(onboarding,/Back to profiles/)
-  assert.match(onboarding,/type="button"/)
-  assert.match(onboarding,/location\.replace\("\/onboarding"\)/)
+  assert.match(onboarding,/href="\/onboarding"/)
+  assert.match(onboarding,/Add social platform/)
+  assert.match(creator,/Save social profiles/)
+  assert.match(creator,/socialDrafts\.length === 1/)
 })
 
 test('V3External navigation exposes profile switching and coordinated logout',()=>{
