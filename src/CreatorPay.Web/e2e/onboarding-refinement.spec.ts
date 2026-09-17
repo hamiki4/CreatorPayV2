@@ -105,7 +105,8 @@ test('active Creator can add, update, and remove socials but cannot remove the f
     if (path === '/api/v1/creators/me') {
       await route.fulfill({ json: { displayName: 'Mimi Creates', publicCreatorId: 'CR-MIMI', creatorCode: '1234',
         creatorStatus: 'Active', accountStatus: 'Active', effectiveStatus: 'Active', effectiveStatusReason: '',
-        email: '', phoneNumber: '', city: 'Addis Ababa', socialProfiles } })
+        email: 'legacy-role-contact@example.test', phoneNumber: '0911223344',
+        city: 'Addis Ababa', socialProfiles } })
       return
     }
     if (path === '/api/v1/integration/v3/creator/social-profiles') {
@@ -123,6 +124,10 @@ test('active Creator can add, update, and remove socials but cannot remove the f
   await page.goto('/creator')
   await page.getByRole('navigation', { name: 'Creator sections' }).getByRole('button', { name: 'Profile', exact: true }).click()
   await expect(page.getByText('Weymela account email')).toBeVisible()
+  await expect(page.getByText('owner@weymela.test')).toBeVisible()
+  await expect(page.getByText('+251911111111')).toBeVisible()
+  await expect(page.getByText('legacy-role-contact@example.test')).toHaveCount(0)
+  await expect(page.getByText('0911223344')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Remove TikTok' })).toBeDisabled()
   await page.getByRole('button', { name: 'Add social platform' }).click()
   const rows = page.locator('.creator-social-editor .social-profile-row')

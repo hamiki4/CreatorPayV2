@@ -171,7 +171,8 @@ function ProfilePanel({
     } finally { setBusy(false) }
   }
 
-  const account = getExternalSession()
+  const externalSession = isExternalSession()
+  const account = externalSession ? getExternalSession() : null
   return (
     <section className="creator-section">
       <h2>Profile</h2>
@@ -188,10 +189,10 @@ function ProfilePanel({
               <strong>{profile.displayName}</strong>
               <p>
                 <small>Weymela account email</small><br />
-                {account?.accountEmail || profile.email || 'Unavailable'}
+                {externalSession ? account?.accountEmail || 'Unavailable' : profile.email || 'Unavailable'}
                 <br />
                 <small>Weymela account phone</small><br />
-                {account?.accountPhone || profile.phoneNumber || 'Unavailable'}
+                {externalSession ? account?.accountPhone || 'Unavailable' : profile.phoneNumber || 'Unavailable'}
                 <br />
                 {profile.city}
               </p>
@@ -232,7 +233,7 @@ function ProfilePanel({
           {copy && <small role="status">{copy}</small>}
         </div>
       </div>
-      {isExternalSession() && <div className="compact-panel creator-social-editor">
+      {externalSession && <div className="compact-panel creator-social-editor">
         <h3>Social profiles</h3>
         {socialMessage && <p className={socialState === 'success' ? 'success-note' : 'friendly-error'} role={socialState === 'error' ? 'alert' : 'status'}>{socialMessage}</p>}
         <div className="social-profile-list">{socialDrafts.map((row, index) => <div className="social-profile-row" key={row.platform}>
