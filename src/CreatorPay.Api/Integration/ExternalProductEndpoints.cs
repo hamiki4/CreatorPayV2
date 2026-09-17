@@ -150,13 +150,17 @@ internal static class ExternalProductEndpoints
         IWebHostEnvironment environment) => context.SignInAsync(ExternalProductAuthentication.CookieScheme,
         ExternalProductAuthentication.Principal(session), new AuthenticationProperties
         {
-            IsPersistent = false, AllowRefresh = false, IssuedUtc = DateTimeOffset.UtcNow,
+            IsPersistent = false,
+            AllowRefresh = false,
+            IssuedUtc = DateTimeOffset.UtcNow,
             ExpiresUtc = session.Session.ExpiresAtUtc
         });
     private static CookieOptions TransientCookie(IWebHostEnvironment environment, TimeSpan lifetime) => new()
     {
-        HttpOnly = true, Secure = !environment.IsDevelopment() && !environment.IsEnvironment("E2E"),
-        SameSite = SameSiteMode.Strict, Path = "/",
+        HttpOnly = true,
+        Secure = !environment.IsDevelopment() && !environment.IsEnvironment("E2E"),
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
         MaxAge = lifetime > TimeSpan.Zero ? lifetime : null
     };
     private static bool Fixed(string state, string? expected)
@@ -177,8 +181,11 @@ internal static class ExternalProductEndpoints
     }
     private static string Destination(UserRole role) => role switch
     {
-        UserRole.Customer => "/shopper", UserRole.Creator => "/creator",
-        UserRole.MerchantAdmin => "/business", UserRole.PlatformAdmin => "/admin",
-        UserRole.Cashier => "/cashier", _ => "/"
+        UserRole.Customer => "/shopper",
+        UserRole.Creator => "/creator",
+        UserRole.MerchantAdmin => "/business",
+        UserRole.PlatformAdmin => "/admin",
+        UserRole.Cashier => "/cashier",
+        _ => "/"
     };
 }
