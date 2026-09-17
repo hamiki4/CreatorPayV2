@@ -34,6 +34,7 @@ internal static class ExternalProductEndpoints
                 TransientCookie(environment, TimeSpan.FromMinutes(2)));
             var target = QueryHelpers.AddQueryString(service.V3ContinuationUrl,
                 new Dictionary<string, string?> { ["state"] = state, ["role"] = role, ["purpose"] = purpose });
+            if (ProductRequest(context, service)) return Results.Ok(new { state });
             return Results.Redirect(target, permanent: false, preserveMethod: false);
         }).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth-sensitive");
 
@@ -62,6 +63,7 @@ internal static class ExternalProductEndpoints
                         _ => "/"
                     }
                     : Destination(session.Session.Role);
+                if (ProductRequest(context, service)) return Results.Ok(new { destination });
                 return Results.Redirect(service.ProductWebUrl + destination);
             }
             catch (UnauthorizedAccessException)

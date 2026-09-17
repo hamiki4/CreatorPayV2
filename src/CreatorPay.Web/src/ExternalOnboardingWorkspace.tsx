@@ -27,7 +27,7 @@ export function ExternalOnboardingWorkspace({ kind }: { kind: "customer" | "crea
         : { ...business, phoneNumber: normalizeEthiopianPhone(business.phoneNumber) ?? business.phoneNumber, email: business.email || null };
       const result = await api<{ destination: string }>(`/api/v1/integration/v3/onboarding/${kind}`, { method: "POST", body: JSON.stringify(body) });
       const refreshed = await loadExternalSession(); setExternalSession(refreshed.session);
-      location.assign(result.destination);
+      location.replace(result.destination);
     } catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
   }

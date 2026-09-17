@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -70,6 +71,43 @@ public sealed class V3ExternalEndpointSecurityTests : IDisposable
                 ["callbackId"] = "integration-callback"
             }));
         Assert.Equal(HttpStatusCode.Unauthorized, callback.StatusCode);
+    }
+
+    [Fact]
+    public async Task Same_origin_browser_fetch_keeps_begin_out_of_navigation_history()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/integration/v3/begin")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["role"] = "Business",
+                ["purpose"] = "PROFILE_ONBOARDING"
+            })
+        };
+        request.Headers.Add("Origin", "https://localhost");
+        request.Headers.Add("X-Weymela-Product-Request", "1");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        var payload = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        Assert.NotNull(payload);
+        Assert.True(payload.TryGetValue("state", out var state));
+        Assert.InRange(state.Length, 32, 160);
+        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
+        Assert.Contains("HttpOnly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Secure", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SameSite=Strict", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Integration_navigation_endpoints_do_not_accept_direct_gets()
+    {
+        Assert.Equal(HttpStatusCode.MethodNotAllowed,
+            (await client.GetAsync("/api/v1/integration/v3/begin")).StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed,
+            (await client.GetAsync("/api/v1/integration/v3/callback")).StatusCode);
     }
 
     public void Dispose()

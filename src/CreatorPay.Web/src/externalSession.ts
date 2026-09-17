@@ -28,7 +28,17 @@ async function transition(path: "switch-profile" | "logout") {
   if (!response.ok) throw new Error("We couldn't complete that account action.");
   current = null;
   const value = await response.json() as { redirectUrl: string };
-  location.assign(value.redirectUrl);
+  if (path === "logout") {
+    const authority = await fetch("/api/session/sign-out", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-Weymela-Request": "1" }, body: "{}",
+    });
+    if (!authority.ok && authority.status !== 401)
+      throw new Error("We couldn't complete that account action.");
+    location.replace("/sign-in");
+    return;
+  }
+  location.replace(value.redirectUrl);
 }
 export function switchExternalProfile() { return transition("switch-profile"); }
 export function signOutExternalSession() { return transition("logout"); }

@@ -35,6 +35,11 @@ test('V3External navigation exposes profile switching and coordinated logout',()
   assert.match(admin,/signOutExternalSession/)
   assert.match(session,/switch-profile/)
   assert.match(session,/logout/)
+  assert.match(session,/location\.replace\(value\.redirectUrl\)/)
+  assert.match(session,/fetch\("\/api\/session\/sign-out"/)
+  assert.match(session,/location\.replace\("\/sign-in"\)/)
+  assert.doesNotMatch(session,/location\.assign\(value\.redirectUrl\)/)
+  assert.match(onboarding,/location\.replace\(result\.destination\)/)
 })
 
 test('legacy V2 PIN and Admin password tools are bypassed for external sessions',()=>{
@@ -53,4 +58,6 @@ test('external cookie mutations require exact product origin and an explicit bro
   assert.match(onboarding,/api<\{ destination: string \}>/)
   assert.match(apiHost,/externalCookie && !callback/)
   assert.match(apiHost,/SameOrigin\(context\.Request\.Headers\.Origin/)
+  assert.match(endpoints,/ProductRequest\(context, service\)\) return Results\.Ok\(new \{ state \}\)/)
+  assert.match(endpoints,/ProductRequest\(context, service\)\) return Results\.Ok\(new \{ destination \}\)/)
 })
