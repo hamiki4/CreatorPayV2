@@ -2172,7 +2172,7 @@ public sealed class RepeatUseOverrideFinancialTests : IAsyncLifetime
 
     private static async Task<HttpResponseMessage> Deposit(HttpClient client, string token, string key, decimal amount, string fileName, string contentType, byte[] bytes)
     {
-        using var form = new MultipartFormDataContent(); form.Add(new StringContent(amount.ToString(CultureInfo.InvariantCulture)), "amount"); var file = new ByteArrayContent(bytes); file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType); form.Add(file, "proof", fileName);
+        using var form = new MultipartFormDataContent(); form.Add(new StringContent(amount.ToString(CultureInfo.InvariantCulture)), "amount"); form.Add(new StringContent(key), "reference"); var file = new ByteArrayContent(bytes); file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType); form.Add(file, "proof", fileName);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/merchant/deposits") { Content = form }; request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token); request.Headers.Add("Idempotency-Key", key); return await client.SendAsync(request);
     }
     private static byte[] Png() => [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0];

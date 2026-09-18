@@ -1,383 +1,43 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { api } from "./apiClient";
-import { AccountStatusBadge } from "./AccountChrome";
-import { formatAmount, formatDate, formatTime } from "./displayFormat";
-import { NavIcon } from "./navIcons";
-import { createUuid } from "./uuid";
-import jsQR from "jsqr";
-import {v3Post} from "./v3ProductApi";
+import {FormEvent,useEffect,useState} from 'react'
+import jsQR from 'jsqr'
+import {api} from './apiClient'
+import {AccountStatusBadge} from './AccountChrome'
+import {formatAmount,formatDate,formatTime} from './displayFormat'
+import {NavIcon} from './navIcons'
+import {v3Post,v3Request} from './v3ProductApi'
 
-type Mode = "cashier" | "merchant";
-type Staff = {
-  firstName: string;
-  lastName: string;
-  username: string;
-  businessName: string;
-  effectiveStatus: string;
-  effectiveStatusReason: string;
-  locations: { id: string; name: string; isPrimary: boolean }[];
-};
-type Purchase = {
-  transactionId: string;
-  publicTransactionId: string;
-  status: string;
-  purchaseAmount: number;
-  confirmedAtUtc?: string;
-  creatorDisplayName: string;
-  creatorPublicId: string;
-};
-type Result = {
-  status: string;
-  code: string;
-  message: string;
-  checkout?: {
-    publicCheckoutId: string;
-    purchaseAmount?: number;
-    creatorName?: string;
-  };
-};
-type Validation = {
-  isValid: boolean;
-  code: string;
-  message: string;
-  creatorName?: string;
-  businessName?: string;
-};
-type Tab = "purchase" | "recent" | "profile";
-type V3Offer={sessionId:string;campaign:string;business:{displayName:string};creator:{displayName:string};customer:string;expiresAtUtc:string}
-type V3Sale={id:string;purchaseAmount:{amount:number};totalBusinessCharge:{amount:number};confirmedAtUtc:string}
+type Mode='cashier'|'merchant'
+type Tab='checkout'|'recent'|'profile'
+type EntryMode='scan'|'manual'
+type Staff={firstName:string;lastName:string;username:string;businessName:string;effectiveStatus:string;locations:{name:string}[]}
+type V3Offer={sessionId:string;offer:string;business:{displayName:string};creator?:{displayName:string};customer:string;expiresAtUtc:string;source:'VIEW_AND_SALE_PROMOTION'|'UGC_CUSTOMER_OFFER';customerDiscountPercent?:number}
+type V3Sale={saleId:string;purchaseAmount:{amount:number};totalBusinessCharge:{amount:number};createdAtUtc:string;customerPays?:{amount:number};customerDiscount?:{amount:number};source:string}
+type RecentSale={id:string;offer:string;source:string;purchaseAmount:number;customerDiscount:number;customerPays:number;platformFee:number;createdAtUtc:string}
 
-const money = formatAmount;
-const transactionDate = formatDate;
-const transactionTime = formatTime;
-const shortReference = (value: string) => {
-  const readable = value.replace(/[^a-z0-9]/gi, "");
-  return `#${readable.slice(-4).toUpperCase()}`;
-};
+export function CashierCheckoutWorkspace({initialQrPayload,mode='cashier'}:{initialQrPayload?:string;mode?:Mode}={}){
+  const merchantMode=mode==='merchant'
+  const[tab,setTab]=useState<Tab>('checkout'),[entryMode,setEntryMode]=useState<EntryMode>(initialQrPayload?'manual':'scan')
+  const[staff,setStaff]=useState<Staff>(),[recent,setRecent]=useState<RecentSale[]>([]),[token,setToken]=useState(initialQrPayload??'')
+  const[offer,setOffer]=useState<V3Offer>(),[amount,setAmount]=useState(''),[sale,setSale]=useState<V3Sale>()
+  const[message,setMessage]=useState(''),[busy,setBusy]=useState(false)
+  const load=async()=>{try{setRecent(await v3Request<RecentSale[]>('/api/checkout/recent'));if(!merchantMode)setStaff(await api<Staff>('/api/v1/cashier/me'))}catch(error){console.error(error);setMessage("We couldn't load this information.")}}
+  useEffect(()=>{void load()},[])
 
-export function CashierCheckoutWorkspace({
-  initialQrPayload,
-  mode = "cashier",
-}: { initialQrPayload?: string; mode?: Mode } = {}) {
-  const merchantMode = mode === "merchant";
-  const [tab, setTab] = useState<Tab>("purchase");
-  const [staff, setStaff] = useState<Staff>();
-  const [recent, setRecent] = useState<Purchase[]>([]);
-  const [creatorCode, setCreatorCode] = useState("");
-  const [validation, setValidation] = useState<Validation>();
-  const [shopperPhoneNumber, setShopperPhoneNumber] = useState("");
-  const [purchaseAmount, setPurchaseAmount] = useState("");
-  const [result, setResult] = useState<Result>();
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [checkoutMode,setCheckoutMode]=useState<"standard"|"offer">(initialQrPayload?"offer":"standard");
-  const [offerToken,setOfferToken]=useState(initialQrPayload??"");
-  const [offer,setOffer]=useState<V3Offer>();
-  const [offerAmount,setOfferAmount]=useState("");
-  const [offerResult,setOfferResult]=useState<V3Sale>();
-  const submissionKey = useRef(createUuid());
-  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
+  async function scan(file?:File){if(!file)return;setMessage('');try{const bitmap=await createImageBitmap(file),canvas=document.createElement('canvas');canvas.width=bitmap.width;canvas.height=bitmap.height;const context=canvas.getContext('2d',{willReadFrequently:true});if(!context)throw new Error();context.drawImage(bitmap,0,0);const image=context.getImageData(0,0,canvas.width,canvas.height),decoded=jsQR(image.data,image.width,image.height);if(!decoded)throw new Error();setToken(decoded.data);await resolve(decoded.data)}catch{setMessage("We couldn't read that QR image. Try again or enter the scanned code manually.")}}
+  async function resolve(value=token){if(!value.trim()||busy)return;setBusy(true);setMessage('');try{setOffer(await v3Post<V3Offer>('/api/checkout/resolve',{token:value.trim()}));setSale(undefined)}catch(error){setOffer(undefined);setMessage((error as Error).message)}finally{setBusy(false)}}
+  async function confirm(event:FormEvent){event.preventDefault();if(!offer||busy)return;setBusy(true);setMessage('');try{const saved=await v3Post<V3Sale>('/api/checkout/confirm',{token:token.trim(),purchaseAmount:Number(amount)});setSale(saved);setOffer(undefined);setAmount('');setToken('');setMessage('Sale completed.');await load()}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}
+  function next(){setSale(undefined);setOffer(undefined);setToken('');setAmount('');setMessage('')}
 
-  const recentEndpoint = merchantMode
-    ? "/api/v1/merchant/purchases"
-    : "/api/v1/cashier/purchases/recent";
-  const validateEndpoint = merchantMode
-    ? "/api/v1/merchant/checkouts/validate-creator"
-    : "/api/v1/cashier/checkouts/validate-creator";
-  const submitEndpoint = merchantMode
-    ? "/api/v1/merchant/checkouts/by-creator"
-    : "/api/v1/cashier/checkouts/by-creator";
-
-  const resetEntryForm = () => {
-    setCreatorCode("");
-    setShopperPhoneNumber("");
-    setPurchaseAmount("");
-    setValidation(undefined);
-    setResult(undefined);
-    setMessage("");
-    submissionKey.current = createUuid();
-  };
-  const showResultThenReset = (nextMessage: string) => {
-    if (resetTimer.current) clearTimeout(resetTimer.current);
-    setMessage(nextMessage);
-    resetTimer.current = setTimeout(resetEntryForm, 3000);
-  };
-  const load = async () => {
-    try {
-      const purchases = await api<Purchase[]>(recentEndpoint);
-      setRecent(purchases);
-      if (!merchantMode) {
-        const cashier = await api<Staff>("/api/v1/cashier/me");
-        setStaff(cashier);
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage("We couldn't load this information.");
-    }
-  };
-
-  useEffect(() => {
-    void load();
-    return () => {
-      if (resetTimer.current) clearTimeout(resetTimer.current);
-    };
-  }, []);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!confirm("Send this purchase to the Customer for confirmation?"))
-      return;
-    setResult(undefined);
-    setValidation(undefined);
-    setMessage("");
-    setBusy(true);
-    try {
-      const eligibility = await api<Validation>(validateEndpoint, {
-        method: "POST",
-        body: JSON.stringify({ creatorCode }),
-      });
-      setValidation(eligibility);
-      if (!eligibility.isValid) {
-        showResultThenReset(
-          eligibility.message ||
-            "This Creator promotion is not currently eligible at this Business.",
-        );
-        return;
-      }
-      const response = await api<Result>(submitEndpoint, {
-        method: "POST",
-        headers: { "Idempotency-Key": submissionKey.current },
-        body: JSON.stringify({
-          creatorCode,
-          shopperPhoneNumber,
-          purchaseAmount: Number(purchaseAmount),
-        }),
-      });
-      setResult(response);
-      void load();
-      if (response.code === "shopper_not_registered")
-        showResultThenReset("Customer account not found.");
-      else {
-        showResultThenReset(
-          response.code === "awaiting_shopper_confirmation"
-            ? "Purchase submitted — awaiting Customer confirmation."
-            : response.message,
-        );
-      }
-    } catch (error) {
-      console.error(error);
-      showResultThenReset(
-        (error as Error).message ||
-          "We couldn't submit this sale. Please check the information and try again.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resolveOffer(e?:FormEvent){e?.preventDefault();if(!offerToken.trim()||busy)return;setBusy(true);setMessage("");try{setOffer(await v3Post<V3Offer>("/api/checkout/resolve",{token:offerToken.trim()}));setOfferResult(undefined)}catch(error){setOffer(undefined);setMessage((error as Error).message)}finally{setBusy(false)}}
-  async function confirmOffer(e:FormEvent){e.preventDefault();if(!offer||busy)return;setBusy(true);setMessage("");try{const saved=await v3Post<V3Sale>("/api/checkout/confirm",{token:offerToken.trim(),purchaseAmount:Number(offerAmount)});setOfferResult(saved);setOffer(undefined);setOfferToken("");setOfferAmount("");setMessage("Purchase confirmed. Eligible rewards were recorded once.")}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}
-  async function scanOfferImage(file?:File){if(!file)return;try{const bitmap=await createImageBitmap(file);const canvas=document.createElement("canvas");canvas.width=bitmap.width;canvas.height=bitmap.height;const context=canvas.getContext("2d",{willReadFrequently:true});if(!context)throw new Error();context.drawImage(bitmap,0,0);const image=context.getImageData(0,0,canvas.width,canvas.height);const decoded=jsQR(image.data,image.width,image.height);if(!decoded)throw new Error();setOfferToken(decoded.data);setMessage("Offer QR scanned. Resolve it to continue.")}catch{setMessage("We couldn't read that QR image. Try again or paste the scanned code.")}}
-
-  const tabs: [Tab, string][] = merchantMode
-    ? [
-        ["purchase", "Checkout"],
-        ["recent", "Recent Transactions"],
-      ]
-    : [
-        ["purchase", "New Purchase"],
-        ["recent", "Recent Transactions"],
-        ["profile", "Profile"],
-      ];
-
-  return (
-    <div className="creator-dashboard cashier-dashboard">
-      <nav className="cashier-tabs" aria-label="Cashier Dashboard sections">
-        {tabs.map(([id, label]) => (
-          <button
-            key={id}
-            className={tab === id ? "active" : ""}
-            onClick={() => setTab(id)}
-          >
-            {!merchantMode && (
-              <NavIcon
-                name={id === "purchase" ? "checkout" : id === "recent" ? "sales" : "profile"}
-                size={24}
-              />
-            )}
-            <span>{label}</span>
-          </button>
-        ))}
-      </nav>
-      {message && (
-        <p
-          role="status"
-          className={
-            message.includes("awaiting Customer confirmation")
-              ? "success-note"
-              : "friendly-error"
-          }
-        >
-          {message}
-        </p>
-      )}
-      {tab === "purchase" && (
-        <section className="creator-section cashier-scan">
-          <h2>{merchantMode ? "Checkout" : "New Purchase"}</h2>
-          <div className="segmented" aria-label="Checkout method"><button className={checkoutMode==='standard'?'active':''} type="button" onClick={()=>setCheckoutMode('standard')}>Customer confirmation</button><button className={checkoutMode==='offer'?'active':''} type="button" onClick={()=>setCheckoutMode('offer')}>Offer QR</button></div>
-          {checkoutMode==='offer'?<>{offerResult?<aside className="success-note"><strong>Purchase confirmed</strong><p>Amount {money(offerResult.purchaseAmount.amount)}</p><p>Promotion charge {money(offerResult.totalBusinessCharge.amount)}</p><button type="button" onClick={()=>setOfferResult(undefined)}>Next Customer</button></aside>:offer?<><div className="compact-panel"><h3>Confirm purchase</h3><dl><div><dt>Business</dt><dd>{offer.business.displayName}</dd></div><div><dt>Promotion</dt><dd>{offer.campaign}</dd></div><div><dt>Creator</dt><dd>{offer.creator.displayName}</dd></div><div><dt>Customer</dt><dd>{offer.customer.split(' · ')[0]}</dd></div></dl></div><form className="panel form cashier-sale" onSubmit={e=>void confirmOffer(e)}><label>Purchase Amount<input required type="number" min="0.01" step="0.01" value={offerAmount} onChange={e=>setOfferAmount(e.target.value)}/></label><button className="full" disabled={busy||!offerAmount}>{busy?'Confirming…':'Confirm Purchase'}</button><button type="button" className="quiet" onClick={()=>{setOffer(undefined);setOfferToken('');setOfferAmount('')}}>Back</button></form></>:<form className="panel form cashier-sale" onSubmit={e=>void resolveOffer(e)}><label>Scan Customer Offer QR<input type="file" accept="image/*" capture="environment" onChange={e=>void scanOfferImage(e.target.files?.[0])}/></label><details><summary>Use a scanned code instead</summary><label>Scanned QR code<input required type="password" autoComplete="off" spellCheck={false} maxLength={256} value={offerToken} onChange={e=>setOfferToken(e.target.value)}/></label></details><button className="full" disabled={busy||!offerToken.trim()}>{busy?'Resolving…':'Resolve Offer'}</button></form>}</>:
-          result?.status !== "AwaitingShopperConfirmation" && (
-            <form className="panel form cashier-sale" onSubmit={submit}>
-              <label>
-                Creator ID
-                <input
-                  required
-                  inputMode="numeric"
-                  autoComplete="off"
-                  minLength={4}
-                  maxLength={4}
-                  pattern="[1-9][0-9]{3}"
-                  value={creatorCode}
-                  onChange={(e) => {
-                    setCreatorCode(
-                      e.target.value.replace(/\D/g, "").slice(0, 4),
-                    );
-                    setValidation(undefined);
-                    submissionKey.current = createUuid();
-                  }}
-                  placeholder="Creator ID"
-                />
-              </label>
-              <label>
-                Customer Phone Number
-                <input
-                  required
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={shopperPhoneNumber}
-                  onChange={(e) => setShopperPhoneNumber(e.target.value)}
-                  placeholder="Customer Phone Number"
-                />
-              </label>
-              <label>
-                Purchase Amount
-                <input
-                  required
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={purchaseAmount}
-                  onChange={(e) => setPurchaseAmount(e.target.value)}
-                  placeholder="Purchase Amount"
-                />
-              </label>
-              <button className="full" disabled={busy}>
-                {busy ? "Submitting…" : "Submit Purchase"}
-              </button>
-            </form>
-          )}
-          {checkoutMode==='standard'&&validation?.isValid && (
-            <aside
-              className="success-note cashier-validation"
-              aria-label="Eligible Creator"
-            >
-              <p>
-                <strong>Creator:</strong> {validation.creatorName}
-              </p>
-              <p>
-                <strong>Business:</strong> {validation.businessName}
-              </p>
-              <p>
-                <strong>Status:</strong> Eligible
-              </p>
-            </aside>
-          )}
-          {checkoutMode==='standard'&&result?.status === "AwaitingShopperConfirmation" && (
-            <aside className="success-note">
-              <strong>Awaiting Customer Confirmation</strong>
-              <p>Reference: {result.checkout?.publicCheckoutId}</p>
-              <p>
-                Amount:{" "}
-                {money(
-                  result.checkout?.purchaseAmount ?? Number(purchaseAmount),
-                )}
-              </p>
-            </aside>
-          )}
-        </section>
-      )}
-      {tab === "recent" && (
-        <section className="creator-section">
-          <h2>Recent Transactions</h2>
-          {recent.length ? (
-            <div className="cashier-transactions">
-              <div className="cashier-transaction-row headings">
-                <span>Amount</span>
-                <span>Status</span>
-                <span>Creator</span>
-                <span>Creator ID</span>
-                <span>Date</span>
-                <span>Time</span>
-                <span>Reference</span>
-              </div>
-              {[...recent]
-                .sort(
-                  (a, b) =>
-                    new Date(b.confirmedAtUtc ?? 0).getTime() -
-                    new Date(a.confirmedAtUtc ?? 0).getTime(),
-                )
-                .map((x) => (
-                  <article
-                    className="cashier-transaction-row"
-                    key={x.transactionId}
-                  >
-                    <strong data-label="Amount">
-                      {money(x.purchaseAmount)}
-                    </strong>
-                    <span data-label="Status">
-                      <span className="status-badge">{x.status}</span>
-                    </span>
-                    <span data-label="Creator" className="cashier-transaction-creator">
-                      {x.creatorDisplayName}
-                    </span>
-                    <strong data-label="Creator ID" className="cashier-transaction-creator-id">
-                      {x.creatorPublicId}
-                    </strong>
-                    <span data-label="Date">
-                      {transactionDate(x.confirmedAtUtc)}
-                    </span>
-                    <span data-label="Time">
-                      {transactionTime(x.confirmedAtUtc)}
-                    </span>
-                    <span data-label="Reference" className="cashier-short-reference" title="Short transaction reference">
-                      {shortReference(x.publicTransactionId)}
-                    </span>
-                  </article>
-                ))}
-            </div>
-          ) : (
-            <p className="compact-empty">No recent transactions yet.</p>
-          )}
-        </section>
-      )}
-      {!merchantMode && tab === "profile" && (
-        <section className="creator-section">
-          <h2>Profile</h2>
-          <div className="compact-panel">
-            <div>
-              <strong>
-                {staff ? `${staff.firstName} ${staff.lastName}` : "Cashier"}
-              </strong>
-              {staff && <AccountStatusBadge status={staff.effectiveStatus} />}
-              <p>{staff?.businessName}</p>
-              <p>{staff?.locations.map((x) => x.name).join(", ")}</p>
-              <small>Username: {staff?.username}</small>
-            </div>
-          </div>
-        </section>
-      )}
-    </div>
-  );
+  const tabs:[Tab,string,Parameters<typeof NavIcon>[0]['name']][]=merchantMode
+    ?[['checkout','Checkout','checkout'],['recent','Recent Sales','sales']]
+    :[['checkout','Checkout','checkout'],['recent','Recent Sales','sales'],['profile','Profile','profile']]
+  return <div className="creator-dashboard cashier-dashboard">
+    <nav className="cashier-tabs" aria-label="Cashier sections">{tabs.map(([id,label,icon])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><NavIcon name={icon} size={24}/><span>{label}</span></button>)}</nav>
+    {message&&<p role="status" className={message==='Sale completed.'?'success-note':'friendly-error'}>{message}</p>}
+    {tab==='checkout'&&<section className="creator-section cashier-scan"><h2>Checkout</h2><p>Scan a Customer QR for an eligible View &amp; Sale or UGC Customer Offer.</p><div className="segmented" aria-label="Checkout entry method"><button className={entryMode==='scan'?'active':''} onClick={()=>setEntryMode('scan')}>Scan Customer QR</button><button className={entryMode==='manual'?'active':''} onClick={()=>setEntryMode('manual')}>Enter Manually</button></div>
+      {sale?<aside className="success-note"><strong>Sale completed</strong><p>Sale {formatAmount(sale.purchaseAmount.amount)}</p>{sale.customerDiscount&&<p>Customer discount {formatAmount(sale.customerDiscount.amount)}</p>}{sale.customerPays&&<p>Customer pays {formatAmount(sale.customerPays.amount)}</p>}<button onClick={next}>Next Customer</button></aside>:offer?<><article className="compact-panel checkout-offer-context"><h3>{offer.business.displayName}</h3><p>{offer.offer}</p><dl><div><dt>Customer</dt><dd>{offer.customer.split(' · ')[0]}</dd></div><div><dt>Offer type</dt><dd>{offer.source==='UGC_CUSTOMER_OFFER'?'UGC Customer Offer':'View & Sale'}</dd></div>{offer.customerDiscountPercent!=null&&<div><dt>Customer discount</dt><dd>{offer.customerDiscountPercent}%</dd></div>}</dl></article><form className="panel form cashier-sale" onSubmit={confirm}><label>Sale amount<input required type="number" min="0.01" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)}/></label><button className="full" disabled={busy||!amount}>{busy?'Completing…':'Complete Sale'}</button><button type="button" className="quiet" onClick={next}>Back</button></form></>:entryMode==='scan'?<section className="panel qr-scan-action"><NavIcon name="checkout" size={44}/><h3>Scan Customer QR</h3><label className="button-like">Open Camera<input className="sr-only" type="file" accept="image/*" capture="environment" onChange={e=>void scan(e.target.files?.[0])}/></label></section>:<form className="panel form cashier-sale" onSubmit={e=>{e.preventDefault();void resolve()}}><label>Scanned QR code<input required type="password" autoComplete="off" spellCheck={false} maxLength={256} value={token} onChange={e=>setToken(e.target.value)}/></label><button className="full" disabled={busy||!token.trim()}>{busy?'Checking…':'Continue'}</button></form>}
+    </section>}
+    {tab==='recent'&&<section className="creator-section"><h2>Recent Sales</h2>{recent.length?<div className="product-list">{recent.map(x=><article key={x.id}><div><strong>{x.offer}</strong><span>{x.source==='UGC_CUSTOMER_OFFER'?'UGC Customer Offer':'View & Sale'} · {formatDate(x.createdAtUtc)} {formatTime(x.createdAtUtc)}</span></div><strong>{formatAmount(x.purchaseAmount)}</strong></article>)}</div>:<p className="compact-empty">No recent Sales.</p>}</section>}
+    {!merchantMode&&tab==='profile'&&<section className="creator-section"><h2>Profile</h2><div className="compact-panel"><strong>{staff?`${staff.firstName} ${staff.lastName}`:'Cashier'}</strong>{staff&&<AccountStatusBadge status={staff.effectiveStatus}/>}<p>{staff?.businessName}</p><p>{staff?.locations.map(x=>x.name).join(', ')}</p><small>Username: {staff?.username}</small></div></section>}
+  </div>
 }

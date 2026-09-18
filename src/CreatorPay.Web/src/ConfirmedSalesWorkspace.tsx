@@ -26,18 +26,18 @@ export function ConfirmedSalesWorkspace(){
     {report&&<div className="business-sales-summary">
       <article><span>Confirmed Sales</span><strong>{report.confirmedSales}</strong></article>
       <article><span>Total Sales</span><strong>{money(report.totalSalesAmount)}</strong></article>
-      <article><span>Commission Charged</span><strong>{money(report.totalCommissionAmount)}</strong></article>
+      <article><span>Platform fees</span><strong>{money(report.totalCommissionAmount)}</strong></article>
     </div>}
     <div className="filter-bar"><input aria-label="Creator Name" placeholder="Creator Name" value={creatorName} onChange={e=>setCreatorName(e.target.value)}/><input aria-label="Cashier" placeholder="Cashier" value={cashierName} onChange={e=>setCashierName(e.target.value)}/><button onClick={load}>Search</button><button className="quiet" onClick={clear}>Clear</button></div>
     {error&&<p className="friendly-error">{error}</p>}
     {report&&<>{report.sales.length===0?<p className="compact-empty">No confirmed sales match these filters.</p>:<div className="business-sales-grid" role="table" aria-label="Confirmed sales transactions">
-      <div className="business-sales-row headings" role="row"><span role="columnheader">Date</span><span role="columnheader">Sale</span><span role="columnheader">Creator</span><span role="columnheader">Cashier</span><span role="columnheader">Commission</span><span role="columnheader">Status</span><span role="columnheader">Reference</span></div>
+      <div className="business-sales-row headings" role="row"><span role="columnheader">Date</span><span role="columnheader">Sale</span><span role="columnheader">Creator</span><span role="columnheader">Cashier</span><span role="columnheader">Platform fee</span><span role="columnheader">Status</span><span role="columnheader">Reference</span></div>
       {report.sales.map(x=><div className="business-sales-row" role="row" key={x.transactionId}>
         <span role="cell" data-label="Date">{date(x.confirmedAtUtc)}</span>
         <strong role="cell" data-label="Sale">{money(x.saleAmount)}</strong>
-        <span role="cell" data-label="Creator"><b>{x.creatorName}</b><small>{x.creatorId}</small></span>
+        <span role="cell" data-label="Creator"><b>{x.creatorName}</b></span>
         <span role="cell" data-label="Cashier">{x.cashierName}</span>
-        <span role="cell" data-label="Commission">{money(x.commissionAmount)}</span>
+        <span role="cell" data-label="Platform fee">{money(x.commissionAmount)}</span>
         <span role="cell" data-label="Status"><span className="status-badge">{x.status}</span></span>
         <button type="button" className="business-short-reference" role="cell" data-label="Reference" title={x.publicTransactionId} aria-label={`Copy full reference ${x.publicTransactionId}`} onClick={()=>void navigator.clipboard?.writeText(x.publicTransactionId)}>{shortReference(x.publicTransactionId)}</button>
       </div>)}

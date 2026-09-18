@@ -4,15 +4,16 @@ import test from 'node:test'
 
 const source=readFileSync(new URL('../src/CashierCheckoutWorkspace.tsx',import.meta.url),'utf8')
 
-test('Cashier success resets to a fresh purchase form after a short result message',()=>{
-  for(const field of ['setCreatorCode("")','setShopperPhoneNumber("")','setPurchaseAmount("")','setResult(undefined)'])assert.ok(source.includes(field),field)
-  assert.match(source,/submissionKey\.current\s*=\s*createUuid\(\)/)
-  assert.match(source,/Purchase submitted — awaiting Customer confirmation\./)
-  assert.match(source,/setTimeout\(resetEntryForm, 3000\)/)
+test('Cashier success stays visible until Next Customer resets sensitive checkout state',()=>{
+  assert.match(source,/setMessage\('Sale completed\.'\)/)
+  assert.match(source,/function next\(\)\{setSale\(undefined\);setOffer\(undefined\);setToken\(''\);setAmount\(''\);setMessage\(''\)\}/)
+  assert.match(source,/Next Customer/)
+  assert.doesNotMatch(source,/Creator ID|Customer Phone Number/)
 })
 
-test('Cashier validation and API failures use the same delayed reset path',()=>{
-  assert.match(source,/showResultThenReset\(\s*eligibility\.message/s)
-  assert.match(source,/showResultThenReset\(\s*\(error as Error\)\.message/s)
-  assert.match(source,/disabled=\{busy\}/)
+test('Cashier validation and API failures remain visible without consuming or clearing the QR',()=>{
+  assert.match(source,/catch\(error\)\{setOffer\(undefined\);setMessage\(\(error as Error\)\.message\)\}/)
+  assert.match(source,/catch\(error\)\{setMessage\(\(error as Error\)\.message\)\}/)
+  assert.match(source,/disabled=\{busy\|\|!token\.trim\(\)\}/)
+  assert.match(source,/disabled=\{busy\|\|!amount\}/)
 })

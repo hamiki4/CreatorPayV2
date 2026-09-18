@@ -1,6 +1,5 @@
 import {FormEvent, useEffect, useState} from 'react'
-import {getAccessToken} from './sessionStore'
-import {rankMatches, useTypeahead} from './typeahead'
+import {useTypeahead} from './typeahead'
 import {AccountChrome, AccountStatusBadge} from './AccountChrome'
 import {onActionableRefresh} from './actionableRefresh'
 import {api as request} from './apiClient'
@@ -73,25 +72,19 @@ type ShopperProfile = {
   isEmailVerified: boolean
   isPhoneVerified: boolean
 }
-type Offer = {
-  offerCode: string
-  title: string
-  businessName: string
-  description: string
-  expiresAtUtc: string
-  creatorDisplayName: string
-}
 type V3Offer = {
   id:string
-  campaign:string
+  campaignId?:string
+  source:'VIEW_AND_SALE_PROMOTION'|'UGC_CUSTOMER_OFFER'
+  offer:string
   business:{displayName:string;directionsUrl?:string}
-  creator:{displayName:string}
-  cashbackPercent:number
+  creator?:{displayName:string}
+  benefitPercent:number
   watchUrl?:string
+  slogan?:string
+  location?:string
 }
 type V3Qr = {id:string;token?:string;expiresAtUtc:string;replayed:boolean}
-
-const token = getAccessToken
 
 async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   return request<T>(path, {
@@ -136,62 +129,18 @@ function directionsUrl(row: AdvertisingRow) {
 }
 
 function AuthoritativeOfferCard({offer,onQr}:{offer:V3Offer;onQr:(offer:V3Offer)=>void}){
-  return <article className="customer-promotion-card"><div className="customer-promotion-copy"><strong>{offer.business.displayName}</strong><h3>{offer.campaign}</h3><p>Promoted by {offer.creator.displayName}</p><span className="cashback">{formatAmount(offer.cashbackPercent)}% Cashback</span></div><div className="actions">{offer.watchUrl&&<a className="quiet" href={offer.watchUrl} target="_blank" rel="noopener noreferrer">Watch Promotion</a>}{offer.business.directionsUrl&&<a className="quiet" href={offer.business.directionsUrl} target="_blank" rel="noopener noreferrer">Get Directions</a>}<button type="button" onClick={()=>onQr(offer)}>Get Offer QR</button></div></article>
+  return <article className="customer-promotion-card"><div className="customer-promotion-copy"><strong>{offer.business.displayName}</strong><h3>{offer.slogan??offer.offer}</h3>{offer.location&&<p>{offer.location}</p>}<span className="cashback">{formatAmount(offer.benefitPercent)}% {offer.source==='UGC_CUSTOMER_OFFER'?'off':'Customer benefit'}</span></div><div className="actions">{offer.watchUrl&&<a className="quiet" href={offer.watchUrl} target="_blank" rel="noopener noreferrer">Watch Promotion</a>}{offer.business.directionsUrl&&<a className="quiet" href={offer.business.directionsUrl} target="_blank" rel="noopener noreferrer">Get Directions</a>}<button type="button" onClick={()=>onQr(offer)}>Use Offer</button></div></article>
 }
 
 export function ShopperOfferPage({code}: {code: string}) {
-  const [offer, setOffer] = useState<Offer>()
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
-  const [v3Offers,setV3Offers]=useState<V3Offer[]>([])
-  const [v3OfferError,setV3OfferError]=useState('')
-  const [activeQr,setActiveQr]=useState<{offer:V3Offer;image:string;expiresAtUtc:string}>()
-  const [qrBusy,setQrBusy]=useState(false)
-
-  useEffect(() => {
-    api<Offer>(`/api/v1/discovery/offers/${encodeURIComponent(code)}`)
-      .then(setOffer)
-      .catch((e) => setError(e.message))
-  }, [code])
-
-  async function useOffer() {
-    if (!token()) {
-      sessionStorage.setItem('weymela_offer_return', location.pathname)
-      location.assign('/')
-      return
-    }
-    try {
-      const x = await api<Checkout>('/api/v1/customer/checkouts/by-offer', 'POST', {offerCode: offer!.offerCode})
-      setMessage(`Temporary checkout QR (valid for about 3 minutes): ${x.qrPayload}`)
-    } catch (e) {
-      setMessage((e as Error).message)
-    }
-  }
-
-  if (error) {
-    return (
-      <main className="auth">
-        <section className="panel">
-          <h1>Offer unavailable</h1>
-          <p>{error}</p>
-          <a href="/">Discover Promotions</a>
-        </section>
-      </main>
-    )
-  }
-
-  if (!offer) return <main className="auth"><p>Loading…</p></main>
-
+  void code
   return (
     <main className="auth">
-      <section className="panel offer-detail">
+      <section className="panel">
         <p className="eyebrow">Weymela</p>
-        <h1>{offer.title}</h1>
-        <h2>{offer.businessName}</h2>
-        <p>{offer.description}</p>
-        <p>With {offer.creatorDisplayName}</p>
-        <button onClick={useOffer}>Support this Creator</button>
-        {message && <aside>{message}</aside>}
+        <h1>Customer Offers</h1>
+        <p>Sign in to see eligible offers and generate a secure checkout QR.</p>
+        <a href="/">Continue to Weymela</a>
       </section>
     </main>
   )
@@ -230,7 +179,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
   )
 
   const loadAccount = () => {
-    v3Request<V3Offer[]>('/api/customer/offers').then(value=>{setV3Offers(value);setV3OfferError('')}).catch(error=>{console.error(error);setV3OfferError("We couldn't load current View & Sale Promotions.")})
+    v3Request<V3Offer[]>('/api/customer/offers').then(value=>{setV3Offers(value);setV3OfferError('')}).catch(error=>{console.error(error);setV3OfferError("We couldn't load current offers.")})
     api<Wallet>('/api/v1/customer/wallet')
       .then((value) => {
         setWallet(value)
@@ -265,18 +214,11 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
     selectedBusinessType = businessType,
     coordinates = locationState,
   ) => {
-    const p = new URLSearchParams()
-    if (term) p.set('q', term)
-    if (selectedBusinessType) p.set('businessType', selectedBusinessType)
-    if (coordinates?.latitude != null && coordinates.longitude != null) {
-      p.set('latitude', String(coordinates.latitude))
-      p.set('longitude', String(coordinates.longitude))
-    }
-    return rankMatches(
-      await api<AdvertisingRow[]>(`/api/v1/customer/discovery/advertising?${p}`),
-      term,
-      (x) => [x.businessName, x.city, x.creatorName, x.publicBusinessId, x.publicCreatorId, x.creatorCode, x.businessType ?? ''],
-    )
+    // The V3 Customer Offer query is authoritative. The legacy advertising
+    // endpoint is intentionally not queried because it cannot express the
+    // View Only / View & Sale / UGC Customer Offer visibility matrix.
+    void term; void selectedBusinessType; void coordinates
+    return [] as AdvertisingRow[]
   }
 
   const find = async (term: string) => {
@@ -427,51 +369,12 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
               {profile?.name && <strong>{profile.name}</strong>}
             </div>
 
-            <section className="customer-home-section" aria-labelledby="nearby-promotions-title">
-              <div className="customer-section-heading">
-                <h3 id="nearby-promotions-title">Nearby Promotions</h3>
-                <button type="button" className="customer-text-action" onClick={() => setView('discover')}>See all</button>
-              </div>
-              {nearbyRows.length ? (
-                <div className="customer-promotion-feed customer-promotion-feed--home">
-                  {nearbyRows.map((row) => <PromotionCard key={row.relationshipId} row={row} compact />)}
-                </div>
-              ) : (
-                <div className="customer-location-prompt">
-                  <NavIcon name="mapPin" />
-                  <div>
-                    <strong>See what is close to you</strong>
-                    <span>Use your location to sort eligible live promotions by distance.</span>
-                  </div>
-                  <button type="button" onClick={() => void nearMe()}>Use Location</button>
-                </div>
-              )}
-            </section>
-
-            {v3Offers.length>0&&<section className="customer-home-section" aria-labelledby="current-offers-title"><div className="customer-section-heading"><h3 id="current-offers-title">View &amp; Sale Promotions</h3><button type="button" className="customer-text-action" onClick={()=>setView('discover')}>See all</button></div><div className="customer-promotion-feed customer-promotion-feed--home">{v3Offers.slice(0,3).map(offer=><AuthoritativeOfferCard key={offer.id} offer={offer} onQr={x=>void prepareOfferQr(x)}/>)}</div></section>}
-
-            {(recommendedRows.length > 0 || (nearbyRows.length === 0 && liveHomeRows.length > 0)) && (
-              <section className="customer-home-section" aria-labelledby="recommended-promotions-title">
-                <div className="customer-section-heading">
-                  <h3 id="recommended-promotions-title">Recommended Promotions</h3>
-                </div>
-                <div className="customer-promotion-feed customer-promotion-feed--home">
-                  {(recommendedRows.length ? recommendedRows : liveHomeRows.slice(0, 3)).map((row) => (
-                    <PromotionCard key={row.relationshipId} row={row} compact />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {homeLoading && (
-              <div className="customer-home-loading" role="status">Loading promotions…</div>
-            )}
-
-            {!homeLoading && !liveHomeRows.length && !discoverError && (
+            {v3Offers.length>0&&<section className="customer-home-section" aria-labelledby="current-offers-title"><div className="customer-section-heading"><h3 id="current-offers-title">Available Offers</h3><button type="button" className="customer-text-action" onClick={()=>setView('discover')}>See all</button></div><div className="customer-promotion-feed customer-promotion-feed--home">{v3Offers.slice(0,3).map(offer=><AuthoritativeOfferCard key={offer.id} offer={offer} onQr={x=>void prepareOfferQr(x)}/>)}</div></section>}
+            {!v3Offers.length && !v3OfferError && (
               <div className="customer-home-empty">
                 <NavIcon name="discover" />
-                <strong>No live promotions yet</strong>
-                <span>New eligible promotions will appear here after their Creators go live.</span>
+                <strong>No offers available right now</strong>
+                <span>Eligible View &amp; Sale and Customer Offers will appear here.</span>
               </div>
             )}
 
@@ -498,96 +401,18 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
             <h2>Discover Promotions</h2>
             {message&&<p className="product-message" role="status">{message}</p>}
             {v3OfferError&&<p className="friendly-error" role="alert">{v3OfferError}</p>}
-            {v3Offers.length>0&&<section className="customer-home-section" aria-label="Current View and Sale Promotions"><div className="customer-promotion-feed">{v3Offers.map(offer=><AuthoritativeOfferCard key={offer.id} offer={offer} onQr={x=>void prepareOfferQr(x)}/>)}</div></section>}
+            {v3Offers.length>0&&<section className="customer-home-section" aria-label="Available Customer Offers"><div className="customer-promotion-feed">{v3Offers.map(offer=><AuthoritativeOfferCard key={offer.id} offer={offer} onQr={x=>void prepareOfferQr(x)}/>)}</div></section>}
             {discoverError && <p className="friendly-error" role="alert">{discoverError}</p>}
             {pendingCount > 0 && (
               <button className="pending-confirmation-link" onClick={() => setView('confirmations')}>
                 Purchase confirmations <span>{pendingCount}</span>
               </button>
             )}
-            <form className="customer-discovery-search" onSubmit={submit}>
-              <label className="customer-search-field">
-                <span className="sr-only">Search business or creator</span>
-                <NavIcon name="discover" />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search business or creator" />
-              </label>
-              <button
-                type="button"
-                className="filter-toggle quiet"
-                aria-label={filtersOpen ? 'Hide filters' : 'Show filters'}
-                aria-expanded={filtersOpen}
-                onClick={() => setFiltersOpen(!filtersOpen)}
-              >
-                <NavIcon name="filter" />
-                <span>Filter</span>
-              </button>
-            </form>
-
-            {filtersOpen && (
-              <section className="customer-filter-panel" aria-label="Promotion filters">
-                <h3>Filters</h3>
-                <div className="customer-filter-controls">
-                  <label>
-                    <span className="sr-only">Business Type</span>
-                    <select aria-label="Business Type" value={businessType} onChange={(e) => setBusinessType(e.target.value)}>
-                      <option value="">Business Type</option>
-                      {businessTypes.map((x) => <option key={x.value} value={x.value}>{x.en}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    <span className="sr-only">Distance</span>
-                    <select
-                      aria-label="Distance"
-                      value={radiusKm}
-                      onChange={(e) => {
-                        const value = e.target.value ? Number(e.target.value) : ''
-                        setRadiusKm(value)
-                        if (value !== '') setSortBy('nearest')
-                      }}
-                    >
-                      <option value="">Nearest</option>
-                      {locationRadiusOptions.map((radius) => <option key={radius} value={radius}>Within {radius} km</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    <span className="sr-only">Sort promotions</span>
-                    <select aria-label="Sort promotions" value={sortBy} onChange={(e) => setSortBy(e.target.value as 'recommended' | 'nearest')}>
-                      <option value="recommended">Recommended</option>
-                      <option value="nearest">Nearest</option>
-                    </select>
-                  </label>
-                </div>
-              </section>
-            )}
-
-            {locationState?.label && (
-              <p className="success-note" role="status">
-                {locationState.label}
-              </p>
-            )}
-            {locationState?.error && (
-              <div className="customer-location-message friendly-error" role="alert">
-                <span>{locationState.error}</span>
-                <button type="button" className="quiet" onClick={() => void nearMe()}>Try Again</button>
-              </div>
-            )}
-
-            {(sortBy === 'nearest' || radiusKm !== '') && locationState?.latitude == null && !locationState?.error && (
-              <div className="customer-location-message" role="status">
-                <span>Use your location to see distances and nearest promotions.</span>
-                <button type="button" onClick={() => void nearMe()}>Use Location</button>
-              </div>
-            )}
-
-            {visibleRows.length ? (
-              <div className="customer-promotion-feed" aria-label="Active promotions">
-                {visibleRows.map((row) => <PromotionCard key={row.relationshipId} row={row} />)}
-              </div>
-            ) : (
+            {!v3Offers.length && !v3OfferError && (
               <div className="customer-discover-empty compact-empty">
                 <NavIcon name="discover" />
-                <strong>No active promotions found.</strong>
-                <span>Try a different search or filter.</span>
+                <strong>No offers available right now.</strong>
+                <span>Only eligible Customer-facing offers appear here.</span>
               </div>
             )}
           </section>
@@ -614,7 +439,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
             <ShopperProfileCard profile={profile} />
           </>
         )}
-        {activeQr&&<div className="modal-backdrop"><section className="help-dialog offer-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="offer-qr-title"><h2 id="offer-qr-title">{activeQr.offer.business.displayName}</h2><p>{activeQr.offer.campaign}</p><img className="qr-image" src={activeQr.image} alt="Offer QR for the cashier"/><p>Show this QR to the cashier.</p><small>Expires {formatTime(activeQr.expiresAtUtc)}</small><button type="button" onClick={()=>setActiveQr(undefined)}>Close</button></section></div>}
+        {activeQr&&<div className="modal-backdrop"><section className="help-dialog offer-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="offer-qr-title"><h2 id="offer-qr-title">{activeQr.offer.business.displayName}</h2><p>{activeQr.offer.slogan??activeQr.offer.offer}</p><img className="qr-image" src={activeQr.image} alt="Offer QR for the cashier"/><p>Show this QR at checkout.</p><small>Expires {formatTime(activeQr.expiresAtUtc)}</small><button type="button" onClick={()=>setActiveQr(undefined)}>Close</button></section></div>}
       </section>
     </AccountChrome>
   )

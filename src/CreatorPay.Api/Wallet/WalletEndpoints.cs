@@ -40,13 +40,14 @@ public static class WalletEndpoints
         try
         {
             var key = Key(request); if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("A valid Idempotency-Key header is required.");
-            var existing = (await service.GetDepositsAsync(user.MerchantId, false, ct)).FirstOrDefault(x => x.ExternalReference == key);
-            if (existing is not null) return Results.Ok(existing);
             var form = await request.ReadFormAsync(ct); if (!decimal.TryParse(form["amount"], NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)) throw new ArgumentException("Deposit amount is invalid.");
+            var reference = form["reference"].ToString().Trim(); if (string.IsNullOrWhiteSpace(reference) || reference.Length > 200) throw new ArgumentException("Payment / transaction reference is required.");
+            var existing = (await service.GetDepositsAsync(user.MerchantId, false, ct)).FirstOrDefault(x => x.ExternalReference == reference);
+            if (existing is not null) return Results.Ok(existing);
             var file = form.Files.GetFile("proof") ?? throw new ArgumentException("Payment proof is required.");
             await using var memory = new MemoryStream(); await file.CopyToAsync(memory, ct); memory.Position = 0;
             var proof = await storage.SaveAsync(user.MerchantId!.Value, memory, file.FileName, file.ContentType, file.Length, ct);
-            return Results.Json(await service.SubmitDepositAsync(user.MerchantId.Value, user.UserAccountId!.Value, key, new(amount, "ETB", key, JsonSerializer.Serialize(proof)), ct), statusCode: 201);
+            return Results.Json(await service.SubmitDepositAsync(user.MerchantId.Value, user.UserAccountId!.Value, key, new(amount, "ETB", reference, JsonSerializer.Serialize(proof)), ct), statusCode: 201);
         }
         catch (Exception x) { return Error(x); }
     }

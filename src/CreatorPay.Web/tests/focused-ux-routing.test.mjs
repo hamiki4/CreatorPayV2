@@ -19,7 +19,7 @@ test('normal account UI avoids opaque Public ID and unnecessary Creator ID termi
   assert.doesNotMatch(businessDashboard,/Creator ID/)
   assert.doesNotMatch(creatorDashboard,/Creator ID|creatorCode/)
   assert.doesNotMatch(customer,/Creator ID/)
-  assert.match(cashier,/Creator ID/)
+  assert.doesNotMatch(cashier,/Creator ID/)
   assert.doesNotMatch(admin,/Public ID or correlation ID/)
   assert.match(admin,/Search accounts, Businesses, Creators, or reference/)
 })
