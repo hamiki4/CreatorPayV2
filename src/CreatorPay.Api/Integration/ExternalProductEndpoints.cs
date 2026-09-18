@@ -25,9 +25,9 @@ internal static class ExternalProductEndpoints
             var form = await context.Request.ReadFormAsync(ct);
             var role = form["role"].ToString();
             var purpose = form["purpose"].ToString();
-            if (role is not ("Customer" or "Creator" or "Business" or "PlatformAdmin")
+            if (role is not ("Customer" or "Creator" or "Business" or "PlatformAdmin" or "OperationsAdmin")
                 || purpose is not (V3HandoffPurposes.ProfileOnboarding or V3HandoffPurposes.ExistingWorkspace)
-                || role == "PlatformAdmin" && purpose != V3HandoffPurposes.ExistingWorkspace)
+                || (role is "PlatformAdmin" or "OperationsAdmin") && purpose != V3HandoffPurposes.ExistingWorkspace)
                 return Results.BadRequest(new { title = "Invalid workspace request." });
             var state = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
             context.Response.Cookies.Append(ExternalProductAuthentication.HandoffCookieName(environment), state,
@@ -87,6 +87,7 @@ internal static class ExternalProductEndpoints
                 status = session.User?.Status.ToString() ?? "Onboarding",
                 isOnboarding = session.Session.IsOnboarding,
                 destination = session.Session.IsOnboarding ? null : Destination(session.Session.Role),
+                displayName = session.User?.DisplayName,
                 accountEmail = context.User.FindFirst(ExternalProductAuthentication.AccountEmailClaim)?.Value,
                 accountPhone = context.User.FindFirst(ExternalProductAuthentication.AccountPhoneClaim)?.Value
             });
@@ -194,7 +195,7 @@ internal static class ExternalProductEndpoints
         UserRole.Customer => "/shopper",
         UserRole.Creator => "/creator",
         UserRole.MerchantAdmin => "/business",
-        UserRole.PlatformAdmin => "/admin",
+        UserRole.PlatformAdmin or UserRole.OperationsAdmin => "/admin",
         UserRole.Cashier => "/cashier",
         _ => "/"
     };

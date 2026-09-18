@@ -9,7 +9,6 @@ import {
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { MerchantQrWorkspace } from "./QrWorkspace";
-import { CommissionWorkspace } from "./CommissionWorkspace";
 import {
   AdminDepositWorkspace,
   MerchantWalletWorkspace,
@@ -803,7 +802,6 @@ function Root() {
   return user.role === "PlatformAdmin" || user.role === "OperationsAdmin" ? (
     <AdminPortal
       operations={{
-        commission: <CommissionWorkspace role={user.role} />,
         deposits: <AdminDepositWorkspace />,
         payouts: <AdminPayoutWorkspace />,
         notifications: <NotificationOperations />,

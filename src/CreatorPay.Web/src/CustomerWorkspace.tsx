@@ -10,6 +10,8 @@ import {RoleNavigation} from './RoleNavigation'
 import {NavIcon} from './navIcons'
 import {formatAmount, formatDate, formatDateTime, formatTime} from './displayFormat'
 import {createUuid} from './uuid'
+import QRCode from 'qrcode'
+import {v3Post, v3Request} from './v3ProductApi'
 
 type Wallet = {
   availableCashback: number
@@ -79,6 +81,15 @@ type Offer = {
   expiresAtUtc: string
   creatorDisplayName: string
 }
+type V3Offer = {
+  id:string
+  campaign:string
+  business:{displayName:string;directionsUrl?:string}
+  creator:{displayName:string}
+  cashbackPercent:number
+  watchUrl?:string
+}
+type V3Qr = {id:string;token?:string;expiresAtUtc:string;replayed:boolean}
 
 const token = getAccessToken
 
@@ -124,10 +135,18 @@ function directionsUrl(row: AdvertisingRow) {
     : undefined
 }
 
+function AuthoritativeOfferCard({offer,onQr}:{offer:V3Offer;onQr:(offer:V3Offer)=>void}){
+  return <article className="customer-promotion-card"><div className="customer-promotion-copy"><strong>{offer.business.displayName}</strong><h3>{offer.campaign}</h3><p>Promoted by {offer.creator.displayName}</p><span className="cashback">{formatAmount(offer.cashbackPercent)}% Cashback</span></div><div className="actions">{offer.watchUrl&&<a className="quiet" href={offer.watchUrl} target="_blank" rel="noopener noreferrer">Watch Promotion</a>}{offer.business.directionsUrl&&<a className="quiet" href={offer.business.directionsUrl} target="_blank" rel="noopener noreferrer">Get Directions</a>}<button type="button" onClick={()=>onQr(offer)}>Get Offer QR</button></div></article>
+}
+
 export function ShopperOfferPage({code}: {code: string}) {
   const [offer, setOffer] = useState<Offer>()
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [v3Offers,setV3Offers]=useState<V3Offer[]>([])
+  const [v3OfferError,setV3OfferError]=useState('')
+  const [activeQr,setActiveQr]=useState<{offer:V3Offer;image:string;expiresAtUtc:string}>()
+  const [qrBusy,setQrBusy]=useState(false)
 
   useEffect(() => {
     api<Offer>(`/api/v1/discovery/offers/${encodeURIComponent(code)}`)
@@ -200,6 +219,10 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
   const [walletError, setWalletError] = useState('')
   const [checkoutError, setCheckoutError] = useState('')
   const [profileError, setProfileError] = useState('')
+  const [v3Offers, setV3Offers] = useState<V3Offer[]>([])
+  const [v3OfferError, setV3OfferError] = useState('')
+  const [activeQr, setActiveQr] = useState<{offer: V3Offer; image: string; expiresAtUtc: string}>()
+  const [qrBusy, setQrBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [processing, setProcessing] = useState<string>()
   const [view, setView] = useState<'home' | 'discover' | 'confirmations' | 'cashback' | 'profile'>(() =>
@@ -207,6 +230,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
   )
 
   const loadAccount = () => {
+    v3Request<V3Offer[]>('/api/customer/offers').then(value=>{setV3Offers(value);setV3OfferError('')}).catch(error=>{console.error(error);setV3OfferError("We couldn't load current View & Sale Promotions.")})
     api<Wallet>('/api/v1/customer/wallet')
       .then((value) => {
         setWallet(value)
@@ -350,6 +374,8 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
     }
   }
 
+  async function prepareOfferQr(offer:V3Offer){if(qrBusy)return;setQrBusy(true);setMessage('');try{const result=await v3Post<V3Qr>(`/api/customer/offers/${offer.id}/qr`,{});if(!result.token)throw new Error('This one-time QR cannot be displayed again.');const image=await QRCode.toDataURL(result.token,{width:280,margin:2,errorCorrectionLevel:'M'});setActiveQr({offer,image,expiresAtUtc:result.expiresAtUtc})}catch(error){setMessage((error as Error).message)}finally{setQrBusy(false)}}
+
   const pendingCount = checkouts.filter((x) => x.status === 'AwaitingCustomerApproval').length
   const navigate = (target: string) =>
     setView(
@@ -422,6 +448,8 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
               )}
             </section>
 
+            {v3Offers.length>0&&<section className="customer-home-section" aria-labelledby="current-offers-title"><div className="customer-section-heading"><h3 id="current-offers-title">View &amp; Sale Promotions</h3><button type="button" className="customer-text-action" onClick={()=>setView('discover')}>See all</button></div><div className="customer-promotion-feed customer-promotion-feed--home">{v3Offers.slice(0,3).map(offer=><AuthoritativeOfferCard key={offer.id} offer={offer} onQr={x=>void prepareOfferQr(x)}/>)}</div></section>}
+
             {(recommendedRows.length > 0 || (nearbyRows.length === 0 && liveHomeRows.length > 0)) && (
               <section className="customer-home-section" aria-labelledby="recommended-promotions-title">
                 <div className="customer-section-heading">
@@ -468,6 +496,9 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
         {view === 'discover' && (
           <section className="customer-discover">
             <h2>Discover Promotions</h2>
+            {message&&<p className="product-message" role="status">{message}</p>}
+            {v3OfferError&&<p className="friendly-error" role="alert">{v3OfferError}</p>}
+            {v3Offers.length>0&&<section className="customer-home-section" aria-label="Current View and Sale Promotions"><div className="customer-promotion-feed">{v3Offers.map(offer=><AuthoritativeOfferCard key={offer.id} offer={offer} onQr={x=>void prepareOfferQr(x)}/>)}</div></section>}
             {discoverError && <p className="friendly-error" role="alert">{discoverError}</p>}
             {pendingCount > 0 && (
               <button className="pending-confirmation-link" onClick={() => setView('confirmations')}>
@@ -583,6 +614,7 @@ export function CustomerWorkspace({onSignOut}: {onSignOut: () => void}) {
             <ShopperProfileCard profile={profile} />
           </>
         )}
+        {activeQr&&<div className="modal-backdrop"><section className="help-dialog offer-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="offer-qr-title"><h2 id="offer-qr-title">{activeQr.offer.business.displayName}</h2><p>{activeQr.offer.campaign}</p><img className="qr-image" src={activeQr.image} alt="Offer QR for the cashier"/><p>Show this QR to the cashier.</p><small>Expires {formatTime(activeQr.expiresAtUtc)}</small><button type="button" onClick={()=>setActiveQr(undefined)}>Close</button></section></div>}
       </section>
     </AccountChrome>
   )
@@ -605,13 +637,12 @@ function PromotionCard({row, compact = false}: {row: AdvertisingRow; compact?: b
         {address && <span>{address}</span>}
         {typeof row.distanceKm === 'number' && <strong><NavIcon name="mapPin" size={16} /> {row.distanceKm.toFixed(1)} km away</strong>}
       </div>
-      <div className="customer-promoted-by">
-        <ProfileAvatar name={row.creatorName} photoUrl={row.creatorProfileImageUrl} />
-        <div>
-          <span>Promoted by</span>
-          <strong>{row.creatorName}</strong>
-          <small className="customer-creator-id"><span>Creator ID</span>{' '}<b>{row.creatorCode}</b></small>
-        </div>
+          <div className="customer-promoted-by">
+            <ProfileAvatar name={row.creatorName} photoUrl={row.creatorProfileImageUrl} />
+            <div>
+              <span>Promoted by</span>
+              <strong>{row.creatorName}</strong>
+            </div>
       </div>
       <div className="customer-promotion-actions">
         {row.promotionVideoUrl && row.promotionVideoStatus === 'Live' && (
@@ -756,5 +787,5 @@ function ShopperProfileCard({profile}: {profile?: ShopperProfile}) {
 }
 
 export const shopperLabels = {
-  en: ['Home', 'Discover Promotions', 'Cashback', 'Search business or creator', 'Creator ID', 'No active promotions found.', 'Available Cashback', 'Next Payout Date'],
+  en: ['Home', 'Discover Promotions', 'Cashback', 'Search business or creator', 'No active promotions found.', 'Available Cashback', 'Next Payout Date'],
 }

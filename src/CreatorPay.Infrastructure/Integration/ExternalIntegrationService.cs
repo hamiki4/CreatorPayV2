@@ -75,7 +75,7 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
             ExternalProfileLink? link;
             if (assertion.Purpose == V3HandoffPurposes.ProfileOnboarding)
             {
-                if (role is UserRole.PlatformAdmin or UserRole.Cashier)
+                if (role is UserRole.PlatformAdmin or UserRole.OperationsAdmin or UserRole.Cashier)
                     throw new UnauthorizedAccessException("This profile cannot be onboarded here.");
                 link = role == UserRole.MerchantAdmin
                     ? await db.ExternalProfileLinks.Where(x => x.ExternalIdentityId == identity.Id && x.Role == role
@@ -103,8 +103,8 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
                     throw new UnauthorizedAccessException("The Weymela workspace authority is invalid.");
                 link = await db.ExternalProfileLinks.SingleOrDefaultAsync(x => x.ExternalIdentityId == identity.Id
                     && x.Role == role && x.ExternalProfileSubjectId == assertion.ProfileSubjectId, ct);
-                if (role == UserRole.PlatformAdmin)
-                    link = await EnsurePlatformAdminLinkAsync(identity, assertion, link, now, ct);
+                if (role is UserRole.PlatformAdmin or UserRole.OperationsAdmin)
+                    link = await EnsureAdminLinkAsync(identity, assertion, role, link, now, ct);
                 else if (role == UserRole.Customer && link is null)
                     link = await CreateMappedCustomerAsync(identity, assertion, now, ct);
                 if (link?.Status != ExternalProfileStatus.Active || link.UserAccountId is null)
@@ -332,6 +332,11 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
         }
         creator.UpdatedAtUtc = now; creator.UpdatedBy = context.User.Id.ToString();
         await db.SaveChangesAsync(ct);
+        await authority.SynchronizeAsync(new(context.Identity.ExternalUserId, context.Identity.IdentityBindingId,
+            context.Identity.IdentityBindingVersion, "Creator", creator.Id, null,
+            context.User.DisplayName ?? "Creator", "ACTIVE", context.Profile.ProvisioningKey,
+            normalized.Select(x => new V3CreatorSocialProfileSynchronization(x.Platform.ToString(),
+                x.ProfileUrl, x.AudienceCount)).ToArray()), ct);
         return normalized.Select((social, index) => new ExternalCreatorSocialProfileResult(
             social.Platform, social.ProfileUrl, social.AudienceCount,
             SocialProfileVerificationStatus.Unverified, index == 0)).ToArray();
@@ -352,13 +357,15 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
             AccountStatus.Rejected => "REJECTED",
             _ => "PENDING"
         };
-        if (!string.Equals(actualLifecycle, lifecycle, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!string.Equals(actualLifecycle, lifecycle, StringComparison.OrdinalIgnoreCase)
+            && !(string.Equals(actualLifecycle, "PENDING", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(lifecycle, "CORRECTION_REQUESTED", StringComparison.OrdinalIgnoreCase))) return false;
         var link = await db.ExternalProfileLinks.SingleAsync(x => x.UserAccountId == user.Id, ct);
         var identity = await db.ExternalIdentities.SingleAsync(x => x.Id == link.ExternalIdentityId, ct);
         var result = await authority.SynchronizeAsync(new(identity.ExternalUserId, identity.IdentityBindingId,
             identity.IdentityBindingVersion, V3Role(role), profileId,
             role == UserRole.MerchantAdmin ? profileId : null, user.DisplayName ?? V3Role(role), lifecycle,
-            link.ProvisioningKey), ct);
+            link.ProvisioningKey, role == UserRole.Creator ? await CreatorSocialsAsync(profileId, ct) : null), ct);
         link.ExternalProfileSubjectId = result.V3ProfileSubjectId;
         link.ExternalBusinessId = role == UserRole.MerchantAdmin ? result.V3ProfileSubjectId : null;
         link.Status = lifecycle.ToUpperInvariant() switch
@@ -436,7 +443,7 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
             var synchronized = await authority.SynchronizeAsync(new(identity.ExternalUserId,
                 identity.IdentityBindingId, identity.IdentityBindingVersion, V3Role(link.Role), profileId,
                 link.Role == UserRole.MerchantAdmin ? profileId : null, user.DisplayName ?? V3Role(link.Role),
-                lifecycle, link.ProvisioningKey), ct);
+                lifecycle, link.ProvisioningKey, link.Role == UserRole.Creator ? await CreatorSocialsAsync(profileId, ct) : null), ct);
             link.ExternalProfileSubjectId = synchronized.V3ProfileSubjectId;
             link.ExternalBusinessId = link.Role == UserRole.MerchantAdmin ? synchronized.V3ProfileSubjectId : null;
             link.Status = Status(synchronized.Lifecycle);
@@ -462,34 +469,55 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
         _ => ExternalProfileStatus.Pending
     };
 
-    private async Task<ExternalProfileLink> EnsurePlatformAdminLinkAsync(ExternalIdentity identity,
-        V3IdentityAssertion assertion, ExternalProfileLink? existing, DateTime now, CancellationToken ct)
+    private async Task<IReadOnlyList<V3CreatorSocialProfileSynchronization>> CreatorSocialsAsync(Guid creatorId,
+        CancellationToken ct) => await db.CreatorSocialProfiles.AsNoTracking().Where(x => x.CreatorId == creatorId && x.ProfileUrl != null)
+        .OrderBy(x => x.Platform).Select(x => new V3CreatorSocialProfileSynchronization(
+            x.Platform.ToString(), x.ProfileUrl!, x.FollowerCount, x.VerificationStatus.ToString(), null)).ToListAsync(ct);
+
+    private async Task<ExternalProfileLink> EnsureAdminLinkAsync(ExternalIdentity identity,
+        V3IdentityAssertion assertion, UserRole role, ExternalProfileLink? existing, DateTime now, CancellationToken ct)
     {
-        if (options.PlatformAdminUserAccountId is not Guid configuredId)
-            throw new UnauthorizedAccessException("The Platform Admin mapping is not configured.");
-        var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == configuredId
-            && x.Role == UserRole.PlatformAdmin && x.Status == AccountStatus.Active, ct)
-            ?? throw new UnauthorizedAccessException("The Platform Admin mapping is unavailable.");
-        if (existing is not null && existing.UserAccountId != configuredId)
-            throw new UnauthorizedAccessException("The Platform Admin mapping is invalid.");
+        UserAccount? account = existing?.UserAccountId is Guid existingId
+            ? await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == existingId && x.Role == role
+                && x.Status == AccountStatus.Active, ct) : null;
+        if (account is null && role == UserRole.PlatformAdmin
+            && options.PlatformAdminUserAccountId is Guid configuredId
+            && !await db.ExternalProfileLinks.AnyAsync(x => x.UserAccountId == configuredId
+                && x.ExternalIdentityId != identity.Id, ct))
+            account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == configuredId
+                && x.Role == UserRole.PlatformAdmin && x.Status == AccountStatus.Active, ct);
+        if (account is null)
+        {
+            account = ExternalUser(role, AccountStatus.Active, now);
+            account.DisplayName = assertion.DisplayName;
+            db.UserAccounts.Add(account);
+        }
         if (existing is null)
         {
             existing = new ExternalProfileLink
             {
                 Id = Guid.NewGuid(),
                 ExternalIdentityId = identity.Id,
-                Role = UserRole.PlatformAdmin,
+                Role = role,
                 ExternalProfileSubjectId = assertion.ProfileSubjectId,
                 UserAccountId = account.Id,
                 Status = ExternalProfileStatus.Active,
-                ProvisioningKey = $"v3:{identity.Id:N}:admin",
+                ProvisioningKey = $"v3:{identity.Id:N}:admin:{role}",
                 CreatedAtUtc = now,
                 CreatedBy = "V3External"
             };
             db.ExternalProfileLinks.Add(existing);
         }
+        else
+        {
+            existing.UserAccountId = account.Id;
+            existing.ExternalProfileSubjectId = assertion.ProfileSubjectId;
+            existing.Status = ExternalProfileStatus.Active;
+            existing.UpdatedAtUtc = now;
+            existing.UpdatedBy = "V3External";
+        }
         account.AuthenticationSource = AuthenticationSource.V3External;
-        account.PasswordHash = string.Empty;
+        account.PasswordHash = string.Empty; account.DisplayName = assertion.DisplayName;
         account.FirebaseUid = null; account.PinHash = null;
         return existing;
     }
@@ -572,7 +600,7 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
         UserRole.Customer => "/shopper",
         UserRole.Creator => "/creator",
         UserRole.MerchantAdmin => "/business",
-        UserRole.PlatformAdmin => "/admin",
+        UserRole.PlatformAdmin or UserRole.OperationsAdmin => "/admin",
         _ => "/"
     };
     private static UserRole MapRole(string role) => role switch
@@ -581,6 +609,7 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
         "Creator" => UserRole.Creator,
         "Business" => UserRole.MerchantAdmin,
         "PlatformAdmin" => UserRole.PlatformAdmin,
+        "OperationsAdmin" => UserRole.OperationsAdmin,
         _ => throw new UnauthorizedAccessException("The Weymela profile is not supported.")
     };
     private static string V3Role(UserRole role) => role switch
@@ -589,6 +618,7 @@ public sealed class ExternalIntegrationService(ApplicationDbContext db, IV3Autho
         UserRole.Creator => "Creator",
         UserRole.MerchantAdmin => "Business",
         UserRole.PlatformAdmin => "PlatformAdmin",
+        UserRole.OperationsAdmin => "OperationsAdmin",
         UserRole.Cashier => "Cashier",
         _ => throw new UnauthorizedAccessException("The Weymela profile is not supported.")
     };

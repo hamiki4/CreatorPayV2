@@ -66,6 +66,11 @@
   .filters-dialog,.promo-video-dialog{width:min(32rem,calc(100vw - 1rem));padding:1rem}
 }
 
+/* Business-led Promotions and UGC product surfaces. */
+.product-workspace{display:grid;gap:1rem;min-width:0;padding:1rem}.product-title{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}.product-title h1,.product-title h2,.product-card h3{margin:0}.product-title p,.product-card p{margin:.35rem 0}.product-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:.85rem}.product-card{display:grid;align-content:start;gap:.65rem;min-width:0;padding:1rem;border:1px solid var(--border,#d7dde7);border-radius:1rem;background:#fff;box-shadow:0 4px 14px #12233a0d}.product-card button{min-height:44px}.product-business{color:var(--role-accent,#25324a)}.product-slogan{font-weight:600}.product-meta{display:flex;flex-wrap:wrap;gap:.35rem .75rem;color:#526077;font-size:.92rem}.product-platforms{display:flex;flex-wrap:wrap;gap:.4rem}.product-platforms span,.ugc-badge{display:inline-flex;align-items:center;min-height:30px;padding:.25rem .55rem;border-radius:999px;background:var(--role-accent-soft,#eef2f8);color:var(--role-accent,#25324a);font-size:.85rem}.product-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;max-width:58rem}.product-form>label,.product-form>fieldset,.product-form>.actions,.product-form>button{min-width:0}.product-form textarea{min-height:7rem}.product-form fieldset{display:grid;gap:.65rem;grid-column:1/-1;border:1px solid #d7dde7;border-radius:.8rem}.product-form .actions{grid-column:1/-1}.platform-capacity-input{display:grid;grid-template-columns:minmax(8rem,1fr) repeat(2,minmax(8rem,1fr));gap:.65rem;align-items:end}.platform-capacity-input label{margin:0}.platform-choice-list{display:grid;gap:.5rem}.platform-choice-list label{display:flex;align-items:center;gap:.7rem;min-height:52px;padding:.55rem;border:1px solid #d7dde7;border-radius:.7rem}.platform-choice-list span{display:grid}.product-dialog{width:min(92vw,30rem)}.product-list{display:grid;gap:.55rem}.product-list article,.request-review-card{display:flex;align-items:center;justify-content:space-between;gap:.8rem;min-width:0;padding:.8rem;border:1px solid #d7dde7;border-radius:.75rem;background:#fff}.product-list article>div,.request-review-card>div{display:grid;gap:.2rem;min-width:0}.product-message{padding:.7rem .85rem;border-radius:.7rem;background:var(--role-accent-soft,#eef2f8)}.segmented{display:flex;gap:.25rem;padding:.2rem;border-radius:.7rem;background:#eef2f7}.segmented button{min-height:40px;background:transparent;color:#354158}.segmented button.active{background:#fff;color:#172033}.identity-readonly{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.identity-readonly h3{grid-column:1/-1}.financial-settings-form fieldset{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-role-label{display:grid;line-height:1.15}.admin-role-label small{font-weight:500}.summary-card{min-height:6.5rem}.summary-card span{display:block}.check{display:flex!important;align-items:center;gap:.5rem}.check input{width:auto}
+
+@media(max-width:640px){.product-workspace{padding:.75rem}.product-title{align-items:stretch;flex-direction:column}.product-title>button{width:100%}.product-form{grid-template-columns:1fr}.product-form>*{grid-column:1!important}.platform-capacity-input{grid-template-columns:1fr}.identity-readonly,.financial-settings-form fieldset{grid-template-columns:1fr}.identity-readonly h3{grid-column:1}.product-list article,.request-review-card{align-items:stretch;flex-direction:column}.request-review-card .actions{display:grid;grid-template-columns:1fr}.request-review-card .actions button{width:100%}.segmented{width:100%}.segmented button{flex:1}.product-dialog{max-height:90vh;overflow:auto}.product-card-grid{grid-template-columns:1fr}}
+
 /* Shared notification controls never inherit legacy green touch-hover states. */
 .account-shell .notification-trigger,
 .account-shell .notification-close,
@@ -3237,4 +3242,27 @@ body:has(.role-business) {
   .external-onboarding .account-identity,.external-onboarding .business-contact,.social-profile-row {grid-template-columns:1fr}
   .social-profile-row .remove-social,.social-profiles .add-social,.creator-social-actions button {width:100%}
   .creator-social-actions {display:grid;grid-template-columns:1fr}
+}
+
+/* Locked role palette and compact product/review surfaces for the integrated Pilot. */
+.role-customer,
+.role-shopper {--role-accent:#218739;--role-accent-soft:#e8f7ec}
+.role-creator {--role-accent:#7c4dff;--role-accent-soft:#f1eaff}
+.role-business {--role-accent:#2563eb;--role-accent-soft:#e8f0ff}
+
+.review-groups {display:grid;gap:1rem}
+.review-groups > section {min-width:0;padding:1rem;border:1px solid #dbe4de;border-radius:.75rem;background:#fff}
+.review-groups h3 {margin:0 0 .65rem;font-size:.95rem}
+.review-social-list {display:grid;gap:.6rem;margin:0;padding:0;list-style:none}
+.review-social-list li {display:grid;grid-template-columns:minmax(6rem,.55fr) minmax(10rem,1.45fr) minmax(8rem,.7fr);gap:.65rem;align-items:center;min-width:0}
+.review-social-list a {overflow-wrap:anywhere}
+
+.offer-qr-dialog {width:min(92vw,25rem);border:0;border-radius:1rem;padding:1.25rem;box-shadow:0 1.5rem 4rem #10241844;text-align:center}
+.offer-qr-dialog::backdrop {background:#10241899}
+.offer-qr-dialog .qr-image {display:block;width:min(72vw,18rem);height:auto;margin:.75rem auto;background:#fff;border-radius:.5rem}
+.offer-qr-dialog .actions {justify-content:center}
+
+@media (max-width:760px) {
+  .review-social-list li {grid-template-columns:1fr}
+  .review-groups > section {padding:.8rem}
 }

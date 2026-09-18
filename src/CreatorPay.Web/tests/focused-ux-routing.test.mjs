@@ -14,15 +14,14 @@ test('Business request tabs have explicit readable selected and unselected color
   assert.match(businessAds,/aria-selected=\{section === "video"\}/)
 })
 
-test('normal account UI avoids opaque Public ID terminology while preserving the four-digit Creator ID',()=>{
+test('normal account UI avoids opaque Public ID and unnecessary Creator ID terminology',()=>{
   for(const source of [businessAds,businessDashboard,creatorAds,creatorDashboard,customer,cashier,help])assert.doesNotMatch(source,/['"`]([^'"`]*\bpublic ID\b[^'"`]*)['"`]/i)
-  assert.match(businessAds,/Creator Name/)
-  assert.match(businessAds,/placeholder="Search Creator"/)
-  assert.match(businessDashboard,/Creator ID \{creator\.creatorCode\}/)
-  assert.match(creatorDashboard,/profile\.creatorCode/)
-  assert.match(customer,/Creator ID/)
+  assert.doesNotMatch(businessDashboard,/Creator ID/)
+  assert.doesNotMatch(creatorDashboard,/Creator ID|creatorCode/)
+  assert.doesNotMatch(customer,/Creator ID/)
   assert.match(cashier,/Creator ID/)
-  assert.match(admin,/Public ID or correlation ID/)
+  assert.doesNotMatch(admin,/Public ID or correlation ID/)
+  assert.match(admin,/Search accounts, Businesses, Creators, or reference/)
 })
 
 test('supported lifecycle notifications route to actionable role-safe destinations',()=>{

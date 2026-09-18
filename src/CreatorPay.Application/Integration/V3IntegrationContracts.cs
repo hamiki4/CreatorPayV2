@@ -18,7 +18,9 @@ public sealed record V3AuthorityRequest(Guid UserId, Guid IdentityBindingId, lon
 public sealed record V3AuthorityResult(bool Active, string Status, long IdentityBindingVersion);
 public sealed record V3ProfileSynchronizationRequest(Guid UserId, Guid IdentityBindingId,
     long IdentityBindingVersion, string Role, Guid ExternalSubjectId, Guid? BusinessId, string DisplayName,
-    string Lifecycle, string IdempotencyKey);
+    string Lifecycle, string IdempotencyKey, IReadOnlyList<V3CreatorSocialProfileSynchronization>? SocialProfiles = null);
+public sealed record V3CreatorSocialProfileSynchronization(string Platform, string ProfileUrl, long AudienceCount,
+    string VerificationStatus = "Unverified", long? VerifiedAudience = null);
 public sealed record V3ProfileSynchronizationResult(Guid V3ProfileSubjectId, string Lifecycle, bool Created);
 
 public interface IV3AuthorityClient

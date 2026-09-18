@@ -9,6 +9,10 @@ import { businessTypes } from "./AuthWorkspace";
 import { formatDateTime, formatUserFacingText } from "./displayFormat";
 import { NavIcon, NavIconName } from "./navIcons";
 import {getExternalSession,isExternalSession,signOutExternalSession,switchExternalProfile} from './externalSession'
+import {AdminPromotions} from './PromotionWorkspace'
+import {AdminUgc} from './UgcWorkspace'
+import {ProductAdminDashboard,V3AdminAccounts,V3AdminNotifications,V3AuditTrail,V3FinancialSettings,V3FundingDeposits,V3Payouts,V3PlatformRevenue,V3Wallets} from './ProductAdminWorkspaces'
+import {v3Post,v3Request} from './v3ProductApi'
 
 type Row = Record<string, unknown>;
 type Page<T = Row> = { items: T[]; page: number; total: number; totalPages: number };
@@ -21,17 +25,21 @@ type PageId =
   | "reports"
   | "creator-review"
   | "business-review"
+  | "promotions"
+  | "ugc"
   | "admin-accounts"
   | "password-reset-requests"
   | "business-accounts"
   | "creator-accounts"
   | "customer-accounts"
   | "cashier-accounts"
-  | "commission"
+  | "financial-settings"
   | "deposits"
   | "wallets"
   | "payouts"
   | "fraud"
+  | "platform-revenue"
+  | "audit"
   | "system"
   | "notifications"
   | "disputes"
@@ -82,24 +90,28 @@ type AccountPageProps = {
 const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const token = getAccessToken;
 const adminRoles: AdminRole[] = ["PlatformAdmin", "OperationsAdmin"];
-const hiddenPages: PageId[] = ["notifications", "disputes", "reversals"];
-const operationsBlockedPages: PageId[] = ["dashboard", "reports", "admin-accounts", "commission", "system"];
+const hiddenPages: PageId[] = ["disputes", "reversals"];
+const operationsBlockedPages: PageId[] = ["dashboard", "reports", "admin-accounts", "financial-settings", "platform-revenue", "audit", "system"];
 const supportedPages = new Set<PageId>([
   "dashboard",
   "reports",
   "creator-review",
   "business-review",
+  "promotions",
+  "ugc",
   "admin-accounts",
   "password-reset-requests",
   "business-accounts",
   "creator-accounts",
   "customer-accounts",
   "cashier-accounts",
-  "commission",
+  "financial-settings",
   "deposits",
   "wallets",
   "payouts",
   "fraud",
+  "platform-revenue",
+  "audit",
   "system",
   ...hiddenPages,
 ]);
@@ -109,18 +121,23 @@ const platformNav: NavItem[] = [
   { id: "reports", label: "Reports", roles: ["PlatformAdmin"], icon: "sales" },
   { id: "creator-review", label: "Creator Review", roles: adminRoles, countKey: "pendingCreatorApprovals", icon: "userPlus" },
   { id: "business-review", label: "Business Review", roles: adminRoles, countKey: "pendingMerchantApprovals", icon: "ads" },
+  { id: "promotions", label: "Promotions", roles: adminRoles, icon: "ads" },
+  { id: "ugc", label: "UGC", roles: adminRoles, icon: "video" },
   { id: "admin-accounts", label: "Admin Accounts", roles: ["PlatformAdmin"], icon: "shield" },
   { id: "password-reset-requests", label: "Password Reset Requests", roles: adminRoles, countKey: "openSupportRequests", icon: "requests" },
   { id: "business-accounts", label: "Business Accounts", roles: adminRoles, icon: "checkout" },
   { id: "creator-accounts", label: "Creator Accounts", roles: adminRoles, icon: "creators" },
   { id: "customer-accounts", label: "Customer Accounts", roles: adminRoles, icon: "profile" },
   { id: "cashier-accounts", label: "Cashier Accounts", roles: adminRoles, icon: "cashier" },
-  { id: "commission", label: "Commission", roles: ["PlatformAdmin"], icon: "sales" },
-  { id: "deposits", label: "Deposits", roles: adminRoles, countKey: "pendingDeposits", icon: "wallet" },
+  { id: "financial-settings", label: "Financial Settings", roles: ["PlatformAdmin"], icon: "settings" },
+  { id: "deposits", label: "Deposits / Funding", roles: adminRoles, countKey: "pendingDeposits", icon: "wallet" },
   { id: "wallets", label: "Wallets", roles: adminRoles, icon: "wallet" },
   { id: "payouts", label: "Payouts", roles: adminRoles, countKey: "pendingPayouts", icon: "payout" },
+  { id: "platform-revenue", label: "Platform Revenue", roles: ["PlatformAdmin"], icon: "sales" },
   { id: "fraud", label: "Fraud", roles: adminRoles, countKey: "openFraudAlerts", icon: "shield" },
+  { id: "notifications", label: "Notifications", roles: adminRoles, icon: "notifications" },
   { id: "system", label: "System", roles: ["PlatformAdmin"], icon: "settings" },
+  { id: "audit", label: "Audit / System", roles: ["PlatformAdmin"], icon: "shield" },
 ];
 
 const dashboardShortcuts: Record<string, { href: string; icon: NavIconName }> = {
@@ -177,7 +194,7 @@ async function notificationApi<T>(path: string, init?: RequestInit): Promise<T> 
 
 function currentRole(): AdminRole | "" {
   const external = getExternalSession();
-  if (external?.role === "PlatformAdmin") return "PlatformAdmin";
+  if (external?.role === "PlatformAdmin" || external?.role === "OperationsAdmin") return external.role;
   try {
     const payload = JSON.parse(
       atob(token().split(".")[1].replace(/-/g, "+").replace(/_/g, "/")),
@@ -245,7 +262,7 @@ export function AdminPortal({ operations }: { operations: Ops }) {
         });
     void load();
     const refresh = () => void load();
-    const timer = window.setInterval(refresh, 12_000);
+    const timer = window.setInterval(refresh, 60_000);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", refresh);
@@ -282,8 +299,8 @@ export function AdminPortal({ operations }: { operations: Ops }) {
 
   const navRoleLabel = role === "PlatformAdmin" ? "Platform" : "Operations";
   const visibleNav = platformNav.filter((item) => (role === "PlatformAdmin" || item.roles.includes(role))
-    && (!isExternalSession() || !["password-reset-requests", "admin-accounts"].includes(item.id)));
-  const externalAuthPage = isExternalSession() && ["password-reset-requests", "admin-accounts"].includes(page);
+    && (!isExternalSession() || item.id !== "password-reset-requests"));
+  const externalAuthPage = isExternalSession() && page === "password-reset-requests";
 
   return (
     <div className={`admin-shell admin-shell--${role === "PlatformAdmin" ? "platform" : "operations"}`}>
@@ -333,27 +350,31 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               }
             />
           ) : page === "dashboard" ? (
-            <Dashboard summary={summary} />
+            <ProductAdminDashboard />
           ) : page === "reports" ? (
             <ReportingWorkspace />
           ) : page === "creator-review" ? (
             <CreatorReview />
           ) : page === "business-review" ? (
             <BusinessReview />
+          ) : page === "promotions" ? (
+            <AdminPromotions />
+          ) : page === "ugc" ? (
+            <AdminUgc />
           ) : page === "password-reset-requests" ? (
             <PasswordResetRequests />
           ) : page === "admin-accounts" ? (
-            <AdminAccountsPage />
+            <V3AdminAccounts />
           ) : page === "business-accounts" ? (
             <AccountPage
               title="Business Accounts"
               description="Business owners and supervisors."
               roles={["MerchantAdmin", "Supervisor"]}
               createRoles={["MerchantAdmin"]}
-              columns={["name", "email", "phone", "businessName", "publicBusinessId", "merchantBusinessType", "isLocked", "lastLoginAtUtc"]}
+              columns={["name", "email", "phone", "businessName", "merchantBusinessType", "isLocked", "lastLoginAtUtc"]}
               fixedRole="MerchantAdmin"
-              allowCreate={role === "PlatformAdmin"}
-              allowRemove={role === "PlatformAdmin"}
+              allowCreate={false}
+              allowRemove={false}
               allowBusinessTypeEdit={role === "PlatformAdmin"}
             />
           ) : page === "creator-accounts" ? (
@@ -362,10 +383,10 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Creator accounts and profile access."
               roles={["Creator"]}
               createRoles={["Creator"]}
-              columns={["name", "publicCreatorId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"]}
+              columns={["name", "email", "phone", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Creator"
-              allowCreate={role === "PlatformAdmin"}
-              allowRemove={role === "PlatformAdmin"}
+              allowCreate={false}
+              allowRemove={false}
             />
           ) : page === "customer-accounts" ? (
             <AccountPage
@@ -373,10 +394,10 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Customer accounts and wallet access."
               roles={["Customer"]}
               createRoles={["Customer"]}
-              columns={["name", "publicCustomerId", "email", "phone", "status", "isLocked", "lastLoginAtUtc"]}
+              columns={["name", "email", "phone", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Customer"
-              allowCreate={role === "PlatformAdmin"}
-              allowRemove={role === "PlatformAdmin"}
+              allowCreate={false}
+              allowRemove={false}
             />
           ) : page === "cashier-accounts" ? (
             <AccountPage
@@ -384,23 +405,29 @@ export function AdminPortal({ operations }: { operations: Ops }) {
               description="Cashier accounts and assignments."
               roles={["Cashier"]}
               createRoles={["Cashier"]}
-              columns={["name", "email", "phone", "businessName", "publicBusinessId", "assignedLocation", "status", "isLocked", "lastLoginAtUtc"]}
+              columns={["name", "email", "phone", "businessName", "assignedLocation", "status", "isLocked", "lastLoginAtUtc"]}
               fixedRole="Cashier"
-              allowCreate={role === "PlatformAdmin"}
-              allowRemove={role === "PlatformAdmin"}
+              allowCreate={false}
+              allowRemove={false}
             />
-          ) : page === "commission" ? (
-            operations.commission ?? <Empty />
+          ) : page === "financial-settings" ? (
+            <V3FinancialSettings />
           ) : page === "deposits" ? (
-            operations.deposits ?? <Empty />
+            <V3FundingDeposits />
           ) : page === "wallets" ? (
-            <Table title="Wallets" endpoint="wallets" />
+            <V3Wallets />
           ) : page === "payouts" ? (
-            operations.payouts ?? <Empty />
+            <V3Payouts />
+          ) : page === "platform-revenue" ? (
+            <V3PlatformRevenue />
           ) : page === "fraud" ? (
             operations.fraud ?? <Empty />
           ) : page === "system" ? (
             <SystemStatus />
+          ) : page === "audit" ? (
+            <V3AuditTrail />
+          ) : page === "notifications" ? (
+            <V3AdminNotifications />
           ) : hiddenPages.includes(page) ? (
             operations[page] ?? <Empty />
           ) : (
@@ -476,33 +503,24 @@ function CreatorReview() {
             ← Pending creators
           </button>
           <h2>{String(selected.displayName ?? "")}</h2>
-          <dl>
-            {Object.entries(selected)
-              .filter(([k]) => !["profileImage"].includes(k))
-              .map(([k, v]) => (
-                <div key={k}>
-                  <dt>{label(k)}</dt>
-                  <dd>
-                    {k === "socialProfiles" && Array.isArray(v)
-                      ? v.map((social: any, index: number) => (
-                          <div key={index}>
-                            <strong>{social.platform}</strong>{" "}
-                            {social.profileUrl ? (
-                              <a href={social.profileUrl} target="_blank" rel="noopener noreferrer">
-                                Open social profile
-                              </a>
-                            ) : null}
-                            <br />
-                            Followers: {String(social.followerCount ?? 0)}
-                            <br />
-                            Verification: {String(social.verificationStatus ?? "")}
-                          </div>
-                        ))
-                      : String(v ?? "—")}
-                  </dd>
-                </div>
-              ))}
-          </dl>
+          <div className="review-groups">
+            <section className="compact-panel"><h3>Creator profile</h3><dl>
+              <div><dt>Legal name</dt><dd>{[selected.firstName,selected.lastName].filter(Boolean).join(" ")}</dd></div>
+              <div><dt>Display name</dt><dd>{String(selected.displayName ?? "")}</dd></div>
+              {Boolean(selected.city)&&<div><dt>City</dt><dd>{String(selected.city)}</dd></div>}
+              {Boolean(selected.contentCategories)&&<div><dt>Content categories</dt><dd>{String(selected.contentCategories)}</dd></div>}
+              {Boolean(selected.biography)&&<div><dt>Biography</dt><dd>{String(selected.biography)}</dd></div>}
+              <div><dt>Application status</dt><dd>{String(selected.effectiveStatus ?? selected.creatorStatus ?? "Pending approval")}</dd></div>
+              {Boolean(selected.effectiveStatusReason)&&<div><dt>Status detail</dt><dd>{String(selected.effectiveStatusReason)}</dd></div>}
+            </dl></section>
+            <section className="compact-panel"><h3>Account verification</h3><dl>
+              <div><dt>Email</dt><dd>{String(selected.email ?? "")}</dd></div>
+              <div><dt>Email verified</dt><dd>{selected.isEmailVerified?"Yes":"No"}</dd></div>
+              <div><dt>Phone</dt><dd>{String(selected.phoneNumber ?? "")}</dd></div>
+              <div><dt>Phone verified</dt><dd>{selected.isPhoneVerified?"Yes":"No"}</dd></div>
+            </dl></section>
+            <section className="compact-panel"><h3>Social profiles</h3>{Array.isArray(selected.socialProfiles)&&selected.socialProfiles.length>0?<div className="review-social-list">{selected.socialProfiles.map((social:any,index:number)=><article key={`${social.platform}-${index}`}><strong>{String(social.platform)}</strong>{social.profileUrl&&<a href={String(social.profileUrl)} target="_blank" rel="noopener noreferrer">Open profile</a>}<span>Self-reported {Number(social.followerCount??0).toLocaleString()}</span><span>{String(social.verificationStatus??"Not verified")}</span></article>)}</div>:<p>No social profiles supplied.</p>}</section>
+          </div>
           <label>
             Decision reason
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -523,7 +541,7 @@ function CreatorReview() {
         <div className="cards">
           {items.map((x) => (
             <article key={String(x.creatorId)}>
-              <span>Pending Approval</span>
+              <span>Pending approval</span>
               <strong>{String(x.displayName ?? "")}</strong>
               <p>{String(x.email ?? "")}</p>
               <p>{formatDateTime(String(x.registeredAtUtc))}</p>
@@ -602,16 +620,23 @@ function BusinessReview() {
             ← Pending registrations
           </button>
           <h2>{String(selected.tradingName)}</h2>
-          <dl>
-            {Object.entries(selected)
-              .filter(([k]) => !["documents", "logo"].includes(k))
-              .map(([k, v]) => (
-                <div key={k}>
-                  <dt>{label(k)}</dt>
-                  <dd>{String(v ?? "—")}</dd>
-                </div>
-              ))}
-          </dl>
+          <div className="review-groups">
+            <section className="compact-panel"><h3>Business profile</h3><dl>
+              <div><dt>Trading Name</dt><dd>{String(selected.tradingName??"")}</dd></div>
+              <div><dt>Business Type</dt><dd>{String(selected.businessType??"")}</dd></div>
+              <div><dt>Primary Contact Name</dt><dd>{String(selected.primaryContactName??"")}</dd></div>
+              <div><dt>Business Address</dt><dd>{String(selected.businessAddress??"")}</dd></div>
+              <div><dt>City / Region</dt><dd>{[selected.city,selected.region].filter(Boolean).join(" · ")}</dd></div>
+              <div><dt>Application status</dt><dd>{String(selected.effectiveStatus??selected.merchantStatus??"Pending approval")}</dd></div>
+              {Boolean(selected.effectiveStatusReason)&&<div><dt>Status detail</dt><dd>{String(selected.effectiveStatusReason)}</dd></div>}
+            </dl></section>
+            <section className="compact-panel"><h3>Contact and account verification</h3><dl>
+              <div><dt>Business Contact Email</dt><dd>{String(selected.email??"")}</dd></div>
+              <div><dt>Business Contact Phone</dt><dd>{String(selected.phoneNumber??"")}</dd></div>
+              <div><dt>Account email verified</dt><dd>{selected.isEmailVerified?"Yes":"No"}</dd></div>
+              <div><dt>Account phone verified</dt><dd>{selected.isPhoneVerified?"Yes":"No"}</dd></div>
+            </dl></section>
+          </div>
           <h3>Cashiers</h3>
           {cashiers.length === 0 ? (
             <p>No Cashiers yet.</p>
@@ -663,7 +688,7 @@ function BusinessReview() {
         <div className="cards">
           {items.map((x) => (
             <article key={String(x.merchantId)} onClick={() => void open(x.merchantId)}>
-              <span>PendingReview</span>
+              <span>Pending approval</span>
               <strong>{String(x.tradingName)}</strong>
               <p>
                 {String(x.email)}
@@ -685,6 +710,7 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
   const [items, setItems] = useState<Notice[]>([]);
   const [unread, setUnread] = useState(0);
   const [message, setMessage] = useState("");
+  const adminName = getExternalSession()?.displayName;
 
   function go(e: FormEvent) {
     e.preventDefault();
@@ -701,7 +727,11 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
     let mounted = true;
     const load = async () => {
       try {
-        const [list, count] = await Promise.all([
+        let list:{items:Notice[]},count:{count:number};
+        if(isExternalSession()){
+          const page=await v3Request<{items:{id:string;title:string;message:string;route:string;createdAtUtc:string;readAtUtc?:string}[];unreadCount:number}>('/api/notifications');
+          list={items:page.items.map(x=>({notificationId:x.id,type:'Weymela',title:x.title,body:x.message,createdAtUtc:x.createdAtUtc,readAtUtc:x.readAtUtc,data:{TargetPath:x.route}}))};count={count:page.unreadCount};
+        }else [list,count]=await Promise.all([
           notificationApi<{ items: Notice[] }>("/api/v1/notifications?page=1&pageSize=30"),
           notificationApi<{ count: number }>("/api/v1/notifications/unread-count"),
         ]);
@@ -716,7 +746,7 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
     };
     void load();
     const refresh = () => void load();
-    const timer = window.setInterval(refresh, 12_000);
+    const timer = window.setInterval(refresh, 60_000);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", refresh);
@@ -732,7 +762,8 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
   async function markRead(notice: Notice) {
     if (!notice.readAtUtc) {
       try {
-        await notificationApi(`/api/v1/notifications/${notice.notificationId}/read`, { method: "POST" });
+        if(isExternalSession())await v3Post(`/api/notifications/${notice.notificationId}/read`);
+        else await notificationApi(`/api/v1/notifications/${notice.notificationId}/read`, { method: "POST" });
       } catch (error) {
         console.error(error);
         setMessage("Notifications are temporarily unavailable.");
@@ -752,7 +783,8 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
 
   async function markAll() {
     try {
-      await notificationApi("/api/v1/notifications/read-all", { method: "POST" });
+      if(isExternalSession())await v3Post('/api/notifications/read-all');
+      else await notificationApi("/api/v1/notifications/read-all", { method: "POST" });
       setItems((current) => current.map((x) => (x.readAtUtc ? x : { ...x, readAtUtc: new Date().toISOString() })));
       setUnread(0);
     } catch (error) {
@@ -773,7 +805,7 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
         <NavIcon name="menu" />
       </button>
       <div className="admin-mobile-identity" aria-label={`${role === "PlatformAdmin" ? "Platform" : "Operations"} Admin`}>
-        <strong>WEYMELA</strong>
+        <strong>{adminName ?? 'WEYMELA'}</strong>
         <small>{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</small>
       </div>
       {showSearch && (
@@ -783,12 +815,12 @@ function AdminHeader({ role, showSearch, onMenu }: { role: AdminRole | ""; showS
             minLength={3}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Public ID or correlation ID"
+            placeholder="Search accounts, Businesses, Creators, or reference"
           />
           <button>Search</button>
         </form>
       )}
-      <span className="admin-role-label">{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</span>
+      <span className="admin-role-label">{adminName&&<strong>{adminName}</strong>}<small>{role === "PlatformAdmin" ? "Platform Admin" : "Operations Admin"}</small></span>
       <div className="account-actions">
         <button
           type="button"
@@ -1090,7 +1122,7 @@ function AccountPage({
   allowBusinessTypeEdit = false,
   showBusinessFilter = true,
   showRoleFilter = false,
-  searchPlaceholder = "Name, email, phone, Business or public ID",
+  searchPlaceholder = "Name, email, phone, or Business",
 }: AccountPageProps) {
   const requestedStatus = new URLSearchParams(location.search).get("status") ?? "";
   const [data, setData] = useState<Page>();
@@ -1192,11 +1224,7 @@ function AccountPage({
       ? "Name"
       : value === "merchantBusinessType"
         ? "Business Type"
-        : value === "publicCreatorId"
-          ? "Public Creator ID"
-          : value === "publicCustomerId"
-            ? "Public Customer ID"
-            : label(value);
+        : label(value);
 
   return (
     <section>
@@ -1287,7 +1315,7 @@ function AccountPage({
         {showBusinessFilter && (
           <label>
             Business
-            <input value={filters.business} onChange={(e) => setFilters({ ...filters, business: e.target.value })} placeholder="Business name or public ID" />
+                <input value={filters.business} onChange={(e) => setFilters({ ...filters, business: e.target.value })} placeholder="Business name" />
           </label>
         )}
         <div className="actions">
@@ -1342,7 +1370,7 @@ function AccountPage({
                           onClick={() => {
                             setEditing({
                               merchantId: String(x.merchantId),
-                              name: String(x.name ?? x.businessName ?? x.publicBusinessId ?? "Business"),
+                              name: String(x.name ?? x.businessName ?? "Business"),
                               businessType: String(x.merchantBusinessType ?? "Other"),
                             });
                             setEditingBusinessType(String(x.merchantBusinessType ?? "Other"));

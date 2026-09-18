@@ -16,7 +16,7 @@ test('Admin navigation reuses actionable dashboard counts with zero and 99+ rule
 
 test('Admin badges refresh without logout and keep notification counts separate from support badges',()=>{
   assert.match(source,/dashboard\/summary/)
-  assert.match(source,/setInterval\(refresh,\s*12_000\)/)
+  assert.match(source,/setInterval\(refresh,\s*60_000\)/)
   assert.match(source,/addEventListener\("focus",\s*refresh\)/)
   assert.match(source,/visibilitychange",\s*refresh/)
   assert.match(source,/aria-label=\{aria\}/)

@@ -37,7 +37,7 @@ test('external onboarding keeps profile fields while excluding V2 authentication
   assert.match(onboarding,/href="\/onboarding"/)
   assert.match(onboarding,/Add social platform/)
   assert.match(creator,/Save social profiles/)
-  assert.match(creator,/socialDrafts\.length === 1/)
+  assert.match(creator,/drafts\.length===1/)
 })
 
 test('V3External navigation exposes profile switching and coordinated logout',()=>{

@@ -376,6 +376,54 @@ public sealed class V3ExternalIntegrationTests : IAsyncLifetime
         Assert.Single(await verify.UserAccounts.Where(x => x.Role == UserRole.PlatformAdmin).ToListAsync());
     }
 
+    [Fact]
+    public async Task Operations_admin_handoff_creates_only_an_external_shadow_principal_and_reuses_it()
+    {
+        var authority = new FakeAuthority(); var user = Guid.NewGuid(); var binding = Guid.NewGuid();
+        authority.Queue(Code("operations-admin-a"), "OperationsAdmin", V3HandoffPurposes.ExistingWorkspace,
+            user, user, binding);
+        authority.Queue(Code("operations-admin-b"), "OperationsAdmin", V3HandoffPurposes.ExistingWorkspace,
+            user, user, binding);
+        Guid firstAccount;
+        await using (var db = Db())
+        {
+            var first = await Service(db, authority).RedeemAsync(Code("operations-admin-a"), "integration-callback", default);
+            firstAccount = first.Session.UserAccountId!.Value;
+            Assert.Equal("OperationsAdmin profile", first.User!.DisplayName);
+        }
+        await using (var db = Db())
+        {
+            var second = await Service(db, authority).RedeemAsync(Code("operations-admin-b"), "integration-callback", default);
+            Assert.Equal(firstAccount, second.Session.UserAccountId);
+        }
+        await using var verify = Db(); var account = await verify.UserAccounts.SingleAsync();
+        Assert.Equal(UserRole.OperationsAdmin, account.Role);
+        Assert.Equal(AuthenticationSource.V3External, account.AuthenticationSource);
+        Assert.Empty(account.PasswordHash); Assert.Null(account.PinHash); Assert.Null(account.FirebaseUid);
+        Assert.Single(await verify.ExternalProfileLinks.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Correction_requested_lifecycle_is_synchronized_to_V3_without_activating_profile()
+    {
+        var authority = new FakeAuthority();
+        authority.Queue(Code("creator-correction"), "Creator", V3HandoffPurposes.ProfileOnboarding);
+        Guid session;
+        await using (var db = Db()) session = (await Service(db, authority)
+            .RedeemAsync(Code("creator-correction"), "integration-callback", default)).Session.SessionId;
+        ExternalProvisioningResult profile;
+        await using (var db = Db()) profile = await Service(db, authority).ProvisionCreatorAsync(session,
+            new ExternalCreatorRegistration("Mimi", "Kibru", "Mimi Creates", "Addis Ababa", null,
+                "Creator", "Food", [new(SocialPlatform.TikTok, "https://www.tiktok.com/@mimi", 1000)]), default);
+        await using (var db = Db()) Assert.True(await Service(db, authority).SynchronizeLifecycleAsync(
+            UserRole.Creator, profile.ProfileId, "CORRECTION_REQUESTED", default));
+        Assert.Contains(authority.Synchronizations, x => x.ExternalSubjectId == profile.ProfileId
+            && x.Lifecycle == "CORRECTION_REQUESTED");
+        await using var verify = Db();
+        Assert.Equal(ExternalProfileStatus.Pending, (await verify.ExternalProfileLinks.SingleAsync()).Status);
+        Assert.Equal(AccountStatus.PendingApproval, (await verify.UserAccounts.SingleAsync()).Status);
+    }
+
     private static ExternalBusinessRegistration Business(string name, string phone) => new(name,
         BusinessTypes.Values[0], name + " Owner", phone, null, "Bole Road", "Addis Ababa",
         "Addis Ababa", "Ethiopia", "Africa/Addis_Ababa");

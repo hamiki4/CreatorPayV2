@@ -6,6 +6,7 @@ import {ProfileAvatar} from './profileMedia'
 import {formatDateTime,formatUserFacingText} from './displayFormat'
 import {NavIcon} from './navIcons'
 import {isExternalSession,switchExternalProfile} from './externalSession'
+import {v3Post,v3Request} from './v3ProductApi'
 
 type Notice={notificationId:string;type:string;title:string;body:string;createdAtUtc:string;readAtUtc?:string;data?:Record<string,string>}
 type NoticePage={items:Notice[];total:number}
@@ -24,8 +25,8 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
   const mounted=useRef(true)
   const settingsRef=useRef<HTMLDivElement>(null)
   const settingsButtonRef=useRef<HTMLButtonElement>(null)
-  const refresh=useCallback(async()=>{try{const[list,count]=await Promise.all([api<NoticePage>('/api/v1/notifications?page=1&pageSize=30'),api<{count:number}>('/api/v1/notifications/unread-count')]);if(mounted.current){setItems(list.items);setUnread(count.count);setNotificationError('');requestActionableRefresh()}}catch(error){console.error(error);if(mounted.current)setNotificationError('Notifications are temporarily unavailable.')}},[])
-  useEffect(()=>{mounted.current=true;void refresh();const timer=window.setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine)void refresh()},12_000);const active=()=>{if(document.visibilityState==='visible'&&navigator.onLine)void refresh()};addEventListener('online',active);addEventListener('weymela:app-resume',active);document.addEventListener('visibilitychange',active);return()=>{mounted.current=false;clearInterval(timer);removeEventListener('online',active);removeEventListener('weymela:app-resume',active);document.removeEventListener('visibilitychange',active)}},[refresh])
+  const refresh=useCallback(async()=>{try{let notices:Notice[],count:number;if(isExternalSession()){const page=await v3Request<{items:{id:string;title:string;message:string;route:string;createdAtUtc:string;readAtUtc?:string}[];unreadCount:number}>('/api/notifications');notices=page.items.map(x=>({notificationId:x.id,type:'Weymela',title:x.title,body:x.message,createdAtUtc:x.createdAtUtc,readAtUtc:x.readAtUtc,data:{TargetPath:x.route}}));count=page.unreadCount}else{const[list,total]=await Promise.all([api<NoticePage>('/api/v1/notifications?page=1&pageSize=30'),api<{count:number}>('/api/v1/notifications/unread-count')]);notices=list.items;count=total.count}if(mounted.current){setItems(notices);setUnread(count);setNotificationError('');requestActionableRefresh()}}catch(error){console.error(error);if(mounted.current)setNotificationError('Notifications are temporarily unavailable.')}},[])
+  useEffect(()=>{mounted.current=true;void refresh();const timer=window.setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine)void refresh()},60_000);const active=()=>{if(document.visibilityState==='visible'&&navigator.onLine)void refresh()};addEventListener('online',active);addEventListener('weymela:app-resume',active);document.addEventListener('visibilitychange',active);return()=>{mounted.current=false;clearInterval(timer);removeEventListener('online',active);removeEventListener('weymela:app-resume',active);document.removeEventListener('visibilitychange',active)}},[refresh])
   useEffect(()=>{
     const onPointerDown=(event:PointerEvent)=>{
       if(!settingsOpen)return
@@ -43,8 +44,8 @@ export function AccountChrome({role,name,status,photoUrl,identityMedia,onProfile
       document.removeEventListener('keydown',onEscape)
     }
   },[settingsOpen])
-  async function markRead(notice:Notice){if(!notice.readAtUtc){setItems(current=>current.map(x=>x.notificationId===notice.notificationId?{...x,readAtUtc:new Date().toISOString()}:x));setUnread(current=>Math.max(0,current-1));try{await api(`/api/v1/notifications/${notice.notificationId}/read`,{method:'POST'})}catch{void refresh()}}requestActionableRefresh();const target=notificationTarget(notice);if(target&&onNavigate){onNavigate(target,notice);setNotificationsOpen(false)}}
-  async function markAll(){const now=new Date().toISOString();setItems(current=>current.map(x=>x.readAtUtc?x:{...x,readAtUtc:now}));setUnread(0);requestActionableRefresh();try{await api('/api/v1/notifications/read-all',{method:'POST'})}catch{void refresh()}}
+  async function markRead(notice:Notice){if(!notice.readAtUtc){setItems(current=>current.map(x=>x.notificationId===notice.notificationId?{...x,readAtUtc:new Date().toISOString()}:x));setUnread(current=>Math.max(0,current-1));try{if(isExternalSession())await v3Post(`/api/notifications/${notice.notificationId}/read`);else await api(`/api/v1/notifications/${notice.notificationId}/read`,{method:'POST'})}catch{void refresh()}}requestActionableRefresh();const target=notificationTarget(notice);if(target&&onNavigate){onNavigate(target,notice);setNotificationsOpen(false)}}
+  async function markAll(){const now=new Date().toISOString();setItems(current=>current.map(x=>x.readAtUtc?x:{...x,readAtUtc:now}));setUnread(0);requestActionableRefresh();try{if(isExternalSession())await v3Post('/api/notifications/read-all');else await api('/api/v1/notifications/read-all',{method:'POST'})}catch{void refresh()}}
   const roleStyles: Record<typeof role, CSSProperties> = {
     Customer: {'--role-accent': '#1f8a3b', '--role-accent-soft': '#e6f5ea'} as CSSProperties,
     Creator: {'--role-accent': '#7c4dff', '--role-accent-soft': '#f1eaff'} as CSSProperties,

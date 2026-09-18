@@ -18,11 +18,11 @@ test('public account deletion route and navigation are present',()=>{
   assert.match(brand,/support@weymela\.com/)
   assert.doesNotMatch(brand,/support@example\.com/)
 })
-test('help content matches the current live-promotion workflow and is role-safe',()=>{
-  for(const text of ['How to start promoting','Revise & Resubmit','press Go Live','30-day promotion period','exact TikTok','four-digit Creator ID','Platform Admin-only'])assert.ok(page.includes(text),text)
-  assert.match(page,/Business approval by itself does not publish the promotion/)
+test('help content matches Business-led Promotions, UGC, and governed roles',()=>{
+  for(const text of ['How do I join a Promotion?','How does UGC work?','Create and fund a Promotion or UGC opportunity','Payment is not released merely because a link was uploaded','Platform Admin-only','one-time Offer QR'])assert.ok(page.includes(text),text)
+  assert.match(page,/approval consumes only its configured capacity/)
   assert.match(page,/current Business interface does not expose a self-service early-end action/)
   assert.match(page,/current Creator interface does not provide a self-service early-end action/)
-  assert.doesNotMatch(page,/QR|Merchant Partnership|[\u1200-\u137f]/i)
+  assert.doesNotMatch(page,/Merchant Partnership|four-digit Creator ID|[\u1200-\u137f]/i)
 })
 test('support form retains consent, references, and safe failures',()=>{for(const field of ['name','contact','userType','subject','message','consentAcknowledged','referenceNumber'])assert.ok(page.includes(field));assert.match(page,/temporarily unavailable/i)})

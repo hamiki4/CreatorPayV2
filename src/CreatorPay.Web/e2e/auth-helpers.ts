@@ -60,7 +60,7 @@ export async function login(page:Page,identity:string){
   const app=page.locator('main.app')
   await expect(setup.or(app)).toBeVisible({timeout:30000})
   if(await app.isVisible()){
-    if(identity.startsWith('creator-')) await expect(page.getByRole('button',{name:'Find Businesses',exact:true}).first()).toBeVisible({timeout:30000})
+    if(identity.startsWith('creator-')) await expect(page.getByRole('button',{name:'Discover',exact:true}).first()).toBeVisible({timeout:30000})
     return
   }
   const pinInputs=page.locator('label.pin-entry input')

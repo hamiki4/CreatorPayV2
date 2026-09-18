@@ -1,6 +1,6 @@
 const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
-export type ExternalSessionUser = { role: string; status: string; isOnboarding: boolean; destination: string | null; accountEmail?: string | null; accountPhone?: string | null };
+export type ExternalSessionUser = { role: string; status: string; isOnboarding: boolean; destination: string | null; displayName?: string | null; accountEmail?: string | null; accountPhone?: string | null };
 let current: ExternalSessionUser | null = null;
 
 export function setExternalSession(value: ExternalSessionUser | null) { current = value; }

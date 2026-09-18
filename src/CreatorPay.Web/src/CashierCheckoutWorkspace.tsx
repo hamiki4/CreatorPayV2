@@ -4,6 +4,8 @@ import { AccountStatusBadge } from "./AccountChrome";
 import { formatAmount, formatDate, formatTime } from "./displayFormat";
 import { NavIcon } from "./navIcons";
 import { createUuid } from "./uuid";
+import jsQR from "jsqr";
+import {v3Post} from "./v3ProductApi";
 
 type Mode = "cashier" | "merchant";
 type Staff = {
@@ -42,6 +44,8 @@ type Validation = {
   businessName?: string;
 };
 type Tab = "purchase" | "recent" | "profile";
+type V3Offer={sessionId:string;campaign:string;business:{displayName:string};creator:{displayName:string};customer:string;expiresAtUtc:string}
+type V3Sale={id:string;purchaseAmount:{amount:number};totalBusinessCharge:{amount:number};confirmedAtUtc:string}
 
 const money = formatAmount;
 const transactionDate = formatDate;
@@ -55,7 +59,6 @@ export function CashierCheckoutWorkspace({
   initialQrPayload,
   mode = "cashier",
 }: { initialQrPayload?: string; mode?: Mode } = {}) {
-  void initialQrPayload;
   const merchantMode = mode === "merchant";
   const [tab, setTab] = useState<Tab>("purchase");
   const [staff, setStaff] = useState<Staff>();
@@ -67,6 +70,11 @@ export function CashierCheckoutWorkspace({
   const [result, setResult] = useState<Result>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [checkoutMode,setCheckoutMode]=useState<"standard"|"offer">(initialQrPayload?"offer":"standard");
+  const [offerToken,setOfferToken]=useState(initialQrPayload??"");
+  const [offer,setOffer]=useState<V3Offer>();
+  const [offerAmount,setOfferAmount]=useState("");
+  const [offerResult,setOfferResult]=useState<V3Sale>();
   const submissionKey = useRef(createUuid());
   const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -169,6 +177,10 @@ export function CashierCheckoutWorkspace({
     }
   }
 
+  async function resolveOffer(e?:FormEvent){e?.preventDefault();if(!offerToken.trim()||busy)return;setBusy(true);setMessage("");try{setOffer(await v3Post<V3Offer>("/api/checkout/resolve",{token:offerToken.trim()}));setOfferResult(undefined)}catch(error){setOffer(undefined);setMessage((error as Error).message)}finally{setBusy(false)}}
+  async function confirmOffer(e:FormEvent){e.preventDefault();if(!offer||busy)return;setBusy(true);setMessage("");try{const saved=await v3Post<V3Sale>("/api/checkout/confirm",{token:offerToken.trim(),purchaseAmount:Number(offerAmount)});setOfferResult(saved);setOffer(undefined);setOfferToken("");setOfferAmount("");setMessage("Purchase confirmed. Eligible rewards were recorded once.")}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}
+  async function scanOfferImage(file?:File){if(!file)return;try{const bitmap=await createImageBitmap(file);const canvas=document.createElement("canvas");canvas.width=bitmap.width;canvas.height=bitmap.height;const context=canvas.getContext("2d",{willReadFrequently:true});if(!context)throw new Error();context.drawImage(bitmap,0,0);const image=context.getImageData(0,0,canvas.width,canvas.height);const decoded=jsQR(image.data,image.width,image.height);if(!decoded)throw new Error();setOfferToken(decoded.data);setMessage("Offer QR scanned. Resolve it to continue.")}catch{setMessage("We couldn't read that QR image. Try again or paste the scanned code.")}}
+
   const tabs: [Tab, string][] = merchantMode
     ? [
         ["purchase", "Checkout"],
@@ -214,7 +226,9 @@ export function CashierCheckoutWorkspace({
       {tab === "purchase" && (
         <section className="creator-section cashier-scan">
           <h2>{merchantMode ? "Checkout" : "New Purchase"}</h2>
-          {result?.status !== "AwaitingShopperConfirmation" && (
+          <div className="segmented" aria-label="Checkout method"><button className={checkoutMode==='standard'?'active':''} type="button" onClick={()=>setCheckoutMode('standard')}>Customer confirmation</button><button className={checkoutMode==='offer'?'active':''} type="button" onClick={()=>setCheckoutMode('offer')}>Offer QR</button></div>
+          {checkoutMode==='offer'?<>{offerResult?<aside className="success-note"><strong>Purchase confirmed</strong><p>Amount {money(offerResult.purchaseAmount.amount)}</p><p>Promotion charge {money(offerResult.totalBusinessCharge.amount)}</p><button type="button" onClick={()=>setOfferResult(undefined)}>Next Customer</button></aside>:offer?<><div className="compact-panel"><h3>Confirm purchase</h3><dl><div><dt>Business</dt><dd>{offer.business.displayName}</dd></div><div><dt>Promotion</dt><dd>{offer.campaign}</dd></div><div><dt>Creator</dt><dd>{offer.creator.displayName}</dd></div><div><dt>Customer</dt><dd>{offer.customer.split(' · ')[0]}</dd></div></dl></div><form className="panel form cashier-sale" onSubmit={e=>void confirmOffer(e)}><label>Purchase Amount<input required type="number" min="0.01" step="0.01" value={offerAmount} onChange={e=>setOfferAmount(e.target.value)}/></label><button className="full" disabled={busy||!offerAmount}>{busy?'Confirming…':'Confirm Purchase'}</button><button type="button" className="quiet" onClick={()=>{setOffer(undefined);setOfferToken('');setOfferAmount('')}}>Back</button></form></>:<form className="panel form cashier-sale" onSubmit={e=>void resolveOffer(e)}><label>Scan Customer Offer QR<input type="file" accept="image/*" capture="environment" onChange={e=>void scanOfferImage(e.target.files?.[0])}/></label><details><summary>Use a scanned code instead</summary><label>Scanned QR code<input required type="password" autoComplete="off" spellCheck={false} maxLength={256} value={offerToken} onChange={e=>setOfferToken(e.target.value)}/></label></details><button className="full" disabled={busy||!offerToken.trim()}>{busy?'Resolving…':'Resolve Offer'}</button></form>}</>:
+          result?.status !== "AwaitingShopperConfirmation" && (
             <form className="panel form cashier-sale" onSubmit={submit}>
               <label>
                 Creator ID
@@ -264,7 +278,7 @@ export function CashierCheckoutWorkspace({
               </button>
             </form>
           )}
-          {validation?.isValid && (
+          {checkoutMode==='standard'&&validation?.isValid && (
             <aside
               className="success-note cashier-validation"
               aria-label="Eligible Creator"
@@ -280,7 +294,7 @@ export function CashierCheckoutWorkspace({
               </p>
             </aside>
           )}
-          {result?.status === "AwaitingShopperConfirmation" && (
+          {checkoutMode==='standard'&&result?.status === "AwaitingShopperConfirmation" && (
             <aside className="success-note">
               <strong>Awaiting Customer Confirmation</strong>
               <p>Reference: {result.checkout?.publicCheckoutId}</p>
