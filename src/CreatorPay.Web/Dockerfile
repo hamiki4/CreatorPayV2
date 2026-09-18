@@ -20,6 +20,9 @@ ENV VITE_FIREBASE_VAPID_PUBLIC_KEY=$VITE_FIREBASE_VAPID_PUBLIC_KEY
 RUN npm run build
 RUN node ./scripts/render-nginx-config.mjs --template ./nginx.conf --output /tmp/default.conf --api-url "$VITE_API_URL"
 FROM nginxinc/nginx-unprivileged:1.27-alpine
+USER root
+RUN apk upgrade --no-cache
+USER 101:101
 COPY --from=build /tmp/default.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
