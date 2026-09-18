@@ -12,7 +12,7 @@ import {SocialPlatformIcon} from './SocialPlatformIcon'
 
 type Tab='home'|'discover'|'ugc'|'earnings'|'profile'|'requests'
 type SocialPlatform='TikTok'|'Instagram'|'YouTube'|'Facebook'
-type Profile={displayName:string;publicCreatorId:string;effectiveStatus:string;email:string;phoneNumber:string;city:string;biography?:string;contentCategories?:string;socialProfiles?:{platform:SocialPlatform;profileUrl?:string;followerCount:number;verificationStatus:string}[];profileImage?:{fileName:string}}
+type Profile={displayName:string;publicCreatorId:string;creatorCode:string;effectiveStatus:string;email:string;phoneNumber:string;city:string;biography?:string;contentCategories?:string;socialProfiles?:{platform:SocialPlatform;profileUrl?:string;followerCount:number;verificationStatus:string}[];profileImage?:{fileName:string}}
 type SocialDraft={platform:SocialPlatform;profileUrl:string;audienceCount:string}
 type Earnings={availableEarnings:number;minimumToCashOut:number;amountNeeded:number;eligibleAmount:number;viewEarnings:number;saleEarnings:number;ugcEarnings:number;history:{id:string;campaign:string;source:string;amount:number;atUtc:string}[];payoutHistory:{id:string;amount:number;status:string;eligibleAtUtc:string;paidAtUtc?:string}[]}
 type Home={requests:number;activeCampaigns:number;earnings:Earnings}
@@ -47,7 +47,7 @@ function ProfileView({profile,refresh}:{profile?:Profile;refresh:()=>Promise<voi
   function update(index:number,value:Partial<SocialDraft>){setDrafts(drafts.map((x,i)=>i===index?{...x,...value}:x))}
   function add(){const platform=platforms.find(x=>!drafts.some(y=>y.platform===x));if(platform)setDrafts([...drafts,{platform,profileUrl:'',audienceCount:''}])}
   async function save(){setBusy(true);setMessage('');try{if(drafts.length===0)throw new Error('Keep at least one social profile.');const socialProfiles=drafts.map(x=>{const audience=Number(x.audienceCount);if(!x.profileUrl.trim()||!Number.isSafeInteger(audience)||audience<0)throw new Error(`Complete ${x.platform} URL and audience count.`);return{platform:x.platform,profileUrl:x.profileUrl.trim(),audienceCount:audience}});await api('/api/v1/integration/v3/creator/social-profiles',{method:'PUT',body:JSON.stringify({socialProfiles})});await refresh();setMessage('Social profiles updated.')}catch(e){setMessage((e as Error).message)}finally{setBusy(false)}}
-  const publicId=/^\d{4}$/.test(profile.publicCreatorId)?profile.publicCreatorId:null
+  const publicId=/^\d{4}$/.test(profile.creatorCode)?profile.creatorCode:null
   return <section className="creator-section product-workspace creator-profile-workspace">
     <h2>Profile</h2>{message&&<p className="product-message" role="status">{message}</p>}
     <section className="creator-identity-panel"><ProfileAvatar name={profile.displayName} photoUrl={creatorPhotoUrl(profile.publicCreatorId,profile.profileImage?.fileName)}/><div><span className="creator-profile-label">Creator</span><strong>{profile.displayName||'Creator'}</strong><span>{profile.city||'City not provided'}</span><AccountStatusBadge status={profile.effectiveStatus||'Pending'}/></div>{publicId&&<p><span>Creator ID</span><strong>{publicId}</strong></p>}</section>
