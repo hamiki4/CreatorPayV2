@@ -1,3 +1,5 @@
+using CreatorPay.Application.Ratings;
+using CreatorPay.Infrastructure.Ratings;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
@@ -94,6 +96,7 @@ public static class DependencyInjection
         services.Configure<CampaignOptions>(configuration.GetSection(CampaignOptions.SectionName)); services.AddScoped<ICampaignService, CampaignService>();
         services.Configure<CheckoutOptions>(configuration.GetSection(CheckoutOptions.SectionName)); services.Configure<PilotOptions>(configuration.GetSection(PilotOptions.SectionName)); services.AddScoped<ICheckoutService, CheckoutService>();
         services.AddScoped<IDiscoveryService, DiscoveryService>();
+        services.AddScoped<ICreatorRatingService, CreatorRatingService>();
         return services;
     }
 }

@@ -1,3 +1,4 @@
+using CreatorPay.Api.Ratings;
 using System.Text;
 using System.Net;
 using System.Security.Claims;
@@ -209,6 +210,7 @@ app.MapReportingEndpoints();
 app.MapCampaignEndpoints();
 app.MapCheckoutEndpoints(); app.MapHub<CheckoutHub>("/hubs/checkout");
 app.MapDiscoveryEndpoints();
+app.MapCreatorRatingEndpoints();
 app.MapSupportEndpoints();
 app.MapPilotExperienceEndpoints();
 app.MapExternalProductEndpoints(app.Environment);

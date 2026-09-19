@@ -20,6 +20,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<CashierLocationAssignment> CashierLocationAssignments => Set<CashierLocationAssignment>();
     public DbSet<SupervisorLocationAssignment> SupervisorLocationAssignments => Set<SupervisorLocationAssignment>();
     public DbSet<MerchantCreatorPartnership> MerchantCreatorPartnerships => Set<MerchantCreatorPartnership>();
+    public DbSet<CreatorRating> CreatorRatings => Set<CreatorRating>();
     public DbSet<CreatorMerchantCampaign> CreatorMerchantCampaigns => Set<CreatorMerchantCampaign>();
     public DbSet<CampaignQrCode> CampaignQrCodes => Set<CampaignQrCode>();
     public DbSet<CampaignRenewalRequest> CampaignRenewalRequests => Set<CampaignRenewalRequest>();

@@ -8,24 +8,47 @@ import {amount,v3Request} from './v3ProductApi'
 import {onActionableRefresh} from './actionableRefresh'
 import {ConfirmedSalesWorkspace} from './ConfirmedSalesWorkspace'
 import {NavIcon,type NavIconName} from './navIcons'
+import {creatorPhotoUrl,ProfileAvatar} from './profileMedia'
 
 type Tab='home'|'promotions'|'ugc'|'wallet'|'profile'|'cashiers'|'sales'|'checkout'
 type Profile={tradingName:string;effectiveStatus:string}
 type Home={wallet:{available:number;reserved:number;history?:{id:string;label:string;amount:number;atUtc:string}[]};activeCampaigns:number;creatorRequests:number;confirmedSales:number}
 type Ugc={status:string}
 type Pricing={rows:{type:string;views:number;businessPays:number;saleCostPercent:number}[]}
+type RateableCreator={partnershipId:string;creatorId:string;displayName:string;existingRating?:number|null}
+type TopCreator={creatorId:string;publicCreatorId:string;displayName:string;profileImageFileName?:string|null;averageRating:number;ratingCount:number;primaryPlatform?:string|null;audienceCount?:number|null}
 const icons:Record<string,NavIconName>={active:'ads',requests:'requests',content:'video',sales:'sales',wallet:'wallet',pricing:'wallet'}
 
 export function BusinessDashboard({cashiers,checkout,wallet,profile,onSignOut}:{cashiers:ReactNode;checkout:ReactNode;wallet:ReactNode;profile:ReactNode;onSignOut:()=>void}){
- const[tab,setTab]=useState<Tab>('home'),[business,setBusiness]=useState<Profile>(),[home,setHome]=useState<Home>(),[ugc,setUgc]=useState<Ugc[]>(),[pricing,setPricing]=useState<Pricing>(),[error,setError]=useState('')
+ const[tab,setTab]=useState<Tab>('home'),[business,setBusiness]=useState<Profile>(),[home,setHome]=useState<Home>(),[ugc,setUgc]=useState<Ugc[]>(),[pricing,setPricing]=useState<Pricing>(),[rateableCreators,setRateableCreators]=useState<RateableCreator[]>([]),[topCreators,setTopCreators]=useState<TopCreator[]>([]),[ratingBusy,setRatingBusy]=useState<string|null>(null),[ratingMessage,setRatingMessage]=useState(''),[error,setError]=useState('')
  const load=()=>{
   setError('')
   void api<Profile>('/api/v1/merchants/me').then(setBusiness).catch(()=>{})
   void v3Request<Home>('/api/business/home').then(setHome).catch(e=>setError((e as Error).message))
   void v3Request<Ugc[]>('/api/business/ugc').then(setUgc).catch(()=>{})
-  void v3Request<Pricing>('/api/business/pricing').then(setPricing).catch(()=>{})
+  void v3Request<Pricing>('/api/business/pricing').then(setPricing).catch(()=>{});
+void v3Request<RateableCreator[]>('/api/business/creator-ratings/eligible').then(setRateableCreators).catch(()=>{});
+void v3Request<TopCreator[]>('/api/business/top-creators').then(setTopCreators).catch(()=>{})
  }
- useEffect(()=>{load();const active=()=>{if(document.visibilityState==='visible')load()};addEventListener('focus',active);return()=>removeEventListener('focus',active)},[])
+ const rateCreator=async(partnershipId:string,rating:number)=>{
+setRatingBusy(partnershipId);setRatingMessage('');
+try{
+await v3Request(`/api/business/creator-ratings/${partnershipId}`,{
+method:'PUT',
+body:JSON.stringify({rating})
+});
+setRatingMessage('Rating saved.');
+await Promise.all([
+v3Request<RateableCreator[]>('/api/business/creator-ratings/eligible').then(setRateableCreators),
+v3Request<TopCreator[]>('/api/business/top-creators').then(setTopCreators)
+]);
+}catch(e){
+setRatingMessage((e as Error).message)
+}finally{
+setRatingBusy(null)
+}
+};
+useEffect(()=>{load();const active=()=>{if(document.visibilityState==='visible')load()};addEventListener('focus',active);return()=>removeEventListener('focus',active)},[])
  useEffect(()=>onActionableRefresh(load),[])
  const navigate=(target:string)=>{if(target.includes('/ugc'))setTab('ugc');else if(target.includes('promotion'))setTab('promotions');else if(target.includes('wallet')||target.includes('deposit'))setTab('wallet');else if(target.includes('checkout'))setTab('checkout');else if(target.includes('sale'))setTab('sales');else if(target.includes('profile'))setTab('profile');else setTab('home')}
  const rows=[
@@ -51,7 +74,101 @@ export function BusinessDashboard({cashiers,checkout,wallet,profile,onSignOut}:{
     </div></section>
     {home?.wallet.history&&<section className="business-recent-activity" aria-labelledby="business-recent-title"><h3 id="business-recent-title">Recent Activity</h3>{home.wallet.history.length===0?<p className="compact-empty">No recent activity.</p>:<div>{home.wallet.history.slice(0,4).map(x=><article key={x.id}><span className="business-activity-icon"><NavIcon name="wallet"/></span><span className="business-activity-copy"><strong>{x.label}</strong><span>{amount(x.amount)}</span></span><time dateTime={x.atUtc}>{new Date(x.atUtc).toLocaleDateString()}</time></article>)}</div>}</section>}
    </section>}
-   {tab==='promotions'&&<BusinessPromotions/>}{tab==='ugc'&&<BusinessUgc/>}{tab==='wallet'&&wallet}{tab==='checkout'&&checkout}{tab==='cashiers'&&cashiers}{tab==='sales'&&<ConfirmedSalesWorkspace/>}{tab==='profile'&&profile}
+   {tab==='home'&&<>
+<section className="business-creator-ratings">
+<h3>Rate Creators</h3>
+
+{ratingMessage&&
+<p className="business-rating-message" role="status">
+{ratingMessage}
+</p>}
+
+{rateableCreators.length===0?
+<p className="compact-empty">No Creators are ready to rate yet.</p>:
+<div className="business-rateable-list">
+{rateableCreators.map(creator=>
+<article className="business-rateable-card" key={creator.partnershipId}>
+<div className="business-rateable-copy">
+<strong>{creator.displayName}</strong>
+<span>
+{creator.existingRating
+?`Your rating: ${creator.existingRating}/5`
+:'Rate approved work'}
+</span>
+</div>
+
+<div className="business-star-picker"
+role="group"
+aria-label={`Rate ${creator.displayName}`}>
+{[1,2,3,4,5].map(star=>
+<button
+type="button"
+key={star}
+className={star<=(creator.existingRating??0)?'is-selected':''}
+aria-label={`${star} star${star===1?'':'s'}`}
+disabled={ratingBusy===creator.partnershipId}
+onClick={()=>void rateCreator(creator.partnershipId,star)}>
+★
+</button>
+)}
+</div>
+</article>
+)}
+</div>}
+</section>
+
+<section className="business-top-creators">
+<div className="business-section-heading">
+<h3>Top Creators</h3>
+{topCreators.length>0&&<span>{topCreators.length}</span>}
+</div>
+
+{topCreators.length===0?
+<p className="compact-empty">
+Top Creators will appear after Businesses submit ratings.
+</p>:
+<div className="business-top-creators-track">
+{topCreators.map(creator=>
+<article className="business-top-creator-card" key={creator.creatorId}>
+<div className="business-top-creator-identity">
+
+<ProfileAvatar
+name={creator.displayName}
+photoUrl={creatorPhotoUrl(
+creator.publicCreatorId,
+creator.profileImageFileName ?? undefined
+)}
+/>
+
+<div className="business-top-creator-copy">
+<strong>{creator.displayName}</strong>
+<span>
+{creator.primaryPlatform??'Creator'}
+{creator.audienceCount!=null
+?` · ${creator.audienceCount.toLocaleString()}`
+:''}
+</span>
+</div>
+</div>
+
+<div className="business-top-creator-rating"
+aria-label={`${creator.averageRating} out of 5 from ${creator.ratingCount} ratings`}>
+
+<span className="business-gold-stars" aria-hidden="true">
+{'★'.repeat(Math.max(0,Math.min(5,Math.round(creator.averageRating))))}
+{'☆'.repeat(Math.max(0,5-Math.round(creator.averageRating)))}
+</span>
+
+<strong>{creator.averageRating.toFixed(1)}</strong>
+<span>({creator.ratingCount})</span>
+</div>
+</article>
+)}
+</div>}
+</section>
+</>}
+
+{tab==='promotions'&&<BusinessPromotions/>}{tab==='ugc'&&<BusinessUgc/>}{tab==='wallet'&&wallet}{tab==='checkout'&&checkout}{tab==='cashiers'&&cashiers}{tab==='sales'&&<ConfirmedSalesWorkspace/>}{tab==='profile'&&profile}
   </div>
  </AccountChrome>
 }
